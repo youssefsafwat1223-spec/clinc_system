@@ -52,6 +52,24 @@ async function main() {
   });
   console.log('Admin user ready:', admin.email);
 
+  const receptionPassword = await bcrypt.hash('reception123', 12);
+  const reception = await prisma.user.upsert({
+    where: { email: 'reception@clinic.com' },
+    update: {
+      password: receptionPassword,
+      name: 'Reception Desk',
+      role: 'RECEPTION',
+      active: true,
+    },
+    create: {
+      email: 'reception@clinic.com',
+      password: receptionPassword,
+      name: 'Reception Desk',
+      role: 'RECEPTION',
+    },
+  });
+  console.log('Reception user ready:', reception.email);
+
   const doctorPassword = await bcrypt.hash('doctor123', 12);
   const doctorUser = await prisma.user.upsert({
     where: { email: 'doctor@clinic.com' },
@@ -221,6 +239,7 @@ async function main() {
   console.log('\nSeeding completed');
   console.log('\nLogin credentials:');
   console.log('  Admin: admin@clinic.com / admin123');
+  console.log('  Reception: reception@clinic.com / reception123');
   console.log('  Doctor: doctor@clinic.com / doctor123');
 }
 
