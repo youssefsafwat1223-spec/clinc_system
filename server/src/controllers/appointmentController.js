@@ -1,0 +1,329 @@
+const prisma = require('../lib/prisma');
+const appointmentService = require('../services/appointmentService');
+const notificationService = require('../services/notificationService');
+const { paginate } = require('../utils/helpers');
+
+const getScopedDoctor = async (req) => {
+  if (req.user?.role !== 'DOCTOR') {
+    return null;
+  }
+
+  const doctor = await prisma.doctor.findUnique({
+    where: { userId: req.user.id },
+    select: { id: true, name: true },
+  });
+
+  if (!doctor) {
+    const error = new Error('لا يوجد ملف طبيب مرتبط بهذا الحساب');
+    error.status = 403;
+    throw error;
+  }
+
+  return doctor;
+};
+
+const getAccessibleAppointment = async (req, appointmentId, include = {}) => {
+  const scopedDoctor = await getScopedDoctor(req);
+
+  const appointment = await prisma.appointment.findFirst({
+    where: {
+      id: appointmentId,
+      ...(scopedDoctor ? { doctorId: scopedDoctor.id } : {}),
+    },
+    include,
+  });
+
+  return { appointment, scopedDoctor };
+};
+
+const getAll = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20, status, doctorId, date } = req.query;
+    const { skip, take } = paginate(Number(page), Number(limit));
+    const scopedDoctor = await getScopedDoctor(req);
+
+    const where = {};
+    if (status === 'RESCHEDULED') {
+      where.notes = { contains: 'تعديل' };
+    } else if (status) {
+      where.status = status;
+    }
+
+    if (scopedDoctor) {
+      where.doctorId = scopedDoctor.id;
+    } else if (doctorId) {
+      where.doctorId = doctorId;
+    }
+
+    if (date) {
+      const dayStart = new Date(date);
+      dayStart.setHours(0, 0, 0, 0);
+      const dayEnd = new Date(date);
+      dayEnd.setHours(23, 59, 59, 999);
+      where.scheduledTime = { gte: dayStart, lte: dayEnd };
+    }
+
+    const [appointments, total] = await Promise.all([
+      prisma.appointment.findMany({
+        where,
+        skip,
+        take,
+        orderBy: { scheduledTime: 'desc' },
+        include: {
+          patient: true,
+          doctor: true,
+          service: true,
+        },
+      }),
+      prisma.appointment.count({ where }),
+    ]);
+
+    res.json({
+      appointments,
+      pagination: { page: Number(page), limit: Number(limit), total, pages: Math.ceil(total / Number(limit)) },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getOne = async (req, res, next) => {
+  try {
+    const { appointment } = await getAccessibleAppointment(req, req.params.id, {
+      patient: true,
+      doctor: true,
+      service: true,
+      notifications: { orderBy: { createdAt: 'desc' } },
+    });
+
+    if (!appointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    res.json({ appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const create = async (req, res, next) => {
+  try {
+    const scopedDoctor = await getScopedDoctor(req);
+    const {
+      patientId,
+      doctorId,
+      serviceId,
+      scheduledTime,
+      confirmImmediately = false,
+      notifyPatient = true,
+      notes,
+    } = req.body;
+
+    let result = await appointmentService.createAppointment({
+      patientId,
+      doctorId: scopedDoctor?.id || doctorId,
+      serviceId,
+      scheduledTime,
+    });
+
+    if (result.conflict) {
+      return res.status(409).json({
+        error: 'هذا الموعد غير متاح',
+        alternatives: result.alternatives,
+      });
+    }
+
+    let appointment = result.appointment;
+
+    if (notes !== undefined) {
+      appointment = await prisma.appointment.update({
+        where: { id: appointment.id },
+        data: { notes },
+        include: { patient: true, doctor: true, service: true },
+      });
+    }
+
+    if (confirmImmediately) {
+      result = await appointmentService.confirmAppointment(appointment.id);
+
+      if (result.conflict) {
+        return res.status(409).json({
+          error: 'تعذر تأكيد الموعد بسبب تعارض جديد',
+          alternatives: result.alternatives,
+          appointment: appointment,
+        });
+      }
+
+      appointment = result.appointment;
+
+      if (notifyPatient) {
+        try {
+          await notificationService.sendBookingConfirmed(appointment);
+        } catch (e) {
+          console.error('Notification error:', e.message);
+        }
+      }
+    }
+
+    res.status(201).json({ appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const confirm = async (req, res, next) => {
+  try {
+    const { appointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!appointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    const result = await appointmentService.confirmAppointment(req.params.id);
+
+    if (result.conflict) {
+      return res.status(409).json({
+        error: 'تضارب في المواعيد',
+        alternatives: result.alternatives,
+      });
+    }
+
+    try {
+      await notificationService.sendBookingConfirmed(result.appointment);
+    } catch (e) {
+      console.error('Notification error:', e.message);
+    }
+
+    res.json({ appointment: result.appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const reject = async (req, res, next) => {
+  try {
+    const { appointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!appointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    const { reason } = req.body;
+    const result = await appointmentService.rejectAppointment(req.params.id, reason);
+
+    try {
+      await notificationService.sendBookingRejected(result.appointment, result.alternatives);
+    } catch (e) {
+      console.error('Notification error:', e.message);
+    }
+
+    res.json({
+      appointment: result.appointment,
+      alternatives: result.alternatives,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const update = async (req, res, next) => {
+  try {
+    const { appointment: existingAppointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!existingAppointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    const { scheduledTime, notes, status } = req.body;
+    const appointment = await prisma.appointment.update({
+      where: { id: req.params.id },
+      data: {
+        ...(scheduledTime && { scheduledTime: new Date(scheduledTime) }),
+        ...(notes !== undefined && { notes }),
+        ...(status && { status }),
+      },
+      include: { patient: true, doctor: true, service: true },
+    });
+
+    res.json({ appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const block = async (req, res, next) => {
+  try {
+    const appointmentId = req.params.id;
+    const { appointment: existingAppointment } = await getAccessibleAppointment(req, appointmentId);
+    if (!existingAppointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    const appointment = await prisma.appointment.update({
+      where: { id: appointmentId },
+      data: { status: 'BLOCKED', notes: 'تم إغلاق الموعد من قبل الإدارة' },
+      include: { patient: true, doctor: true, service: true },
+    });
+
+    const alternatives = await appointmentService.getAlternativeSlots(
+      appointment.doctorId,
+      appointment.scheduledTime,
+      appointment.doctor.workingHours,
+      appointment.service.duration
+    );
+
+    try {
+      await notificationService.sendBookingRejected(appointment, alternatives);
+    } catch (e) {
+      console.error('Notification error:', e.message);
+    }
+
+    res.json({ appointment, alternatives });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getStats = async (req, res, next) => {
+  try {
+    const scopedDoctor = await getScopedDoctor(req);
+    const statuses = ['PENDING', 'CONFIRMED', 'CANCELLED', 'REJECTED', 'BLOCKED'];
+    const counts = { ALL: 0, RESCHEDULED: 0 };
+    const where = scopedDoctor ? { doctorId: scopedDoctor.id } : {};
+
+    statuses.forEach((status) => {
+      counts[status] = 0;
+    });
+
+    const [total, grouped, rescheduled] = await Promise.all([
+      prisma.appointment.count({ where }),
+      prisma.appointment.groupBy({
+        by: ['status'],
+        where,
+        _count: { status: true },
+      }),
+      prisma.appointment.count({
+        where: { ...where, notes: { contains: 'تعديل' } },
+      }),
+    ]);
+
+    counts.ALL = total;
+    counts.RESCHEDULED = rescheduled;
+
+    grouped.forEach((group) => {
+      counts[group.status] = group._count.status;
+    });
+
+    res.json(counts);
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = {
+  getAll,
+  getOne,
+  create,
+  confirm,
+  reject,
+  update,
+  block,
+  getStats,
+};

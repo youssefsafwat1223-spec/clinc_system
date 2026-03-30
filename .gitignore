@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+server/node_modules/
+dashboard/node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
+dashboard/.env
+dashboard/.env.*
+
+# Build outputs
+dist/
+build/
+server/dist/
+dashboard/dist/
+
+# Logs and runtime files
+*.log
+*.pid
+server/server.out.log
+server/server.err.log
+server/webhook-debug.log
+dashboard/build_output.log
+
+# Temporary / local scratch files
+server/fb_token.tmp
+server/Untitled-1.txt
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

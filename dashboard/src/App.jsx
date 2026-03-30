@@ -1,0 +1,155 @@
+import { Suspense, lazy } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+
+const LoginPage = lazy(() => import('./pages/LoginPage.jsx'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
+const InboxPage = lazy(() => import('./pages/InboxPage.jsx'));
+const PatientsPage = lazy(() => import('./pages/PatientsPage.jsx'));
+const AppointmentsPage = lazy(() => import('./pages/AppointmentsPage.jsx'));
+const ServicesPage = lazy(() => import('./pages/ServicesPage.jsx'));
+const StaffPage = lazy(() => import('./pages/StaffPage.jsx'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'));
+const AISettingsPage = lazy(() => import('./pages/AISettingsPage.jsx'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage.jsx'));
+const ConsultationsPage = lazy(() => import('./pages/ConsultationsPage.jsx'));
+const CampaignsPage = lazy(() => import('./pages/CampaignsPage.jsx'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage.jsx'));
+
+const ProtectedRoute = ({ children, allowedRoles }) => {
+  const token = localStorage.getItem('token');
+  const userStr = localStorage.getItem('user');
+
+  if (!token || !userStr) {
+    return <Navigate to="/login" replace />;
+  }
+
+  try {
+    const user = JSON.parse(userStr);
+    if (allowedRoles && !allowedRoles.includes(user.role)) {
+      return <Navigate to="/" replace />;
+    }
+  } catch {
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
+
+const PageLoader = () => (
+  <div className="flex min-h-screen items-center justify-center bg-dark-bg">
+    <div className="relative h-14 w-14">
+      <div className="absolute inset-0 animate-spin rounded-full border-t-2 border-primary-500"></div>
+      <div
+        className="absolute inset-2 animate-spin rounded-full border-r-2 border-primary-400 opacity-75"
+        style={{ animationDuration: '1.4s' }}
+      ></div>
+    </div>
+  </div>
+);
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <DashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/inbox"
+            element={
+              <ProtectedRoute>
+                <InboxPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patients"
+            element={
+              <ProtectedRoute>
+                <PatientsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/appointments"
+            element={
+              <ProtectedRoute>
+                <AppointmentsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/consultations"
+            element={
+              <ProtectedRoute>
+                <ConsultationsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/services"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <ServicesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/staff"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <StaffPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/campaigns"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'STAFF']}>
+                <CampaignsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <SettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ai-settings"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AISettingsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/analytics"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AnalyticsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </BrowserRouter>
+  );
+}
+
+export default App;

@@ -1,0 +1,219 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  REJECTED
+  EXPIRED
+  BLOCKED
+}
+
+enum MessageType {
+  INBOUND
+  OUTBOUND
+}
+
+enum UserRole {
+  ADMIN
+  DOCTOR
+  STAFF
+  RECEPTION
+}
+
+enum ChatState {
+  BOT
+  HUMAN
+}
+
+enum ConsultationStatus {
+  PENDING
+  REPLIED
+  CLOSED
+}
+
+enum Platform {
+  WHATSAPP
+  FACEBOOK
+  INSTAGRAM
+  DASHBOARD
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(STAFF)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  doctor    Doctor?
+
+  @@map("users")
+}
+
+model Doctor {
+  id             String        @id @default(uuid())
+  name           String
+  specialization String
+  phone          String?
+  workingHours   Json          @default("{}") @map("working_hours")
+  active         Boolean       @default(true)
+  userId         String?       @unique @map("user_id")
+  user           User?          @relation(fields: [userId], references: [id])
+  appointments   Appointment[]
+  consultations  Consultation[]
+  prescriptions  Prescription[]
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  @@map("doctors")
+}
+
+model Patient {
+  id           String        @id @default(uuid())
+  name         String
+  phone         String         @unique
+  platform      Platform       @default(WHATSAPP)
+  whatsappId    String?        @unique @map("whatsapp_id")
+  facebookId    String?        @unique @map("facebook_id")
+  instagramId   String?        @unique @map("instagram_id")
+  chatState     ChatState      @default(BOT) @map("chat_state")
+  notes         String?
+  appointments  Appointment[]
+  messages      Message[]
+  consultations Consultation[]
+  prescriptions Prescription[]
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  @@map("patients")
+}
+
+model Service {
+  id           String        @id @default(uuid())
+  name         String
+  nameAr       String        @map("name_ar")
+  description  String?
+  price        Float?
+  duration     Int           @default(30)
+  active       Boolean       @default(true)
+  appointments Appointment[]
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  @@map("services")
+}
+
+model Appointment {
+  id            String            @id @default(uuid())
+  bookingRef    String?           @unique @map("booking_ref")
+  patientId     String            @map("patient_id")
+  patient       Patient           @relation(fields: [patientId], references: [id])
+  doctorId      String            @map("doctor_id")
+  doctor        Doctor            @relation(fields: [doctorId], references: [id])
+  serviceId     String            @map("service_id")
+  service       Service           @relation(fields: [serviceId], references: [id])
+  scheduledTime DateTime          @map("scheduled_time")
+  status        AppointmentStatus @default(PENDING)
+  lockedUntil   DateTime?         @map("locked_until")
+  notes         String?
+  notifications Notification[]
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+
+  @@map("appointments")
+}
+
+model Message {
+  id        String      @id @default(uuid())
+  patientId String      @map("patient_id")
+  patient   Patient     @relation(fields: [patientId], references: [id])
+  platform  Platform
+  content   String
+  type      MessageType
+  metadata  Json?
+  createdAt DateTime    @default(now()) @map("created_at")
+
+  @@map("messages")
+}
+
+model ClinicSettings {
+  id           String  @id @default(uuid())
+  clinicName   String  @default("العيادة") @map("clinic_name")
+  clinicNameAr String  @default("العيادة") @map("clinic_name_ar")
+  phone        String?
+  address      String?
+  whatsappChatLink String? @map("whatsapp_chat_link")
+  googleMapsLink String? @map("google_maps_link")
+  workingHours Json    @default("{}") @map("working_hours")
+  systemPrompt String  @default("") @map("system_prompt")
+  faqData      Json    @default("[]") @map("faq_data")
+  aiEnabled    Boolean @default(true) @map("ai_enabled")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("clinic_settings")
+}
+
+model Notification {
+  id            String      @id @default(uuid())
+  appointmentId String      @map("appointment_id")
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  type          String
+  sentAt        DateTime?   @map("sent_at")
+  channel       Platform    @default(WHATSAPP)
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@map("notifications")
+}
+
+model Consultation {
+  id        String             @id @default(uuid())
+  patientId String             @map("patient_id")
+  patient   Patient            @relation(fields: [patientId], references: [id])
+  doctorId  String?            @map("doctor_id")
+  doctor    Doctor?            @relation(fields: [doctorId], references: [id])
+  question  String
+  reply     String?
+  status    ConsultationStatus @default(PENDING)
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+
+  @@map("consultations")
+}
+
+model Prescription {
+  id          String   @id @default(uuid())
+  patientId   String   @map("patient_id")
+  patient     Patient  @relation(fields: [patientId], references: [id])
+  doctorId    String   @map("doctor_id")
+  doctor      Doctor   @relation(fields: [doctorId], references: [id])
+  diagnosis   String?
+  medications Json     @default("[]")
+  notes       String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("prescriptions")
+}
+
+model AdminNotification {
+  id        String   @id @default(uuid())
+  title     String
+  message   String
+  type      String   @default("INFO") // HUMAN_REQUEST, NEW_APPOINTMENT, CANCELED_APPOINTMENT, CONSULTATION_REQUEST
+  read      Boolean  @default(false)
+  link      String?  
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("admin_notifications")
+}
