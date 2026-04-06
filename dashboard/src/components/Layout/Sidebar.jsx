@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Bot,
@@ -31,7 +31,7 @@ const navItems = [
   { path: '/analytics', label: 'التحليلات', icon: LineChart, allowedRoles: ['ADMIN'] },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen = false, onClose }) {
   const location = useLocation();
   const userStr = localStorage.getItem('user');
   const userRole = userStr ? JSON.parse(userStr).role : 'STAFF';
@@ -102,8 +102,24 @@ export default function Sidebar() {
     window.location.href = '/login';
   };
 
+  const handleClose = () => {
+    if (onClose) onClose();
+  };
+
   return (
-    <aside className="sticky top-0 z-40 hidden h-screen w-64 flex-col overflow-y-auto border-l border-dark-border bg-dark-card/50 p-4 backdrop-blur-xl transition-transform duration-300 md:flex">
+    <>
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden"
+          onClick={handleClose}
+        />
+      )}
+      <aside
+        className={clsx(
+          'fixed inset-y-0 right-0 z-40 flex h-screen w-72 flex-col overflow-y-auto border-l border-dark-border bg-dark-card/80 p-4 backdrop-blur-xl transition-transform duration-300 md:static md:w-64 md:translate-x-0 md:bg-dark-card/50',
+          isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
+        )}
+      >
       <div className="mb-8 flex items-center gap-3 border-b border-dark-border/50 px-2 py-4">
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 shadow-lg shadow-primary-500/30">
           <Stethoscope className="h-6 w-6 text-white" />
@@ -129,6 +145,7 @@ export default function Sidebar() {
             <Link
               key={item.path}
               to={item.path}
+              onClick={handleClose}
               className={clsx(
                 'group flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-300',
                 isActive
@@ -159,5 +176,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

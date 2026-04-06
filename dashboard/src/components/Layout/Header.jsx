@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Bell,
@@ -117,7 +117,7 @@ function getNotificationFilterCount(notifications, filterId) {
   return notifications.filter((notification) => getNotificationMeta(notification.type).category === filterId).length;
 }
 
-export default function Header() {
+export default function Header({ onMenuClick }) {
   const location = useLocation();
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
@@ -256,7 +256,12 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-30 flex h-20 items-center justify-between border-b border-dark-border bg-dark-bg/80 px-6 shadow-sm backdrop-blur-xl lg:px-8">
-      <button className="text-dark-muted transition-colors hover:text-white md:hidden">
+      <button
+        type="button"
+        onClick={onMenuClick}
+        className="text-dark-muted transition-colors hover:text-white md:hidden"
+        aria-label="فتح القائمة الجانبية"
+      >
         <Menu className="h-6 w-6" />
       </button>
 

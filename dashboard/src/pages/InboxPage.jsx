@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bot, CheckCheck, MessageSquare, Phone, Search, Send, User } from 'lucide-react';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';

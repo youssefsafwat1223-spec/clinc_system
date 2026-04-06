@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react';
+﻿import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'));

@@ -1,4 +1,4 @@
-const sections = [
+﻿const sections = [
   {
     title: 'البيانات التي نجمعها',
     items: [
