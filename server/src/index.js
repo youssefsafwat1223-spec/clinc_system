@@ -26,12 +26,18 @@ const notificationsRoutes = require('./routes/notifications');
 const app = express();
 
 app.use(helmet());
-app.use(
-  cors({
-    origin: config.nodeEnv === 'production' ? process.env.DASHBOARD_URL || 'http://localhost:5173' : '*',
-    credentials: true,
-  })
-);
+
+const corsOptions = {
+  credentials: true,
+};
+
+if (config.nodeEnv === 'production') {
+  corsOptions.origin = process.env.DASHBOARD_URL || 'http://localhost:5173';
+} else {
+  corsOptions.origin = (origin, callback) => callback(null, true);
+}
+
+app.use(cors(corsOptions));
 app.use(morgan('dev'));
 app.use(
   express.json({
@@ -74,6 +80,10 @@ app.use((req, res) => {
 const PORT = config.port;
 
 const startServer = async () => {
+  if (config.nodeEnv === 'production' && config.jwtSecret === 'dev-secret-change-me') {
+    console.warn('[Security] JWT_SECRET is not set. Please configure a strong secret.');
+  }
+
   app.listen(PORT, async () => {
     console.log(`\nClinic Booking Server running on port ${PORT}`);
     console.log(`Environment: ${config.nodeEnv}`);

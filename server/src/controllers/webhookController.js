@@ -25,6 +25,35 @@ const { generateTimeSlots, formatDateAr, formatTimeAr } = require('../utils/help
 
 // In-memory session store for booking flow (per phone number)
 const bookingSessions = new Map();
+const BOOKING_SESSION_TTL_MS = 30 * 60 * 1000;
+
+const pruneBookingSessions = () => {
+  const now = Date.now();
+  for (const [key, session] of bookingSessions.entries()) {
+    if (!session?.updatedAt || now - session.updatedAt > BOOKING_SESSION_TTL_MS) {
+      bookingSessions.delete(key);
+    }
+  }
+};
+
+const getBookingSession = (key) => {
+  pruneBookingSessions();
+  const session = bookingSessions.get(key);
+  if (!session) return null;
+  if (Date.now() - session.updatedAt > BOOKING_SESSION_TTL_MS) {
+    bookingSessions.delete(key);
+    return null;
+  }
+  return session;
+};
+
+const setBookingSession = (key, data) => {
+  bookingSessions.set(key, { ...data, updatedAt: Date.now() });
+};
+
+const clearBookingSession = (key) => {
+  bookingSessions.delete(key);
+};
 const webhookDebugLogPath = path.join(process.cwd(), 'webhook-debug.log');
 const SOCIAL_BOOKING_PATTERN = /(?:\u062d\u062c\u0632|\u0645\u0648\u0639\u062f|\u0627\u062d\u062c\u0632|book|appointment|BOOK_APPOINTMENT)/i;
 const MESSENGER_FALLBACK_NAME = '\u0645\u0631\u064a\u0636 Facebook';
@@ -429,14 +458,14 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     // Handle the booking flow
-    const session = bookingSessions.get(from);
+    const session = getBookingSession(from);
 
     // Selected ID from button or list
     const selectedId = buttonId || listId;
 
     // Main menu interactions
     if (selectedId === 'return_main') {
-      bookingSessions.delete(from);
+      clearBookingSession(from);
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
 
@@ -445,7 +474,7 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     if (selectedId === 'manage_bookings') {
-      bookingSessions.delete(from);
+      clearBookingSession(from);
       const activeAppointments = await prisma.appointment.findMany({
         where: {
           patientId: patient.id,
@@ -520,7 +549,7 @@ const handleWhatsAppMessage = async (message, contact) => {
       const aptId = selectedId.replace('resch_apt_', '');
 
       // Inject the appointment ID into the session so createAppointment updates it
-      bookingSessions.set(from, { step: 'select_service', patientId: patient.id, rescheduleAptId: aptId });
+      setBookingSession(from, { step: 'select_service', patientId: patient.id, rescheduleAptId: aptId });
 
       await whatsappService.sendTextMessage(from, '🔄 حسناً، سيتم تأجيل موعدك الحالي. يرجى اختيار الخدمة والوقت الجديد:');
 
@@ -544,7 +573,7 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     if (selectedId === 'check_appointment') {
-      bookingSessions.set(from, { step: 'check_appointment', patientId: patient.id });
+      setBookingSession(from, { step: 'check_appointment', patientId: patient.id });
       return await whatsappService.sendTextMessage(from, 'يرجى إرسال "رقم الحجز" المكون من 6 أحرف (مثال: BK-A1B2):');
     }
 
@@ -568,7 +597,7 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     if (selectedId === 'request_consultation') {
-      bookingSessions.set(from, { step: 'ask_consultation', patientId: patient.id });
+      setBookingSession(from, { step: 'ask_consultation', patientId: patient.id });
       return await whatsappService.sendTextMessage(from, '👨‍⚕️ يرجى كتابة استشارتك أو الأعراض التي تعاني منها بالتفصيل في رسالة واحدة:');
     }
 
@@ -687,8 +716,8 @@ const sendDoctorDaySelection = async (from, patient, service, doctor, availableD
     return false;
   }
 
-  const existingSession = bookingSessions.get(from) || {};
-  bookingSessions.set(from, {
+  const existingSession = getBookingSession(from) || {};
+  setBookingSession(from, {
     ...existingSession,
     step: 'select_day',
     patientId: patient.id,
@@ -710,7 +739,7 @@ const startBookingFlow = async (from, patient) => {
   const doctors = await prisma.doctor.findMany({ where: { active: true }, select: { name: true } });
   const doctorNames = doctors.map((doctor) => doctor.name).join(' و ');
 
-  bookingSessions.set(from, { step: 'select_service', patientId: patient.id });
+  setBookingSession(from, { step: 'select_service', patientId: patient.id });
 
   await whatsappService.sendInteractiveMessage(buildServiceSelection(from, services, doctorNames));
 };
@@ -731,7 +760,7 @@ const handleServiceSelection = async (from, patient, serviceId) => {
     });
 
     if (doctors.length === 0) {
-      bookingSessions.delete(from);
+      clearBookingSession(from);
       return await whatsappService.sendTextMessage(from, 'عذرًا، لا يوجد أطباء متاحون حاليًا.');
     }
 
@@ -745,7 +774,7 @@ const handleServiceSelection = async (from, patient, serviceId) => {
     ).filter((entry) => entry.availableDays.length > 0);
 
     if (availableDoctors.length === 0) {
-      bookingSessions.delete(from);
+      clearBookingSession(from);
       return await whatsappService.sendTextMessage(from, 'عذرًا، لا توجد مواعيد متاحة حاليًا. يرجى المحاولة لاحقًا.');
     }
 
@@ -755,8 +784,8 @@ const handleServiceSelection = async (from, patient, serviceId) => {
       return;
     }
 
-    const existingSession = bookingSessions.get(from) || {};
-    bookingSessions.set(from, {
+    const existingSession = getBookingSession(from) || {};
+    setBookingSession(from, {
       ...existingSession,
       step: 'select_doctor',
       patientId: patient.id,
@@ -779,16 +808,16 @@ const handleServiceSelection = async (from, patient, serviceId) => {
     );
   } catch (error) {
     console.error('[Booking] handleServiceSelection ERROR:', error.message, error.stack);
-    bookingSessions.delete(from);
+    clearBookingSession(from);
     await whatsappService.sendTextMessage(from, 'عذرًا، حدث خطأ أثناء عرض المواعيد. يرجى المحاولة لاحقًا.');
   }
 };
 
 const handleDoctorSelection = async (from, patient, doctorId) => {
   try {
-    const session = bookingSessions.get(from);
+    const session = getBookingSession(from);
     if (!session || !session.serviceId) {
-      bookingSessions.delete(from);
+      clearBookingSession(from);
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
 
@@ -814,9 +843,9 @@ const handleDoctorSelection = async (from, patient, doctorId) => {
 
 const handleDaySelection = async (from, patient, dateString) => {
   try {
-    const session = bookingSessions.get(from);
+    const session = getBookingSession(from);
     if (!session || !session.serviceId || !session.doctorId) {
-      bookingSessions.delete(from);
+      clearBookingSession(from);
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
 
@@ -847,7 +876,7 @@ const handleDaySelection = async (from, patient, dateString) => {
     // Update session
     session.step = 'select_period';
     session.selectedDate = dateString;
-    bookingSessions.set(from, session);
+    setBookingSession(from, session);
 
     const periods = [];
     const hasMorning = daySlots.some(s => new Date(s.time).getHours() < 12);
@@ -876,9 +905,9 @@ const handleDaySelection = async (from, patient, dateString) => {
 
 const handlePeriodSelection = async (from, patient, periodType, dateString) => {
   try {
-    const session = bookingSessions.get(from);
+    const session = getBookingSession(from);
     if (!session || !session.serviceId || !session.doctorId) {
-      bookingSessions.delete(from);
+      clearBookingSession(from);
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
 
@@ -918,7 +947,7 @@ const handlePeriodSelection = async (from, patient, periodType, dateString) => {
     // Update session
     session.step = 'select_time';
     session.selectedPeriod = periodType;
-    bookingSessions.set(from, session);
+    setBookingSession(from, session);
 
     // Show max 10 time slots for that period
     const displaySlots = filteredSlots.slice(0, 10);
@@ -933,9 +962,9 @@ const handlePeriodSelection = async (from, patient, periodType, dateString) => {
 };
 
 const handleTimeSlotSelection = async (from, patient, timeISO) => {
-  const session = bookingSessions.get(from);
+  const session = getBookingSession(from);
   if (!session || !session.serviceId || !session.doctorId) {
-    bookingSessions.delete(from);
+    clearBookingSession(from);
     return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
   }
 
@@ -948,7 +977,7 @@ const handleTimeSlotSelection = async (from, patient, timeISO) => {
       rescheduleAptId: session.rescheduleAptId,
     });
 
-    bookingSessions.delete(from);
+    clearBookingSession(from);
 
     if (result.conflict) {
       await whatsappService.sendTextMessage(from, '⚠️ عذراً، هذا الموعد لم يعد متاحاً. يرجى اختيار موعد آخر.');
@@ -971,7 +1000,7 @@ const handleTimeSlotSelection = async (from, patient, timeISO) => {
   } catch (error) {
     console.error('[Booking] Error:', error);
     await whatsappService.sendTextMessage(from, 'عذراً، حدث خطأ. يرجى المحاولة لاحقاً.');
-    bookingSessions.delete(from);
+    clearBookingSession(from);
   }
 };
 
@@ -1013,7 +1042,7 @@ const handleSessionInput = async (from, patient, content, session) => {
     return await startBookingFlow(from, patient);
   }
   if (session.step === 'ask_consultation') {
-    bookingSessions.delete(from);
+    clearBookingSession(from);
     await prisma.consultation.create({
       data: {
         patientId: patient.id,
@@ -1035,7 +1064,7 @@ const handleSessionInput = async (from, patient, content, session) => {
   }
 
   if (session.step === 'check_appointment') {
-    bookingSessions.delete(from);
+    clearBookingSession(from);
     const ref = content.trim();
     const appointment = await prisma.appointment.findUnique({
       where: { bookingRef: ref },
@@ -1064,7 +1093,7 @@ const handleSessionInput = async (from, patient, content, session) => {
 
   if (session.step === 'select_day' || session.step === 'select_period' || session.step === 'select_time') {
     // User typed instead of selecting - treat as inquiry
-    bookingSessions.delete(from);
+    clearBookingSession(from);
     return await handleInquiry(from, patient, content);
   }
 };
@@ -1357,9 +1386,9 @@ const handleMessengerInbound = async (event) => {
 
       const quickReplies = [
         { title: 'ًں“… ط§ط­ط¬ط² ظ…ظˆط¹ط¯', payload: 'BOOK_APPOINTMENT' },
-        { title: 'ًں’° ط£ط³ط¹ط§ط± ط§ظ„ظƒط´ظپ', payload: 'ط£ط³ط¹ط§ط± ط§ظ„ظƒط´ظپ ط¨ط§ظ„ط¹ظٹط§ط¯ط©' },
-        { title: 'âŒڑ ظ…ظˆط§ط¹ظٹط¯ ط§ظ„ط¹ظ…ظ„', payload: 'ظ…ط§ ظ‡ظٹ ظ…ظˆط§ط¹ظٹط¯ ط§ظ„ط¹ظ…ظ„طں' },
-        { title: 'ًں“چ ط¹ظ†ظˆط§ظ† ط§ظ„ط¹ظٹط§ط¯ط©', payload: 'ظ…ط§ ظ‡ظˆ ط¹ظ†ظˆط§ظ† ط§ظ„ط¹ظٹط§ط¯ط©طں' },
+        { title: 'أسعار الكشف', payload: 'أسعار الكشف بالعيادة' },
+        { title: 'مواعيد العمل', payload: 'ما هي مواعيد العمل؟' },
+        { title: 'عنوان العيادة', payload: 'ما هو عنوان العيادة؟' },
       ];
 
       const aiResponse = await openaiService.getInquiryResponse(content || routingContent, recentMessages.reverse());
@@ -1381,7 +1410,7 @@ const handleMessengerInbound = async (event) => {
 
     await messengerService.sendTextMessage(
       senderId,
-      'ط´ظƒط±ط§ظ‹ ظ„طھظˆط§طµظ„ظƒ! ط³ظٹطھظ… ط§ظ„ط±ط¯ ط¹ظ„ظٹظƒ ظ‚ط±ظٹط¨ط§ظ‹.',
+      'شكراً لتواصلك! سيتم الرد عليك قريبًا.',
       [{ title: 'ًں“… ط§ط­ط¬ط² ظ…ظˆط¹ط¯', payload: 'BOOK_APPOINTMENT' }]
     );
   } catch (error) {
@@ -1623,9 +1652,9 @@ const handleInstagramInbound = async (event) => {
 
       const quickReplies = [
         { title: 'ًں“… ط§ط­ط¬ط² ظ…ظˆط¹ط¯', payload: 'BOOK_APPOINTMENT' },
-        { title: 'ًں’° ط£ط³ط¹ط§ط± ط§ظ„ظƒط´ظپ', payload: 'ط£ط³ط¹ط§ط± ط§ظ„ظƒط´ظپ ط¨ط§ظ„ط¹ظٹط§ط¯ط©' },
-        { title: 'âŒڑ ظ…ظˆط§ط¹ظٹط¯ ط§ظ„ط¹ظ…ظ„', payload: 'ظ…ط§ ظ‡ظٹ ظ…ظˆط§ط¹ظٹط¯ ط§ظ„ط¹ظ…ظ„طں' },
-        { title: 'ًں“چ ط¹ظ†ظˆط§ظ† ط§ظ„ط¹ظٹط§ط¯ط©', payload: 'ظ…ط§ ظ‡ظˆ ط¹ظ†ظˆط§ظ† ط§ظ„ط¹ظٹط§ط¯ط©طں' },
+        { title: 'أسعار الكشف', payload: 'أسعار الكشف بالعيادة' },
+        { title: 'مواعيد العمل', payload: 'ما هي مواعيد العمل؟' },
+        { title: 'عنوان العيادة', payload: 'ما هو عنوان العيادة؟' },
       ];
 
       const aiResponse = await openaiService.getInquiryResponse(content || routingContent, recentMessages.reverse());

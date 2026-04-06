@@ -3,7 +3,7 @@
  */
 const formatDateAr = (date) => {
   const d = new Date(date);
-  const days = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+  const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
   const day = d.getDate();
   const month = d.getMonth() + 1;
   return `${days[d.getDay()]} ${day}/${month}`;

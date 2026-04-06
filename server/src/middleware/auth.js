@@ -25,7 +25,9 @@ const auth = async (req, res, next) => {
     next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({ error: 'انتهت صلاحية الجلسة - يرجى تسجيل الدخول مجدداً' });
+      return res
+        .status(401)
+        .json({ error: 'انتهت صلاحية الجلسة - يرجى تسجيل الدخول مجددًا' });
     }
     return res.status(401).json({ error: 'توكن غير صالح' });
   }

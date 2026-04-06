@@ -1,5 +1,21 @@
 const prisma = require('../lib/prisma');
-const { hasConflict, generateTimeSlots, formatDateAr, formatTimeAr } = require('../utils/helpers');
+const { generateTimeSlots, formatDateAr, formatTimeAr } = require('../utils/helpers');
+
+const buildRange = (time, durationMinutes) => {
+  const start = new Date(time).getTime();
+  const end = start + durationMinutes * 60 * 1000;
+  return { start, end };
+};
+
+const rangesOverlap = (a, b) => a.start < b.end && a.end > b.start;
+
+const getDayBounds = (time) => {
+  const dayStart = new Date(time);
+  dayStart.setHours(0, 0, 0, 0);
+  const dayEnd = new Date(time);
+  dayEnd.setHours(23, 59, 59, 999);
+  return { dayStart, dayEnd };
+};
 
 /**
  * Create a new appointment with conflict detection + pending lock
@@ -10,19 +26,25 @@ const createAppointment = async ({ patientId, doctorId, serviceId, scheduledTime
   if (!service) throw new Error('الخدمة غير موجودة');
 
   // Check for existing confirmed/pending appointments at this time for the doctor
+  const { dayStart, dayEnd } = getDayBounds(scheduledTime);
   const existingAppointments = await prisma.appointment.findMany({
     where: {
       doctorId,
       status: { in: ['CONFIRMED', 'PENDING'] },
       id: rescheduleAptId ? { not: rescheduleAptId } : undefined,
-      scheduledTime: {
-        gte: new Date(new Date(scheduledTime).getTime() - service.duration * 60 * 1000),
-        lte: new Date(new Date(scheduledTime).getTime() + service.duration * 60 * 1000),
-      },
+      scheduledTime: { gte: dayStart, lte: dayEnd },
     },
+    include: { service: true },
   });
 
-  if (existingAppointments.length > 0) {
+  const requestedRange = buildRange(scheduledTime, service.duration);
+  const hasOverlap = existingAppointments.some((appointment) => {
+    const duration = appointment.service?.duration || service.duration;
+    const appointmentRange = buildRange(appointment.scheduledTime, duration);
+    return rangesOverlap(requestedRange, appointmentRange);
+  });
+
+  if (hasOverlap) {
     // There's a conflict - suggest alternatives
     const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
     const alternatives = await getAlternativeSlots(doctorId, scheduledTime, doctor.workingHours, service.duration);
@@ -93,19 +115,25 @@ const confirmAppointment = async (appointmentId) => {
   if (appointment.status === 'EXPIRED') throw new Error('الموعد منتهي الصلاحية');
 
   // Final conflict check
+  const { dayStart, dayEnd } = getDayBounds(appointment.scheduledTime);
   const conflicts = await prisma.appointment.findMany({
     where: {
       id: { not: appointmentId },
       doctorId: appointment.doctorId,
-      status: 'CONFIRMED',
-      scheduledTime: {
-        gte: new Date(appointment.scheduledTime.getTime() - appointment.service.duration * 60 * 1000),
-        lte: new Date(appointment.scheduledTime.getTime() + appointment.service.duration * 60 * 1000),
-      },
+      status: { in: ['CONFIRMED', 'PENDING'] },
+      scheduledTime: { gte: dayStart, lte: dayEnd },
     },
+    include: { service: true },
   });
 
-  if (conflicts.length > 0) {
+  const requestedRange = buildRange(appointment.scheduledTime, appointment.service.duration);
+  const hasOverlap = conflicts.some((existing) => {
+    const duration = existing.service?.duration || appointment.service.duration;
+    const existingRange = buildRange(existing.scheduledTime, duration);
+    return rangesOverlap(requestedRange, existingRange);
+  });
+
+  if (hasOverlap) {
     const alternatives = await getAlternativeSlots(
       appointment.doctorId,
       appointment.scheduledTime,

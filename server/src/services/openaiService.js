@@ -1,4 +1,4 @@
-const { OpenAI } = require('openai');
+﻿const { OpenAI } = require('openai');
 const config = require('../config/env');
 const prisma = require('../lib/prisma');
 const { resolveWhatsAppChatLink } = require('../utils/clinicLinks');
