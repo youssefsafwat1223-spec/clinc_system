@@ -107,6 +107,9 @@ const detectIntent = (text) => {
     return 'default';
   }
 
+  if (/(مرحبا|أهلا|اهلا|السلام عليكم|سلام|هاي|hello|hi|hey|start)/i.test(text)) {
+    return 'greeting';
+  }
   if (/(احجز|حجز|موعد|appointment|book)/i.test(text)) {
     return 'booking';
   }
@@ -170,7 +173,9 @@ const manychatWebhook = async (req, res) => {
 
     let replyText = '';
 
-    if (intent === 'booking') {
+    if (intent === 'greeting') {
+      replyText = buildDefaultReply(clinicName);
+    } else if (intent === 'booking') {
       replyText = whatsappLink
         ? `تمام، للحجز مباشرة تواصل معنا عبر الرابط:\n${whatsappLink}`
         : `تمام، للحجز اكتب اسم الطبيب والخدمة واليوم المناسب لك، وفريق ${clinicName} سيتابع معك.`;
