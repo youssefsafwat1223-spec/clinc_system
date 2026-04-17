@@ -1,7 +1,18 @@
 const crypto = require('crypto');
 const prisma = require('../lib/prisma');
+const openaiService = require('../services/openaiService');
 
 const DEFAULT_QUICK_REPLIES = ['احجز موعد', 'أسعار الخدمات', 'عنوان العيادة', 'مواعيد العمل'];
+
+const DAY_LABELS = {
+  sunday: 'الأحد',
+  monday: 'الاثنين',
+  tuesday: 'الثلاثاء',
+  wednesday: 'الأربعاء',
+  thursday: 'الخميس',
+  friday: 'الجمعة',
+  saturday: 'السبت',
+};
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 
@@ -29,37 +40,26 @@ const formatCurrency = (value) => {
   return `${value} ريال`;
 };
 
-const buildWorkingHoursText = (workingHours) => {
+const formatWorkingHours = (workingHours = {}, heading = 'مواعيد العمل') => {
   if (!workingHours || typeof workingHours !== 'object') {
-    return 'مواعيد العمل غير متاحة الآن.';
+    return `${heading} غير متاحة الآن.`;
   }
 
-  const dayMap = {
-    sunday: 'الأحد',
-    monday: 'الاثنين',
-    tuesday: 'الثلاثاء',
-    wednesday: 'الأربعاء',
-    thursday: 'الخميس',
-    friday: 'الجمعة',
-    saturday: 'السبت',
-  };
-
-  const ordered = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-  const lines = ordered
-    .map((day) => {
-      const slot = workingHours[day];
-      if (!slot || !slot.start || !slot.end) {
+  const lines = Object.entries(DAY_LABELS)
+    .map(([dayKey, label]) => {
+      const slot = workingHours?.[dayKey];
+      if (!slot?.start || !slot?.end) {
         return null;
       }
-      return `- ${dayMap[day]}: ${slot.start} - ${slot.end}`;
+      return `- ${label}: ${slot.start} - ${slot.end}`;
     })
     .filter(Boolean);
 
   if (!lines.length) {
-    return 'مواعيد العمل غير متاحة الآن.';
+    return `${heading} غير متاحة الآن.`;
   }
 
-  return `مواعيد العمل:\n${lines.join('\n')}`;
+  return `${heading}:\n${lines.join('\n')}`;
 };
 
 const buildServicesText = (services) => {
@@ -80,8 +80,26 @@ const buildDoctorsText = (doctors) => {
     return 'لا يوجد أطباء متاحون حالياً.';
   }
 
-  const lines = doctors.slice(0, 12).map((doctor) => `- ${doctor.name}${doctor.specialization ? ` (${doctor.specialization})` : ''}`);
+  const lines = doctors.slice(0, 12).map((doctor) => {
+    const specialization = doctor.specialization ? ` (${doctor.specialization})` : '';
+    return `- ${doctor.name}${specialization}`;
+  });
+
   return `الأطباء المتاحون:\n${lines.join('\n')}`;
+};
+
+const buildDoctorsSchedulesText = (doctors) => {
+  if (!doctors.length) {
+    return 'لا توجد مواعيد أطباء متاحة حالياً.';
+  }
+
+  const sections = doctors.map((doctor) => {
+    const specialization = doctor.specialization ? ` - ${doctor.specialization}` : '';
+    const schedule = formatWorkingHours(doctor.workingHours || {}, `مواعيد ${doctor.name}${specialization}`);
+    return schedule;
+  });
+
+  return `مواعيد الدكاترة:\n\n${sections.join('\n\n')}`;
 };
 
 const detectIntent = (text) => {
@@ -89,24 +107,30 @@ const detectIntent = (text) => {
     return 'default';
   }
 
-  if (/احجز|حجز|موعد|appointment|book/i.test(text)) {
+  if (/(احجز|حجز|موعد|appointment|book)/i.test(text)) {
     return 'booking';
   }
-  if (/اسعار|سعر|كشف|الخدمات|service|price/i.test(text)) {
+  if (/(اسعار|أسعار|سعر|تكلفة|الكشف|الخدمات|service|price)/i.test(text)) {
     return 'prices';
   }
-  if (/عنوان|لوكيشن|location|map|خرائط|google maps/i.test(text)) {
+  if (/(عنوان|العنوان|لوكيشن|location|map|maps|خرائط|google maps)/i.test(text)) {
     return 'address';
   }
-  if (/مواعيد|ساعات|دوام|working|hours/i.test(text)) {
+  if (/(مواعيد الدكاتره|مواعيد الدكاترة|مواعيد الأطباء|دوام الدكاتره|دوام الدكاترة|doctor schedules?)/i.test(text)) {
+    return 'doctor_schedules';
+  }
+  if (/(مواعيد|ساعات|دوام|working|hours)/i.test(text)) {
     return 'hours';
   }
-  if (/دكتور|دكاترة|اطباء|أطباء|doctor/i.test(text)) {
+  if (/(دكتور|دكاترة|دكاتره|اطباء|أطباء|doctor)/i.test(text)) {
     return 'doctors';
   }
 
   return 'default';
 };
+
+const buildDefaultReply = (clinicName) =>
+  `أهلاً بك في ${clinicName}.\nاكتب:\n- احجز موعد\n- أسعار الخدمات\n- عنوان العيادة\n- مواعيد العمل`;
 
 const manychatWebhook = async (req, res) => {
   try {
@@ -117,7 +141,7 @@ const manychatWebhook = async (req, res) => {
     }
 
     if (expectedToken) {
-      const incomingToken = req.headers['x-webhook-token'] || req.headers['authorization']?.replace(/^Bearer\s+/i, '');
+      const incomingToken = req.headers['x-webhook-token'] || req.headers.authorization?.replace(/^Bearer\s+/i, '');
       if (!timingSafeEqual(incomingToken, expectedToken)) {
         return res.status(401).json({ ok: false, error: 'unauthorized' });
       }
@@ -132,7 +156,7 @@ const manychatWebhook = async (req, res) => {
       }),
       prisma.doctor.findMany({
         where: { active: true },
-        select: { name: true, specialization: true },
+        select: { name: true, specialization: true, workingHours: true },
         orderBy: { createdAt: 'asc' },
       }),
     ]);
@@ -144,12 +168,12 @@ const manychatWebhook = async (req, res) => {
     const mapsLink = settings?.googleMapsLink || '';
     const address = settings?.address || 'العنوان غير متاح حالياً.';
 
-    let replyText;
+    let replyText = '';
 
     if (intent === 'booking') {
       replyText = whatsappLink
         ? `تمام، للحجز مباشرة تواصل معنا عبر الرابط:\n${whatsappLink}`
-        : `تمام، للحجز اكتب اسم الطبيب والخدمة واليوم المناسب لك، وفريق ${clinicName} هيتابع معك.`;
+        : `تمام، للحجز اكتب اسم الطبيب والخدمة واليوم المناسب لك، وفريق ${clinicName} سيتابع معك.`;
     } else if (intent === 'prices') {
       replyText = buildServicesText(services);
     } else if (intent === 'address') {
@@ -157,11 +181,19 @@ const manychatWebhook = async (req, res) => {
         ? `عنوان العيادة:\n${address}\n\nرابط الموقع:\n${mapsLink}`
         : `عنوان العيادة:\n${address}`;
     } else if (intent === 'hours') {
-      replyText = buildWorkingHoursText(settings?.workingHours);
+      replyText = formatWorkingHours(settings?.workingHours);
     } else if (intent === 'doctors') {
       replyText = buildDoctorsText(doctors);
+    } else if (intent === 'doctor_schedules') {
+      replyText = buildDoctorsSchedulesText(doctors);
+    } else if (settings?.aiEnabled && incomingText) {
+      replyText = await openaiService.getInquiryResponse(incomingText, []);
     } else {
-      replyText = `أهلاً بك في ${clinicName}.\nاكتب:\n- احجز موعد\n- أسعار الخدمات\n- عنوان العيادة\n- مواعيد العمل`;
+      replyText = buildDefaultReply(clinicName);
+    }
+
+    if (!replyText) {
+      replyText = buildDefaultReply(clinicName);
     }
 
     return res.json({
