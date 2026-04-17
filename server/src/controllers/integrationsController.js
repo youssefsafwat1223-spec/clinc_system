@@ -31,6 +31,15 @@ const PLATFORM_MAP = {
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 const normalizePlatform = (value) => PLATFORM_MAP[String(value || '').trim().toLowerCase()] || 'FACEBOOK';
+const pickFirstString = (...values) => {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return '';
+};
 
 const writeManyChatLog = (label, payload) => {
   try {
@@ -51,12 +60,47 @@ const timingSafeEqual = (left, right) => {
 };
 
 const readIncomingText = (body) =>
-  body?.message_text ||
-  body?.last_text_input ||
-  body?.text ||
-  body?.message ||
-  body?.input ||
-  '';
+  pickFirstString(
+    body?.message_text,
+    body?.comment_text,
+    body?.comment_message,
+    body?.last_comment_text,
+    body?.last_text_input,
+    body?.text,
+    body?.message,
+    body?.input,
+    body?.content,
+    body?.comment?.text,
+    body?.comment?.message,
+    body?.data?.comment_text,
+    body?.data?.text,
+    body?.full_contact_data?.last_text_input
+  );
+
+const readSourceType = (body) => pickFirstString(body?.source_type, body?.trigger_type).toLowerCase() || 'chat';
+
+const readSubscriberId = (body) =>
+  pickFirstString(
+    body?.subscriber_id,
+    body?.contact_id,
+    body?.user_id,
+    body?.sender_id,
+    body?.id,
+    body?.full_contact_data?.contact_id
+  );
+
+const readFullName = (body) =>
+  pickFirstString(
+    body?.full_name,
+    body?.name,
+    [body?.first_name, body?.last_name].filter(Boolean).join(' '),
+    body?.full_contact_data?.full_name
+  );
+
+const readCommentMetadata = (body) => ({
+  commentId: pickFirstString(body?.comment_id, body?.commentId, body?.comment?.id, body?.data?.comment_id),
+  postId: pickFirstString(body?.post_id, body?.postId, body?.media_id, body?.mediaId, body?.data?.post_id),
+});
 
 const findOrCreateSocialPatient = async ({ platform, senderId, fallbackName }) => {
   const idField = platform === 'FACEBOOK' ? 'facebookId' : 'instagramId';
@@ -238,8 +282,10 @@ const manychatWebhook = async (req, res) => {
     }
 
     const platform = normalizePlatform(req.body?.platform);
-    const senderId = String(req.body?.subscriber_id || '').trim();
-    const fullName = String(req.body?.full_name || '').trim();
+    const senderId = readSubscriberId(req.body);
+    const fullName = readFullName(req.body);
+    const sourceType = readSourceType(req.body);
+    const commentMeta = readCommentMetadata(req.body);
     const fallbackName = fullName || (platform === 'FACEBOOK' ? 'مريض Facebook' : 'مريض Instagram');
 
     const [settings, services, doctors, patient] = await Promise.all([
@@ -263,7 +309,8 @@ const manychatWebhook = async (req, res) => {
         : Promise.resolve(null),
     ]);
 
-    const incomingText = normalizeText(readIncomingText(req.body));
+    const incomingTextRaw = readIncomingText(req.body);
+    const incomingText = normalizeText(incomingTextRaw);
     const intent = detectIntent(incomingText);
     const clinicName = settings?.clinicNameAr || settings?.clinicName || 'العيادة';
     const whatsappLink = settings?.whatsappChatLink || '';
@@ -303,20 +350,24 @@ const manychatWebhook = async (req, res) => {
       replyText = buildDefaultReply(clinicName);
     }
 
-    if (patient && incomingText) {
+    if (patient && (incomingTextRaw || sourceType === 'comment')) {
+      const inboundContent = incomingTextRaw || 'تعليق جديد بدون نص واضح';
       const baseMetadata = {
-        source: 'MANYCHAT',
-        sourceType: req.body?.source_type || 'chat',
+        source: sourceType === 'comment' ? 'COMMENT' : 'MANYCHAT',
+        sourceType,
         rawPlatform: req.body?.platform || '',
         subscriberId: senderId,
         fullName: fullName || null,
         intent,
+        ...(commentMeta.commentId ? { commentId: commentMeta.commentId } : {}),
+        ...(commentMeta.postId ? { postId: commentMeta.postId } : {}),
+        raw: req.body,
       };
 
       await persistSocialMessage({
         patientId: patient.id,
         platform,
-        content: readIncomingText(req.body),
+        content: inboundContent,
         type: 'INBOUND',
         metadata: baseMetadata,
       });
@@ -337,9 +388,11 @@ const manychatWebhook = async (req, res) => {
       intent,
       incomingText,
       replyText,
-      sourceType: req.body?.source_type || '',
+      sourceType,
       platform: req.body?.platform || '',
       patientId: patient?.id || null,
+      senderId: senderId || null,
+      commentId: commentMeta.commentId || null,
     });
 
     return res.json({
