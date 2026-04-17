@@ -1,4 +1,6 @@
 const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 const prisma = require('../lib/prisma');
 const openaiService = require('../services/openaiService');
 
@@ -21,7 +23,18 @@ const DAY_LABELS = {
   saturday: 'السبت',
 };
 
+const manychatLogPath = path.join(process.cwd(), 'manychat-debug.log');
+
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
+const writeManyChatLog = (label, payload) => {
+  try {
+    const line = `[${new Date().toISOString()}] ${label} ${JSON.stringify(payload)}\n`;
+    fs.appendFileSync(manychatLogPath, line, 'utf8');
+  } catch (error) {
+    console.error('[ManyChat] Failed to write debug log:', error.message);
+  }
+};
 
 const timingSafeEqual = (left, right) => {
   const a = Buffer.from(String(left || ''), 'utf8');
@@ -147,14 +160,24 @@ const buildDefaultReply = (clinicName) =>
 
 const manychatWebhook = async (req, res) => {
   try {
+    writeManyChatLog('incoming', {
+      headers: {
+        hasWebhookToken: !!req.headers['x-webhook-token'],
+        userAgent: req.headers['user-agent'] || '',
+      },
+      body: req.body,
+    });
+
     const expectedToken = process.env.MANYCHAT_WEBHOOK_TOKEN;
     if (!expectedToken) {
       console.error('[ManyChat] MANYCHAT_WEBHOOK_TOKEN is not configured');
+      writeManyChatLog('misconfigured', { reason: 'missing_webhook_token' });
       return res.status(500).json({ ok: false, error: 'server_misconfigured' });
     }
 
     const incomingToken = req.headers['x-webhook-token'] || req.headers.authorization?.replace(/^Bearer\s+/i, '');
     if (!timingSafeEqual(incomingToken, expectedToken)) {
+      writeManyChatLog('unauthorized', { body: req.body });
       return res.status(401).json({ ok: false, error: 'unauthorized' });
     }
 
@@ -212,6 +235,14 @@ const manychatWebhook = async (req, res) => {
       replyText = buildDefaultReply(clinicName);
     }
 
+    writeManyChatLog('response', {
+      intent,
+      incomingText,
+      replyText,
+      sourceType: req.body?.source_type || '',
+      platform: req.body?.platform || '',
+    });
+
     return res.json({
       ok: true,
       intent,
@@ -225,6 +256,10 @@ const manychatWebhook = async (req, res) => {
     });
   } catch (error) {
     console.error('[ManyChat] Webhook error:', error.message);
+    writeManyChatLog('error', {
+      message: error.message,
+      body: req.body,
+    });
     return res.status(500).json({
       ok: false,
       error: 'server_error',
