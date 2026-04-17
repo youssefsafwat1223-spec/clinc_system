@@ -117,6 +117,9 @@ const detectIntent = (text) => {
   if (/(مرحبا|أهلا|اهلا|السلام عليكم|سلام|هاي|hello|hi|hey|start)/i.test(text)) {
     return 'greeting';
   }
+  if (/(استفسار سريع عن مشكلة|عندي مشكلة بالاسنان|عندي مشكلة بالأسنان|عندي مشكلة|عندي ألم|اعاني من مشكلة|أعاني من مشكلة|استشارة سريعة|شكوى)/i.test(text)) {
+    return 'problem_inquiry';
+  }
   if (/(احجز|حجز|موعد|appointment|book)/i.test(text)) {
     return 'booking';
   }
@@ -145,16 +148,14 @@ const buildDefaultReply = (clinicName) =>
 const manychatWebhook = async (req, res) => {
   try {
     const expectedToken = process.env.MANYCHAT_WEBHOOK_TOKEN;
-    if (process.env.NODE_ENV === 'production' && !expectedToken) {
-      console.error('[ManyChat] MANYCHAT_WEBHOOK_TOKEN is not configured in production');
+    if (!expectedToken) {
+      console.error('[ManyChat] MANYCHAT_WEBHOOK_TOKEN is not configured');
       return res.status(500).json({ ok: false, error: 'server_misconfigured' });
     }
 
-    if (expectedToken) {
-      const incomingToken = req.headers['x-webhook-token'] || req.headers.authorization?.replace(/^Bearer\s+/i, '');
-      if (!timingSafeEqual(incomingToken, expectedToken)) {
-        return res.status(401).json({ ok: false, error: 'unauthorized' });
-      }
+    const incomingToken = req.headers['x-webhook-token'] || req.headers.authorization?.replace(/^Bearer\s+/i, '');
+    if (!timingSafeEqual(incomingToken, expectedToken)) {
+      return res.status(401).json({ ok: false, error: 'unauthorized' });
     }
 
     const [settings, services, doctors] = await Promise.all([
@@ -182,6 +183,9 @@ const manychatWebhook = async (req, res) => {
 
     if (intent === 'greeting') {
       replyText = buildDefaultReply(clinicName);
+    } else if (intent === 'problem_inquiry') {
+      replyText =
+        'أكيد، اكتب لي المشكلة أو الأعراض باختصار، مثل: ألم، تورم، نزيف، حساسية، كسر، أو رائحة، وسأعطيك ردًا مبدئيًا مناسبًا.';
     } else if (intent === 'booking') {
       replyText = whatsappLink
         ? `تمام، للحجز مباشرة تواصل معنا عبر الرابط:\n${whatsappLink}`
