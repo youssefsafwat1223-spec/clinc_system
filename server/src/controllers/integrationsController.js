@@ -2,7 +2,14 @@ const crypto = require('crypto');
 const prisma = require('../lib/prisma');
 const openaiService = require('../services/openaiService');
 
-const DEFAULT_QUICK_REPLIES = ['احجز موعد', 'أسعار الخدمات', 'عنوان العيادة', 'مواعيد العمل', 'مواعيد الدكاتره'];
+const DEFAULT_QUICK_REPLIES = [
+  'احجز موعد',
+  'أسعار الخدمات',
+  'عنوان العيادة',
+  'مواعيد العمل',
+  'مواعيد الدكاتره',
+  'استفسار سريع عن مشكلة',
+];
 
 const DAY_LABELS = {
   sunday: 'الأحد',
@@ -133,7 +140,7 @@ const detectIntent = (text) => {
 };
 
 const buildDefaultReply = (clinicName) =>
-  `أهلاً بك في ${clinicName}.\nاكتب:\n- احجز موعد\n- أسعار الخدمات\n- عنوان العيادة\n- مواعيد العمل\n- مواعيد الدكاتره`;
+  `أهلاً بك في ${clinicName}.\nاكتب:\n- احجز موعد\n- أسعار الخدمات\n- عنوان العيادة\n- مواعيد العمل\n- مواعيد الدكاتره\n- استفسار سريع عن مشكلة`;
 
 const manychatWebhook = async (req, res) => {
   try {
