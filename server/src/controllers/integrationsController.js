@@ -24,8 +24,13 @@ const DAY_LABELS = {
 };
 
 const manychatLogPath = path.join(process.cwd(), 'manychat-debug.log');
+const PLATFORM_MAP = {
+  facebook: 'FACEBOOK',
+  instagram: 'INSTAGRAM',
+};
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
+const normalizePlatform = (value) => PLATFORM_MAP[String(value || '').trim().toLowerCase()] || 'FACEBOOK';
 
 const writeManyChatLog = (label, payload) => {
   try {
@@ -52,6 +57,57 @@ const readIncomingText = (body) =>
   body?.message ||
   body?.input ||
   '';
+
+const findOrCreateSocialPatient = async ({ platform, senderId, fallbackName }) => {
+  const idField = platform === 'FACEBOOK' ? 'facebookId' : 'instagramId';
+
+  let patient = await prisma.patient.findFirst({
+    where: {
+      OR: [{ [idField]: senderId }, { platform, phone: senderId }],
+    },
+  });
+
+  if (patient) {
+    const updates = {};
+
+    if (patient[idField] !== senderId) {
+      updates[idField] = senderId;
+    }
+
+    if (patient.name !== fallbackName && patient.name?.startsWith('مريض ')) {
+      updates.name = fallbackName;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      patient = await prisma.patient.update({
+        where: { id: patient.id },
+        data: updates,
+      });
+    }
+
+    return patient;
+  }
+
+  return prisma.patient.create({
+    data: {
+      name: fallbackName,
+      phone: senderId,
+      platform,
+      [idField]: senderId,
+    },
+  });
+};
+
+const persistSocialMessage = async ({ patientId, platform, content, type, metadata = null }) =>
+  prisma.message.create({
+    data: {
+      patientId,
+      platform,
+      content,
+      type,
+      ...(metadata ? { metadata } : {}),
+    },
+  });
 
 const formatCurrency = (value) => {
   if (typeof value !== 'number') {
@@ -181,7 +237,12 @@ const manychatWebhook = async (req, res) => {
       return res.status(401).json({ ok: false, error: 'unauthorized' });
     }
 
-    const [settings, services, doctors] = await Promise.all([
+    const platform = normalizePlatform(req.body?.platform);
+    const senderId = String(req.body?.subscriber_id || '').trim();
+    const fullName = String(req.body?.full_name || '').trim();
+    const fallbackName = fullName || (platform === 'FACEBOOK' ? 'مريض Facebook' : 'مريض Instagram');
+
+    const [settings, services, doctors, patient] = await Promise.all([
       prisma.clinicSettings.findFirst(),
       prisma.service.findMany({
         where: { active: true },
@@ -193,6 +254,13 @@ const manychatWebhook = async (req, res) => {
         select: { name: true, specialization: true, workingHours: true },
         orderBy: { createdAt: 'asc' },
       }),
+      senderId
+        ? findOrCreateSocialPatient({
+            platform,
+            senderId,
+            fallbackName,
+          })
+        : Promise.resolve(null),
     ]);
 
     const incomingText = normalizeText(readIncomingText(req.body));
@@ -235,12 +303,43 @@ const manychatWebhook = async (req, res) => {
       replyText = buildDefaultReply(clinicName);
     }
 
+    if (patient && incomingText) {
+      const baseMetadata = {
+        source: 'MANYCHAT',
+        sourceType: req.body?.source_type || 'chat',
+        rawPlatform: req.body?.platform || '',
+        subscriberId: senderId,
+        fullName: fullName || null,
+        intent,
+      };
+
+      await persistSocialMessage({
+        patientId: patient.id,
+        platform,
+        content: readIncomingText(req.body),
+        type: 'INBOUND',
+        metadata: baseMetadata,
+      });
+
+      await persistSocialMessage({
+        patientId: patient.id,
+        platform,
+        content: replyText,
+        type: 'OUTBOUND',
+        metadata: {
+          ...baseMetadata,
+          delivery: 'MANYCHAT_AUTOMATION',
+        },
+      });
+    }
+
     writeManyChatLog('response', {
       intent,
       incomingText,
       replyText,
       sourceType: req.body?.source_type || '',
       platform: req.body?.platform || '',
+      patientId: patient?.id || null,
     });
 
     return res.json({
