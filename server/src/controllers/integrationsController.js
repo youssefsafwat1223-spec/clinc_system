@@ -102,6 +102,15 @@ const readCommentMetadata = (body) => ({
   postId: pickFirstString(body?.post_id, body?.postId, body?.media_id, body?.mediaId, body?.data?.post_id),
 });
 
+const isPlaceholderName = (value) => {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return true;
+  }
+
+  return /^\{\{[^}]+\}\}$/.test(normalized) || normalized.toLowerCase() === 'full name';
+};
+
 const findOrCreateSocialPatient = async ({ platform, senderId, fallbackName }) => {
   const idField = platform === 'FACEBOOK' ? 'facebookId' : 'instagramId';
 
@@ -118,7 +127,10 @@ const findOrCreateSocialPatient = async ({ platform, senderId, fallbackName }) =
       updates[idField] = senderId;
     }
 
-    if (patient.name !== fallbackName && patient.name?.startsWith('مريض ')) {
+    if (
+      patient.name !== fallbackName &&
+      (patient.name?.startsWith('مريض ') || isPlaceholderName(patient.name))
+    ) {
       updates.name = fallbackName;
     }
 
