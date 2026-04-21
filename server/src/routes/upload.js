@@ -45,10 +45,8 @@ router.post('/', requireRole('ADMIN'), upload.single('image'), (req, res) => {
     return res.status(400).json({ error: 'الرجاء اختيار صورة لرفعها' });
   }
 
-  // Define the base URL properly depending on env or just return relative URL
-  const protocol = req.protocol;
-  const host = req.get('host');
-  const fileUrl = `${protocol}://${host}/images/${req.file.filename}`;
+  // Return a relative URL which is more robust behind proxies
+  const fileUrl = `/images/${req.file.filename}`;
 
   res.json({
     message: 'تم رفع الصورة بنجاح',
