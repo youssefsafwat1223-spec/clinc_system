@@ -56,7 +56,8 @@ app.use(
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // Serve uploaded images statically - Fixed path (src/ to public/ is one level up)
-app.use('/images', express.static(path.join(__dirname, '../public/images')));
+// Using /api/images to ensure Nginx proxies it to the backend correctly
+app.use('/api/images', express.static(path.join(__dirname, '../public/images')));
 
 app.get('/api/health', (req, res) => {
   res.json({
