@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Edit2, Mail, Phone, Plus, Search, ShieldCheck, Stethoscope, Trash2, UserSquare2, Users } from 'lucide-react';
+import { Edit2, Mail, Phone, Plus, Search, ShieldCheck, Stethoscope, Trash2, UserSquare2, Users, UploadCloud, Loader2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
@@ -42,6 +42,7 @@ export default function StaffPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentDoctor, setCurrentDoctor] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -141,6 +142,33 @@ export default function StaffPage() {
       fetchDoctors();
     } catch (error) {
       toast.error(error.message || 'فشل الحذف');
+    }
+  };
+
+  const handleImageUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('حجم الصورة يجب أن لا يتجاوز 5 ميجابايت');
+      return;
+    }
+
+    try {
+      setIsUploading(true);
+      const uploadData = new FormData();
+      uploadData.append('image', file);
+
+      const res = await api.post('/upload', uploadData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      setFormData((prev) => ({ ...prev, image: res.data.url }));
+      toast.success('تم رفع الصورة بنجاح');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'فشل رفع الصورة');
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -336,15 +364,41 @@ export default function StaffPage() {
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-dark-muted">رابط صورة الطبيب (اختياري)</label>
-                  <input
-                    type="url"
-                    value={formData.image}
-                    onChange={(event) => setFormData({ ...formData, image: event.target.value })}
-                    className="input-field"
-                    dir="ltr"
-                    placeholder="https://example.com/doctor.png"
-                  />
+                  <label className="mb-1 block text-sm font-medium text-dark-muted">صورة الطبيب (اختياري)</label>
+                  
+                  <div className="flex items-center gap-4">
+                    {formData.image ? (
+                      <div className="relative h-16 w-16 overflow-hidden rounded-full ring-2 ring-primary-500/20">
+                        <img src={formData.image} alt="صورة الطبيب" className="h-full w-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, image: '' })}
+                          className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition-opacity hover:opacity-100"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-dark-bg/50 ring-1 ring-dark-border">
+                        <UserSquare2 className="h-6 w-6 text-dark-muted" />
+                      </div>
+                    )}
+                    
+                    <div className="flex-1 relative">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        disabled={isUploading}
+                        className="absolute inset-0 h-full w-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+                      />
+                      <div className={`flex items-center gap-2 rounded-lg border border-dashed border-dark-border bg-dark-bg/30 px-4 py-3 text-sm text-slate-300 transition-colors ${isUploading ? 'opacity-50' : 'hover:border-primary-500/50 hover:bg-dark-bg/50'}`}>
+                        {isUploading ? <Loader2 className="h-5 w-5 animate-spin text-primary-400" /> : <UploadCloud className="h-5 w-5 text-dark-muted" />}
+                        {isUploading ? 'جاري الرفع...' : 'اضغط لاختيار صورة (أو اسحبها هنا)'}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-[10px] text-dark-muted">أنواع الملفات المسموحة: jpeg, png, webp (الحد الأقصى 5MB)</p>
                 </div>
 
                 <div className="rounded-xl border border-dark-border/60 bg-dark-bg/30 p-4">

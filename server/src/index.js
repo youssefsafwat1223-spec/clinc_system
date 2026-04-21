@@ -1,4 +1,5 @@
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
@@ -23,6 +24,7 @@ const consultationRoutes = require('./routes/consultations');
 const campaignRoutes = require('./routes/campaigns');
 const prescriptionRoutes = require('./routes/prescriptions');
 const notificationsRoutes = require('./routes/notifications');
+const uploadRoutes = require('./routes/upload');
 
 const app = express();
 
@@ -50,6 +52,9 @@ app.use(
 );
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
+// Serve uploaded images statically
+app.use('/images', express.static(path.join(__dirname, '../../public/images')));
+
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
@@ -72,6 +77,7 @@ app.use('/api/consultations', consultationRoutes);
 app.use('/api/campaigns', campaignRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/upload', uploadRoutes);
 
 app.use(errorHandler);
 
