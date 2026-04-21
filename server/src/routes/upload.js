@@ -46,7 +46,7 @@ router.post('/', requireRole('ADMIN'), upload.single('image'), (req, res) => {
   }
 
   // Return a relative URL which is more robust behind proxies
-  const fileUrl = `/images/${req.file.filename}`;
+  const fileUrl = `/api/images/${req.file.filename}`;
 
   res.json({
     message: 'تم رفع الصورة بنجاح',
