@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stethoscope, Lock, Mail, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -21,7 +21,7 @@ export default function LoginPage() {
       localStorage.setItem('user', JSON.stringify(res.data.user));
       
       toast.success('تم تسجيل الدخول بنجاح');
-      navigate('/');
+      navigate('/dashboard');
     } catch (error) {
       toast.error(error.message || 'خطأ في تسجيل الدخول');
     } finally {
@@ -105,14 +105,7 @@ export default function LoginPage() {
             </button>
           </form>
           
-          <div className="mt-8 text-center border-t border-dark-border/40 pt-6">
-            <p className="text-sm text-dark-muted mb-2">بيانات تجريبية</p>
-            <div className="inline-flex gap-4 text-xs font-mono bg-dark-bg px-4 py-2 rounded-lg border border-dark-border/50 text-slate-300">
-               <span>admin@clinic.com</span>
-               <span className="opacity-50">/</span>
-               <span>admin123</span>
-            </div>
-          </div>
+
         </div>
       </div>
     </div>

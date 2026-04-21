@@ -1,6 +1,7 @@
-﻿import { Suspense, lazy } from 'react';
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
+const LandingPage = lazy(() => import('./pages/LandingPage.jsx'));
 const LoginPage = lazy(() => import('./pages/LoginPage.jsx'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const InboxPage = lazy(() => import('./pages/InboxPage.jsx'));
@@ -26,7 +27,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
   try {
     const user = JSON.parse(userStr);
     if (allowedRoles && !allowedRoles.includes(user.role)) {
-      return <Navigate to="/" replace />;
+      return <Navigate to="/dashboard" replace />;
     }
   } catch {
     return <Navigate to="/login" replace />;
@@ -52,11 +53,14 @@ function App() {
     <BrowserRouter>
       <Suspense fallback={<PageLoader />}>
         <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
 
+          {/* Protected dashboard routes */}
           <Route
-            path="/"
+            path="/dashboard"
             element={
               <ProtectedRoute>
                 <DashboardPage />

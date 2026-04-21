@@ -1,8 +1,11 @@
 const express = require('express');
-const { getAll, create, update, remove } = require('../controllers/serviceController');
+const { getAll, getPublic, create, update, remove } = require('../controllers/serviceController');
 const { auth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
+
+// Public endpoint - no auth required
+router.get('/public', getPublic);
 
 router.use(auth);
 router.get('/', getAll);

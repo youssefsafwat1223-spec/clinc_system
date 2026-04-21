@@ -62,6 +62,45 @@ const buildKnowledgeImportPreview = ({ currentAiConfig, importData, mode }) => {
   };
 };
 
+const getPublic = async (req, res, next) => {
+  try {
+    const settings = await getOrCreateSettings();
+
+    // Fetch active doctors (public info only)
+    const doctors = await prisma.doctor.findMany({
+      where: { active: true },
+      select: { id: true, name: true, specialization: true, image: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    // Fetch real stats
+    const [patientCount, appointmentCount] = await Promise.all([
+      prisma.patient.count(),
+      prisma.appointment.count({ where: { status: 'CONFIRMED' } }),
+    ]);
+
+    res.json({
+      clinic: {
+        name: settings.clinicName,
+        nameAr: settings.clinicNameAr,
+        phone: settings.phone,
+        address: settings.address,
+        whatsappLink: settings.whatsappChatLink,
+        googleMapsLink: settings.googleMapsLink,
+        workingHours: settings.workingHours,
+      },
+      doctors,
+      stats: {
+        patients: patientCount,
+        appointments: appointmentCount,
+        doctors: doctors.length,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getOrCreateSettings = async () => {
   let settings = await prisma.clinicSettings.findFirst();
 
@@ -298,4 +337,4 @@ const preview = async (req, res, next) => {
   }
 };
 
-module.exports = { get, update, preview, importKnowledgeCases, previewKnowledgeImport };
+module.exports = { get, getPublic, update, preview, importKnowledgeCases, previewKnowledgeImport };

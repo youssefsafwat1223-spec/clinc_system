@@ -9,6 +9,19 @@ const getAll = async (req, res, next) => {
   }
 };
 
+const getPublic = async (req, res, next) => {
+  try {
+    const services = await prisma.service.findMany({
+      where: { active: true },
+      select: { id: true, name: true, nameAr: true, description: true, price: true, duration: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json({ services });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const create = async (req, res, next) => {
   try {
     const { name, nameAr, description, price, duration } = req.body;
@@ -50,4 +63,4 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, create, update, remove };
+module.exports = { getAll, getPublic, create, update, remove };

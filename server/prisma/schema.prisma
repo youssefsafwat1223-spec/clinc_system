@@ -66,6 +66,7 @@ model Doctor {
   name           String
   specialization String
   phone          String?
+  image          String?
   workingHours   Json          @default("{}") @map("working_hours")
   active         Boolean       @default(true)
   userId         String?       @unique @map("user_id")

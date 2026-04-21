@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   Bot,
@@ -18,7 +18,7 @@ import clsx from 'clsx';
 import api from '../../api/client';
 
 const navItems = [
-  { path: '/', label: 'الرئيسية', icon: Home },
+  { path: '/dashboard', label: 'الرئيسية', icon: Home },
   { path: '/inbox', label: 'صندوق الوارد', icon: MessageSquare },
   { path: '/appointments', label: 'المواعيد', icon: Calendar },
   { path: '/consultations', label: 'الاستشارات', icon: FileText },
