@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Edit2, Mail, Phone, Plus, Search, ShieldCheck, Stethoscope, Trash2, UserSquare2, Users } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
@@ -47,6 +47,7 @@ export default function StaffPage() {
     name: '',
     specialization: '',
     phone: '',
+    image: '',
     email: '',
     password: '',
     active: true,
@@ -75,6 +76,7 @@ export default function StaffPage() {
         name: doctor.name || '',
         specialization: doctor.specialization || '',
         phone: doctor.phone || '',
+        image: doctor.image || '',
         email: doctor.user?.email || '',
         password: '',
         active: doctor.active ?? doctor.user?.active ?? true,
@@ -85,6 +87,7 @@ export default function StaffPage() {
         name: '',
         specialization: '',
         phone: '',
+        image: '',
         email: '',
         password: '',
         active: true,
@@ -101,6 +104,7 @@ export default function StaffPage() {
       const payload = {
         ...formData,
         phone: formData.phone || null,
+        image: formData.image || null,
       };
 
       if (!payload.password) {
@@ -227,10 +231,14 @@ export default function StaffPage() {
                       </button>
                     </div>
 
-                    <div className="absolute -bottom-10 right-6 flex h-20 w-20 items-center justify-center rounded-full border-4 border-dark-card bg-dark-card shadow-xl">
-                      <div className="flex h-full w-full items-center justify-center rounded-full bg-gradient-to-br from-primary-400/20 to-primary-600/20">
-                        <UserSquare2 className="h-8 w-8 text-primary-400" />
-                      </div>
+                    <div className="absolute -bottom-10 right-6 flex h-20 w-20 items-center justify-center rounded-full border-4 border-dark-card bg-dark-card shadow-xl overflow-hidden">
+                      {doctor.image ? (
+                        <img src={doctor.image} alt={doctor.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary-400/20 to-primary-600/20">
+                          <UserSquare2 className="h-8 w-8 text-primary-400" />
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -324,6 +332,18 @@ export default function StaffPage() {
                     className="input-field"
                     dir="ltr"
                     placeholder="+201000000000"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-dark-muted">رابط صورة الطبيب (اختياري)</label>
+                  <input
+                    type="url"
+                    value={formData.image}
+                    onChange={(event) => setFormData({ ...formData, image: event.target.value })}
+                    className="input-field"
+                    dir="ltr"
+                    placeholder="https://example.com/doctor.png"
                   />
                 </div>
 

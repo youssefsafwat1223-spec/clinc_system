@@ -66,7 +66,7 @@ const getMine = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
-    const { name, specialization, phone, workingHours, email, password, active } = req.body;
+    const { name, specialization, phone, image, workingHours, email, password, active } = req.body;
 
     let userId = null;
 
@@ -89,6 +89,7 @@ const create = async (req, res, next) => {
         name,
         specialization,
         phone,
+        image,
         workingHours: workingHours || {},
         ...(active !== undefined && { active }),
         userId,
@@ -106,7 +107,7 @@ const create = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const { name, specialization, phone, workingHours, active, email, password } = req.body;
+    const { name, specialization, phone, image, workingHours, active, email, password } = req.body;
     const existingDoctor = await prisma.doctor.findUnique({
       where: { id: req.params.id },
       include: { user: true },
@@ -157,6 +158,7 @@ const update = async (req, res, next) => {
           ...(name !== undefined && { name }),
           ...(specialization !== undefined && { specialization }),
           ...(phone !== undefined && { phone }),
+          ...(image !== undefined && { image }),
           ...(workingHours !== undefined && { workingHours }),
           ...(active !== undefined && { active }),
           ...(userId !== existingDoctor.userId && { userId }),
