@@ -29,7 +29,7 @@ const routeTitles = {
   '/campaigns': 'الحملات والرسائل الجماعية',
   '/settings': 'إعدادات النظام الأساسية',
   '/ai-settings': 'تخصيص مساعد الذكاء الاصطناعي',
-  '/analytics': 'مؤشرات الأداء والتحليلات',\r
+  '/analytics': 'مؤشرات الأداء والتحليلات',
   '/reviews': 'تقييمات المرضى وآرائهم',
 };
 
@@ -365,17 +365,15 @@ export default function Header({ onMenuClick }) {
                     <button
                       key={filter.id}
                       onClick={() => setNotificationFilter(filter.id)}
-                      className={`flex min-w-fit items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition-all ${
-                        notificationFilter === filter.id
+                      className={`flex min-w-fit items-center gap-2 rounded-full px-3 py-2 text-xs font-bold transition-all ${notificationFilter === filter.id
                           ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
                           : 'bg-dark-bg/60 text-slate-400 hover:text-white'
-                      }`}
+                        }`}
                     >
                       <span>{filter.label}</span>
                       <span
-                        className={`rounded-full px-1.5 py-0.5 text-[10px] ${
-                          notificationFilter === filter.id ? 'bg-white/15 text-white' : 'bg-dark-border/50 text-slate-300'
-                        }`}
+                        className={`rounded-full px-1.5 py-0.5 text-[10px] ${notificationFilter === filter.id ? 'bg-white/15 text-white' : 'bg-dark-border/50 text-slate-300'
+                          }`}
                       >
                         {getNotificationFilterCount(notifications, filter.id)}
                       </span>
@@ -413,11 +411,10 @@ export default function Header({ onMenuClick }) {
                               <button
                                 key={notification.id}
                                 onClick={() => handleNotificationClick(notification)}
-                                className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-right transition-colors hover:bg-[#1e293b]/50 ${
-                                  notification.read
+                                className={`flex w-full items-start gap-3 rounded-2xl border p-4 text-right transition-colors hover:bg-[#1e293b]/50 ${notification.read
                                     ? 'border-dark-border/50 bg-dark-bg/30'
                                     : 'border-primary-500/20 bg-primary-900/10'
-                                }`}
+                                  }`}
                               >
                                 <div className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1 ${meta.bubbleClass}`}>
                                   <Icon className={`h-4.5 w-4.5 ${meta.iconClass}`} />
