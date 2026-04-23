@@ -4,7 +4,7 @@ const { formatCurrency } = require('./helpers');
 /**
  * Build WhatsApp welcome message with quick reply buttons
  */
-const buildWelcomeMessage = (to) => ({
+const buildWelcomeMessageLegacy = (to) => ({
   messaging_product: 'whatsapp',
   recipient_type: 'individual',
   to,
@@ -26,6 +26,38 @@ const buildWelcomeMessage = (to) => ({
             { id: 'manage_bookings', title: '📋 إدارة حجوزاتي', description: 'عرض أو إلغاء أو تأجيل حجز' },
             { id: 'request_reception', title: '🙋‍♂️ التحدث للإدارة', description: 'التواصل مع موظف الاستقبال' },
             { id: 'inquiry', title: '❓ استفسار آلي', description: 'سؤال المساعد الآلي للعيادة' },
+          ],
+        },
+      ],
+    },
+  },
+});
+
+const buildWelcomeMessage = (to) => ({
+  messaging_product: 'whatsapp',
+  recipient_type: 'individual',
+  to,
+  type: 'interactive',
+  interactive: {
+    type: 'list',
+    body: {
+      text: 'مرحباً بك في عيادتنا\nاختر من القائمة الخدمة التي تحتاجها، وسنساعدك خطوة بخطوة في الحجز أو الاستفسار أو متابعة مواعيدك.',
+    },
+    footer: {
+      text: 'إذا كنت محتار، ابدأ بـ "احجز موعد جديد" أو "استفسار آلي سريع".',
+    },
+    action: {
+      button: 'القائمة الرئيسية',
+      sections: [
+        {
+          title: 'الخدمات السريعة',
+          rows: [
+            { id: 'book_appointment', title: 'احجز موعد جديد', description: 'ابدأ الحجز وحدد الخدمة والطبيب والوقت' },
+            { id: 'check_appointment', title: 'استعلام عن حجز', description: 'اعرف حالة الموعد برقم الحجز' },
+            { id: 'request_consultation', title: 'استشارة أولية', description: 'أرسل سؤالك أو وصف الحالة للطبيب' },
+            { id: 'manage_bookings', title: 'إدارة حجوزاتي', description: 'عرض أو تعديل أو إلغاء موعد موجود' },
+            { id: 'request_reception', title: 'التحدث مع الاستقبال', description: 'تحويلك لموظف خدمة العملاء' },
+            { id: 'inquiry', title: 'استفسار آلي سريع', description: 'أسئلة عامة عن الخدمات أو المواعيد' },
           ],
         },
       ],

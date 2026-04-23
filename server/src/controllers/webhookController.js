@@ -26,6 +26,8 @@ const { generateTimeSlots, formatDateAr, formatTimeAr } = require('../utils/help
 // In-memory session store for booking flow (per phone number)
 const bookingSessions = new Map();
 const BOOKING_SESSION_TTL_MS = 30 * 60 * 1000;
+const processedWhatsAppMessages = new Map();
+const PROCESSED_WHATSAPP_MESSAGE_TTL_MS = 10 * 60 * 1000;
 
 const pruneBookingSessions = () => {
   const now = Date.now();
@@ -53,6 +55,26 @@ const setBookingSession = (key, data) => {
 
 const clearBookingSession = (key) => {
   bookingSessions.delete(key);
+};
+
+const hasProcessedWhatsAppMessage = (messageId) => {
+  if (!messageId) {
+    return false;
+  }
+
+  const now = Date.now();
+  for (const [id, timestamp] of processedWhatsAppMessages.entries()) {
+    if (now - timestamp > PROCESSED_WHATSAPP_MESSAGE_TTL_MS) {
+      processedWhatsAppMessages.delete(id);
+    }
+  }
+
+  if (processedWhatsAppMessages.has(messageId)) {
+    return true;
+  }
+
+  processedWhatsAppMessages.set(messageId, now);
+  return false;
 };
 const webhookDebugLogPath = path.join(process.cwd(), 'webhook-debug.log');
 const SOCIAL_BOOKING_PATTERN = /(?:\u062d\u062c\u0632|\u0645\u0648\u0639\u062f|\u0627\u062d\u062c\u0632|book|appointment|BOOK_APPOINTMENT)/i;
@@ -389,6 +411,11 @@ const handleWhatsAppMessage = async (message, contact) => {
   const messageId = message.id;
 
   try {
+    if (hasProcessedWhatsAppMessage(messageId)) {
+      console.log('[WhatsApp] Duplicate webhook message ignored:', messageId);
+      return;
+    }
+
     // Mark as read
     await whatsappService.markAsRead(messageId);
 
@@ -476,6 +503,9 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     if (selectedId === 'book_appointment') {
+      if (session?.step === 'select_service') {
+        return await whatsappService.sendTextMessage(from, 'أنت بالفعل داخل خطوات الحجز. اختر الخدمة من القائمة الظاهرة فوق.');
+      }
       return await startBookingFlow(from, patient);
     }
 
