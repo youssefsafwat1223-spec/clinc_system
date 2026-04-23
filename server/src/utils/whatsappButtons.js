@@ -33,7 +33,7 @@ const buildWelcomeMessageLegacy = (to) => ({
   },
 });
 
-const buildWelcomeMessage = (to) => ({
+const buildWelcomeMessageWithLongFooter = (to) => ({
   messaging_product: 'whatsapp',
   recipient_type: 'individual',
   to,
@@ -57,6 +57,38 @@ const buildWelcomeMessage = (to) => ({
             { id: 'request_consultation', title: 'استشارة أولية', description: 'أرسل سؤالك أو وصف الحالة للطبيب' },
             { id: 'manage_bookings', title: 'إدارة حجوزاتي', description: 'عرض أو تعديل أو إلغاء موعد موجود' },
             { id: 'request_reception', title: 'التحدث مع الاستقبال', description: 'تحويلك لموظف خدمة العملاء' },
+            { id: 'inquiry', title: 'استفسار آلي سريع', description: 'أسئلة عامة عن الخدمات أو المواعيد' },
+          ],
+        },
+      ],
+    },
+  },
+});
+
+const buildWelcomeMessage = (to) => ({
+  messaging_product: 'whatsapp',
+  recipient_type: 'individual',
+  to,
+  type: 'interactive',
+  interactive: {
+    type: 'list',
+    body: {
+      text: 'مرحباً بك في عيادتنا\nاختر من القائمة الخدمة التي تحتاجها وسنساعدك خطوة بخطوة.',
+    },
+    footer: {
+      text: 'ابدأ بالحجز أو اختر استفسار سريع',
+    },
+    action: {
+      button: 'القائمة الرئيسية',
+      sections: [
+        {
+          title: 'الخدمات السريعة',
+          rows: [
+            { id: 'book_appointment', title: 'احجز موعد جديد', description: 'ابدأ الحجز وحدد الخدمة والطبيب' },
+            { id: 'check_appointment', title: 'استعلام عن حجز', description: 'اعرف حالة الحجز برقم المرجع' },
+            { id: 'request_consultation', title: 'استشارة أولية', description: 'أرسل سؤالك أو وصف الحالة' },
+            { id: 'manage_bookings', title: 'إدارة حجوزاتي', description: 'عرض أو تعديل أو إلغاء موعد' },
+            { id: 'request_reception', title: 'التحدث مع الاستقبال', description: 'تحويل المحادثة لموظف مختص' },
             { id: 'inquiry', title: 'استفسار آلي سريع', description: 'أسئلة عامة عن الخدمات أو المواعيد' },
           ],
         },
