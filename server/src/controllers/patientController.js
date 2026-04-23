@@ -98,6 +98,10 @@ const getOne = async (req, res, next) => {
         orderBy: { scheduledTime: 'desc' },
       },
       messages: { orderBy: { createdAt: 'desc' }, take: 50 },
+      prescriptions: {
+        include: { doctor: { select: { name: true, specialization: true } } },
+        orderBy: { createdAt: 'desc' },
+      },
     });
 
     if (!patient) {

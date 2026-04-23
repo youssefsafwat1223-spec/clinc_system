@@ -1,5 +1,5 @@
-﻿import { useEffect, useMemo, useState } from 'react';
-import { Calendar, FileText, MessageSquare, Phone, Save, Search, Send, UserRound, Users, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Calendar, ClipboardList, FileText, MessageSquare, Phone, Pill, Save, Search, Send, UserRound, Users, X } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'react-toastify';
@@ -67,6 +67,7 @@ export default function PatientsPage() {
   const [rxDiagnosis, setRxDiagnosis] = useState('');
   const [rxMedicines, setRxMedicines] = useState('');
   const [rxNotes, setRxNotes] = useState('');
+  const [rxSending, setRxSending] = useState(false);
 
   const fetchPatients = async (currentPage = page, currentSearch = searchTerm) => {
     try {
@@ -152,6 +153,7 @@ export default function PatientsPage() {
     }
 
     try {
+      setRxSending(true);
       const res = await api.post('/prescriptions', {
         patientId: activePatient.id,
         diagnosis: rxDiagnosis,
@@ -163,12 +165,22 @@ export default function PatientsPage() {
       await api.post(`/prescriptions/${prescriptionId}/send`);
 
       toast.success('تم حفظ الروشتة وإرسالها للمريض بنجاح');
+
+      // Add to local history so it appears instantly
+      if (res.data.prescription) {
+        setPatientDetails((prev) => prev ? {
+          ...prev,
+          prescriptions: [res.data.prescription, ...(prev.prescriptions || [])],
+        } : prev);
+      }
+
       setRxDiagnosis('');
       setRxMedicines('');
       setRxNotes('');
-      setModalTab('OVERVIEW');
     } catch (error) {
-      toast.error('فشل في إنشاء أو إرسال الروشتة');
+      toast.error(error.response?.data?.error || 'فشل في إنشاء أو إرسال الروشتة');
+    } finally {
+      setRxSending(false);
     }
   };
 
@@ -190,6 +202,7 @@ export default function PatientsPage() {
   const activePatient = patientDetails || selectedPatient;
   const patientAppointments = patientDetails?.appointments || [];
   const patientMessages = patientDetails?.messages || [];
+  const patientPrescriptions = patientDetails?.prescriptions || [];
 
   return (
     <AppLayout>
@@ -547,57 +560,128 @@ export default function PatientsPage() {
                     </div>
                   </div>
                 ) : (
-                  <form onSubmit={handleCreatePrescription} className="space-y-4 fade-in">
-                    <div className="mb-4 flex gap-3 rounded-xl border border-primary-500/20 bg-primary-900/10 p-4">
-                      <FileText className="h-5 w-5 shrink-0 text-primary-400" />
-                      <p className="text-xs leading-relaxed text-slate-300">
-                        سيتم إنشاء الروشتة الإلكترونية وإرسالها مباشرة إلى رقم المريض
-                        {' '}
-                        <span dir="ltr">({activePatient?.phone || selectedPatient.phone})</span>
-                        .
-                      </p>
+                  <div className="space-y-6 fade-in">
+                    {/* ── New prescription form ── */}
+                    <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-emerald-950/20 to-dark-card p-5">
+                      <div className="mb-5 flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15">
+                          <Pill className="h-5 w-5 text-emerald-400" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white">إصدار روشتة جديدة</h3>
+                          <p className="text-xs text-slate-400">
+                            سيتم إرسالها فوراً لرقم{' '}
+                            <span dir="ltr" className="font-medium text-emerald-300">{activePatient?.phone || selectedPatient.phone}</span>
+                          </p>
+                        </div>
+                      </div>
+
+                      <form onSubmit={handleCreatePrescription} className="space-y-4">
+                        <div>
+                          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">التشخيص الطبي *</label>
+                          <input
+                            type="text"
+                            value={rxDiagnosis}
+                            onChange={(event) => setRxDiagnosis(event.target.value)}
+                            className="w-full rounded-xl border border-dark-border bg-dark-bg/80 px-4 py-3 text-sm text-white shadow-inner transition-colors focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                            placeholder="مثال: التهاب لثة حاد"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">الأدوية والجرعات *</label>
+                          <textarea
+                            value={rxMedicines}
+                            onChange={(event) => setRxMedicines(event.target.value)}
+                            className="h-32 w-full resize-none rounded-xl border border-dark-border bg-dark-bg/80 px-4 py-3 text-sm leading-relaxed text-white shadow-inner transition-colors focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                            dir="auto"
+                            placeholder={`Panadol Advance 500mg - 1 tablet every 8 hours\nAmoxil 500mg - 1 capsule every 12 hours`}
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">ملاحظات إضافية</label>
+                          <textarea
+                            value={rxNotes}
+                            onChange={(event) => setRxNotes(event.target.value)}
+                            className="h-20 w-full resize-none rounded-xl border border-dark-border bg-dark-bg/80 px-4 py-3 text-sm text-white shadow-inner transition-colors focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                            placeholder="تعليمات ما بعد الكشف أو تنبيهات للمريض"
+                          />
+                        </div>
+
+                        <div className="flex justify-end border-t border-dark-border/50 pt-4">
+                          <button
+                            type="submit"
+                            disabled={rxSending}
+                            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 hover:shadow-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {rxSending ? (
+                              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                            ) : (
+                              <Send className="h-4 w-4 rtl:-scale-x-100" />
+                            )}
+                            {rxSending ? 'جاري الإرسال...' : 'حفظ وإرسال للمريض'}
+                          </button>
+                        </div>
+                      </form>
                     </div>
 
+                    {/* ── Prescription history ── */}
                     <div>
-                      <label className="mb-2 block text-sm font-bold text-slate-300">التشخيص الطبي *</label>
-                      <input
-                        type="text"
-                        value={rxDiagnosis}
-                        onChange={(event) => setRxDiagnosis(event.target.value)}
-                        className="input-field rounded-xl bg-dark-bg"
-                        required
-                      />
-                    </div>
+                      <div className="mb-3 flex items-center gap-2">
+                        <ClipboardList className="h-4 w-4 text-emerald-400" />
+                        <h3 className="font-bold text-white">سجل الروشتات السابقة</h3>
+                        <span className="rounded-full bg-dark-bg px-2 py-0.5 text-[10px] font-bold text-slate-400">{patientPrescriptions.length}</span>
+                      </div>
 
-                    <div>
-                      <label className="mb-2 block text-sm font-bold text-slate-300">الأدوية والجرعات *</label>
-                      <textarea
-                        value={rxMedicines}
-                        onChange={(event) => setRxMedicines(event.target.value)}
-                        className="h-32 w-full resize-none rounded-xl border border-dark-border bg-dark-bg px-4 py-3 font-sans leading-relaxed text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        dir="auto"
-                        placeholder={`- Panadol Advance 500mg (1 tablet every 8 hours)\n- Amoxil 500mg (1 capsule every 12 hours)`}
-                        required
-                      />
-                    </div>
+                      {patientPrescriptions.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-dark-border bg-dark-bg/30 p-8 text-center">
+                          <Pill className="mx-auto mb-3 h-8 w-8 text-dark-muted opacity-30" />
+                          <p className="text-sm text-dark-muted">لم يتم صرف روشتات لهذا المريض بعد.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3">
+                          {patientPrescriptions.map((rx) => {
+                            const meds = Array.isArray(rx.medications)
+                              ? rx.medications.filter(Boolean).join(' • ')
+                              : typeof rx.medications === 'string'
+                                ? rx.medications
+                                : '';
 
-                    <div>
-                      <label className="mb-2 block text-sm font-bold text-slate-300">ملاحظات إضافية</label>
-                      <textarea
-                        value={rxNotes}
-                        onChange={(event) => setRxNotes(event.target.value)}
-                        className="h-24 w-full resize-none rounded-xl border border-dark-border bg-dark-bg px-4 py-3 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        placeholder="أي تعليمات إضافية أو تنبيهات للمريض"
-                      />
-                    </div>
+                            return (
+                              <div key={rx.id} className="rounded-xl border border-dark-border bg-dark-bg/40 p-4 transition-colors hover:border-emerald-500/20">
+                                <div className="mb-2 flex items-start justify-between gap-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10">
+                                      <FileText className="h-3.5 w-3.5 text-emerald-400" />
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-bold text-white">{rx.diagnosis || 'بدون تشخيص'}</p>
+                                      <p className="text-[10px] text-slate-500">
+                                        {rx.doctor?.name ? `د. ${rx.doctor.name}` : ''}
+                                        {rx.doctor?.name && rx.createdAt ? ' • ' : ''}
+                                        {rx.createdAt ? format(parseISO(rx.createdAt), 'dd MMM yyyy - hh:mm a', { locale: ar }) : ''}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
 
-                    <div className="flex justify-end pt-4">
-                      <button type="submit" className="btn-primary rounded-xl px-6 py-2.5 font-bold transition-transform hover:scale-[1.02]">
-                        <Send className="h-4 w-4 rtl:-scale-x-100" />
-                        حفظ وإرسال للمريض
-                      </button>
+                                {meds ? (
+                                  <p className="mt-2 line-clamp-2 rounded-lg bg-dark-bg/60 px-3 py-2 text-xs leading-6 text-slate-300">{meds}</p>
+                                ) : null}
+
+                                {rx.notes ? (
+                                  <p className="mt-2 text-xs italic text-slate-500">ملاحظات: {rx.notes}</p>
+                                ) : null}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </form>
+                  </div>
                 )}
               </div>
             </div>
