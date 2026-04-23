@@ -237,6 +237,88 @@ async function main() {
   });
   console.log('Sample patient ready:', patient.name);
 
+  const templatesData = [
+    {
+      name: 'clinic_offer_image_ar',
+      displayName: 'عرض بصورة',
+      category: 'MARKETING',
+      languageCode: 'ar',
+      headerType: 'IMAGE',
+      bodyText:
+        'يسر عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان تقديم عرض خاص وخدمات مميزة. للحجز أو الاستفسار تواصل معنا الآن.',
+      footerText: 'للحجز والاستفسار',
+    },
+    {
+      name: 'clinic_offer_text_ar',
+      displayName: 'عرض نصي',
+      category: 'MARKETING',
+      languageCode: 'ar',
+      headerType: 'NONE',
+      bodyText:
+        'يسر عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان تقديم عروض وخدمات مميزة. للحجز أو معرفة التفاصيل تواصل معنا الآن.',
+      footerText: 'عيادة د. إبراهيم',
+    },
+    {
+      name: 'clinic_followup_ar',
+      displayName: 'متابعة للمرضى',
+      category: 'UTILITY',
+      languageCode: 'ar',
+      headerType: 'NONE',
+      bodyText:
+        'نذكركم بمتابعة حالتكم مع عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان. إذا كنتم بحاجة إلى حجز أو استفسار، تواصلوا معنا.',
+      footerText: 'خدمتكم تهمنا',
+    },
+    {
+      name: 'booking_confirmed_ar',
+      displayName: 'تأكيد الحجز',
+      category: 'UTILITY',
+      languageCode: 'ar',
+      headerType: 'NONE',
+      bodyText:
+        '✅ تم تأكيد حجزك بنجاح!\n\nرقم الحجز: *{{1}}*\n\n📋 الخدمة: {{2}}\n👨‍⚕️ الدكتور: {{3}}\n📅 الموعد: {{4}}\n⏰ الوقت: {{5}}\n\nسنرسل لك تذكير قبل الموعد. شكراً لك! 🙏',
+      footerText: null,
+    },
+    {
+      name: 'booking_rejected_ar',
+      displayName: 'رفض الحجز',
+      category: 'UTILITY',
+      languageCode: 'ar',
+      headerType: 'NONE',
+      bodyText:
+        'تعذر تثبيت الموعد المطلوب.\n\nالخدمة: {{1}}\nالسبب: {{2}}\n\nيرجى التواصل معنا لتحديد موعد بديل.',
+      footerText: null,
+    },
+    {
+      name: 'booking_rejected_with_alternatives_ar',
+      displayName: 'رفض الحجز مع بدائل',
+      category: 'UTILITY',
+      languageCode: 'ar',
+      headerType: 'NONE',
+      bodyText:
+        'تعذر تثبيت الموعد المطلوب.\n\nالخدمة: {{1}}\nالسبب: {{2}}\n\nالمواعيد البديلة المقترحة:\n- {{3}}\n- {{4}}\n- {{5}}',
+      footerText: null,
+    },
+    {
+      name: 'appointment_reminder_ar',
+      displayName: 'تذكير بالموعد',
+      category: 'UTILITY',
+      languageCode: 'ar',
+      headerType: 'NONE',
+      bodyText:
+        '🔔 تذكير بموعدك\n\nمرحبًا {{1}}،\nتذكير بموعدك يوم {{2}} الساعة {{3}}.\n\n👨‍⚕️ الدكتور: {{4}}\n📋 الخدمة: {{5}}\n\nنتطلع لرؤيتك! 😊',
+      footerText: null,
+    },
+  ];
+
+  for (const data of templatesData) {
+    await prisma.campaignTemplate.upsert({
+      where: { name: data.name },
+      update: data,
+      create: data,
+    });
+  }
+  console.log('Campaign templates ready');
+
   console.log('\nSeeding completed');
   console.log('\nLogin credentials:');
   console.log('  Admin: admin@clinic.com / admin123');

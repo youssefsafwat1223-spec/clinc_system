@@ -166,6 +166,23 @@ model ClinicSettings {
   @@map("clinic_settings")
 }
 
+model CampaignTemplate {
+  id           String   @id @default(uuid())
+  name         String   @unique
+  displayName  String   @map("display_name")
+  category     String   @default("MARKETING")
+  languageCode String   @default("ar") @map("language_code")
+  headerType   String   @default("NONE") @map("header_type")
+  bodyText     String?  @map("body_text")
+  footerText   String?  @map("footer_text")
+  imageUrl     String?  @map("image_url")
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("campaign_templates")
+}
+
 model Notification {
   id            String      @id @default(uuid())
   appointmentId String      @map("appointment_id")

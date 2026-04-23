@@ -5,6 +5,7 @@ module.exports = {
   nodeEnv: process.env.NODE_ENV || 'development',
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  dashboardUrl: process.env.DASHBOARD_URL || 'http://localhost:5173',
 
   openai: {
     apiKey: process.env.OPENAI_API_KEY,

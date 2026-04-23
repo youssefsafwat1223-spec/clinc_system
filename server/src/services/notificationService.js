@@ -4,6 +4,67 @@ const messengerService = require('./messengerService');
 const instagramService = require('./instagramService');
 const { formatDateAr, formatTimeAr } = require('../utils/helpers');
 
+const WHATSAPP_TEMPLATES = {
+  bookingConfirmed: 'booking_confirmed_ar',
+  bookingRejected: 'booking_rejected_ar',
+  bookingRejectedWithAlternatives: 'booking_rejected_with_alternatives_ar',
+  appointmentReminder: 'appointment_reminder_ar',
+};
+
+const CARE_WINDOW_HOURS = 24;
+
+const getServiceName = (appointment) => appointment.service?.nameAr || appointment.service?.name || 'الخدمة';
+const getDoctorName = (appointment) => appointment.doctor?.name || 'غير محدد';
+
+const isWithinWhatsAppCareWindow = async (patientId) => {
+  if (!patientId) {
+    return false;
+  }
+
+  const since = new Date(Date.now() - CARE_WINDOW_HOURS * 60 * 60 * 1000);
+  const inboundMessage = await prisma.message.findFirst({
+    where: {
+      patientId,
+      platform: 'WHATSAPP',
+      type: 'INBOUND',
+      createdAt: { gte: since },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+
+  return Boolean(inboundMessage);
+};
+
+const sendWhatsAppTextOrTemplate = async ({
+  patient,
+  textContent,
+  templateName,
+  bodyParams = [],
+}) => {
+  const withinWindow = await isWithinWhatsAppCareWindow(patient.id);
+
+  if (withinWindow) {
+    await whatsappService.sendTextMessage(patient.phone, textContent);
+    return { mode: 'text', content: textContent };
+  }
+
+  await whatsappService.sendTemplateMessage(patient.phone, templateName, 'ar', null, bodyParams);
+  return { mode: 'template', content: textContent };
+};
+
+const buildReminderText = (appointment) => [
+  '🔔 تذكير بموعدك',
+  '',
+  `مرحبًا ${appointment.patient?.name || 'عزيزي المريض'}،`,
+  `تذكير بموعدك يوم ${formatDateAr(appointment.scheduledTime)} الساعة ${formatTimeAr(appointment.scheduledTime)}.`,
+  '',
+  `👨‍⚕️ الدكتور: ${getDoctorName(appointment)}`,
+  `📋 الخدمة: ${getServiceName(appointment)}`,
+  '',
+  'نتطلع لرؤيتك! 😊',
+].join('\n');
+
 const sendReminders = async (hoursBeforeAppointment = 24) => {
   const now = new Date();
   const targetTime = new Date(now.getTime() + hoursBeforeAppointment * 60 * 60 * 1000);
@@ -40,21 +101,29 @@ const sendReminders = async (hoursBeforeAppointment = 24) => {
       continue;
     }
 
-    const reminderText = [
-      `تذكير بموعدك بعد ${hoursBeforeAppointment} ساعة`,
-      '',
-      `الخدمة: ${appointment.service?.nameAr || appointment.service?.name || 'الخدمة'}`,
-      `الدكتور: ${appointment.doctor?.name || 'غير محدد'}`,
-      `التاريخ: ${formatDateAr(appointment.scheduledTime)}`,
-      `الوقت: ${formatTimeAr(appointment.scheduledTime)}`,
-    ].join('\n');
+    const reminderText = buildReminderText(appointment);
 
     try {
-      await sendTextByChannel({
-        channel,
-        patient: appointment.patient,
-        content: reminderText,
-      });
+      if (channel === 'WHATSAPP') {
+        await sendWhatsAppTextOrTemplate({
+          patient: appointment.patient,
+          textContent: reminderText,
+          templateName: WHATSAPP_TEMPLATES.appointmentReminder,
+          bodyParams: [
+            appointment.patient?.name || 'عزيزي المريض',
+            formatDateAr(appointment.scheduledTime),
+            formatTimeAr(appointment.scheduledTime),
+            getDoctorName(appointment),
+            getServiceName(appointment),
+          ],
+        });
+      } else {
+        await sendTextByChannel({
+          channel,
+          patient: appointment.patient,
+          content: reminderText,
+        });
+      }
 
       await prisma.notification.create({
         data: {
@@ -84,35 +153,29 @@ const sendReminders = async (hoursBeforeAppointment = 24) => {
 };
 
 const buildBookingConfirmationText = (appointment) => {
-  const serviceName = appointment.service?.nameAr || appointment.service?.name || 'الخدمة';
-  const doctorName = appointment.doctor?.name || 'غير محدد';
-  const lines = [
-    'تم تأكيد حجزك بنجاح',
-    '',
-  ];
+  const lines = ['✅ تم تأكيد حجزك بنجاح!', ''];
 
   if (appointment.bookingRef) {
-    lines.push(`كود الحجز: ${appointment.bookingRef}`, '');
+    lines.push(`رقم الحجز: *${appointment.bookingRef}*`, '');
   }
 
   lines.push(
-    `الخدمة: ${serviceName}`,
-    `الدكتور: ${doctorName}`,
-    `التاريخ: ${formatDateAr(appointment.scheduledTime)}`,
-    `الوقت: ${formatTimeAr(appointment.scheduledTime)}`,
+    `📋 الخدمة: ${getServiceName(appointment)}`,
+    `👨‍⚕️ الدكتور: ${getDoctorName(appointment)}`,
+    `📅 الموعد: ${formatDateAr(appointment.scheduledTime)}`,
+    `⏰ الوقت: ${formatTimeAr(appointment.scheduledTime)}`,
     '',
-    'إذا أردت تعديل الموعد أو إلغاءه، اكتب لنا من نفس المحادثة.'
+    'سنرسل لك تذكير قبل الموعد. شكراً لك! 🙏'
   );
 
   return lines.join('\n');
 };
 
 const buildBookingRejectedText = (appointment, alternatives = []) => {
-  const serviceName = appointment.service?.nameAr || appointment.service?.name || 'الخدمة';
   const baseLines = [
     'تعذر تثبيت الموعد المطلوب.',
     '',
-    `الخدمة: ${serviceName}`,
+    `الخدمة: ${getServiceName(appointment)}`,
     `السبب: ${appointment.notes || 'تعديل إداري'}`,
   ];
 
@@ -202,11 +265,26 @@ const sendBookingConfirmed = async (appointment) => {
   }
 
   const content = buildBookingConfirmationText(appointment);
-  await sendTextByChannel({
-    channel,
-    patient: appointment.patient,
-    content,
-  });
+  if (channel === 'WHATSAPP') {
+    await sendWhatsAppTextOrTemplate({
+      patient: appointment.patient,
+      textContent: content,
+      templateName: WHATSAPP_TEMPLATES.bookingConfirmed,
+      bodyParams: [
+        appointment.bookingRef || '-',
+        getServiceName(appointment),
+        getDoctorName(appointment),
+        formatDateAr(appointment.scheduledTime),
+        formatTimeAr(appointment.scheduledTime),
+      ],
+    });
+  } else {
+    await sendTextByChannel({
+      channel,
+      patient: appointment.patient,
+      content,
+    });
+  }
 
   await logOutboundMessageIfNeeded({
     appointment,
@@ -229,11 +307,41 @@ const sendBookingRejected = async (appointment, alternatives = []) => {
   }
 
   const content = buildBookingRejectedText(appointment, alternatives);
-  await sendTextByChannel({
-    channel,
-    patient: appointment.patient,
-    content,
-  });
+  if (channel === 'WHATSAPP') {
+    const normalizedAlternatives = alternatives
+      .map((alternative) => alternative?.label)
+      .filter(Boolean)
+      .slice(0, 3);
+
+    const templateName =
+      normalizedAlternatives.length >= 3
+        ? WHATSAPP_TEMPLATES.bookingRejectedWithAlternatives
+        : WHATSAPP_TEMPLATES.bookingRejected;
+
+    const bodyParams =
+      normalizedAlternatives.length >= 3
+        ? [
+            getServiceName(appointment),
+            appointment.notes || 'تعديل إداري',
+            normalizedAlternatives[0],
+            normalizedAlternatives[1],
+            normalizedAlternatives[2],
+          ]
+        : [getServiceName(appointment), appointment.notes || 'تعديل إداري'];
+
+    await sendWhatsAppTextOrTemplate({
+      patient: appointment.patient,
+      textContent: content,
+      templateName,
+      bodyParams,
+    });
+  } else {
+    await sendTextByChannel({
+      channel,
+      patient: appointment.patient,
+      content,
+    });
+  }
 
   await logOutboundMessageIfNeeded({
     appointment,

@@ -1,16 +1,104 @@
 const prisma = require('../lib/prisma');
+const config = require('../config/env');
 const whatsappService = require('../services/whatsappService');
+
+const toAbsoluteUrl = (req, url) => {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+
+  const baseUrl = (config.dashboardUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  return new URL(url, `${baseUrl}/`).toString();
+};
+
+const normalizeTemplatePayload = (body) => ({
+  name: body.name?.trim(),
+  displayName: body.displayName?.trim(),
+  category: (body.category || 'MARKETING').trim().toUpperCase(),
+  languageCode: (body.languageCode || 'ar').trim(),
+  headerType: (body.headerType || 'NONE').trim().toUpperCase(),
+  bodyText: body.bodyText?.trim() || null,
+  footerText: body.footerText?.trim() || null,
+  imageUrl: body.imageUrl?.trim() || null,
+  active: body.active !== undefined ? Boolean(body.active) : true,
+});
+
+const listTemplates = async (req, res, next) => {
+  try {
+    const templates = await prisma.campaignTemplate.findMany({
+      orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    res.json({ templates });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createTemplate = async (req, res, next) => {
+  try {
+    const data = normalizeTemplatePayload(req.body);
+
+    if (!data.name || !data.displayName) {
+      return res.status(400).json({ error: 'اسم القالب واسم العرض مطلوبان' });
+    }
+
+    if (data.headerType === 'IMAGE' && !data.imageUrl) {
+      return res.status(400).json({ error: 'ارفع صورة للقالب الذي يحتوي على Header Image' });
+    }
+
+    const template = await prisma.campaignTemplate.create({ data });
+    res.status(201).json({ template });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateTemplate = async (req, res, next) => {
+  try {
+    const data = normalizeTemplatePayload(req.body);
+
+    if (!data.name || !data.displayName) {
+      return res.status(400).json({ error: 'اسم القالب واسم العرض مطلوبان' });
+    }
+
+    if (data.headerType === 'IMAGE' && !data.imageUrl) {
+      return res.status(400).json({ error: 'ارفع صورة للقالب الذي يحتوي على Header Image' });
+    }
+
+    const template = await prisma.campaignTemplate.update({
+      where: { id: req.params.id },
+      data,
+    });
+
+    res.json({ template });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const removeTemplate = async (req, res, next) => {
+  try {
+    await prisma.campaignTemplate.delete({ where: { id: req.params.id } });
+    res.json({ message: 'تم حذف القالب بنجاح' });
+  } catch (error) {
+    next(error);
+  }
+};
 
 const sendBroadcast = async (req, res, next) => {
   try {
-    const { platform = 'WHATSAPP', audience = 'ALL', messageText, broadcastType = 'TEXT', templateName, imageUrl } = req.body;
-    
-    // Validate
-    if (broadcastType === 'TEXT' && !messageText) {
+    const {
+      platform = 'WHATSAPP',
+      audience = 'ALL',
+      messageText,
+      broadcastType = 'TEXT',
+      templateId,
+      templateName,
+      imageUrl,
+    } = req.body;
+
+    if (broadcastType === 'TEXT' && !messageText?.trim()) {
       return res.status(400).json({ error: 'يرجى إدخال نص الرسالة' });
-    }
-    if (broadcastType === 'TEMPLATE' && !templateName) {
-      return res.status(400).json({ error: 'يرجى إدخال اسم الـ Template المعتمد من ميتا' });
     }
 
     if (platform !== 'WHATSAPP') {
@@ -21,33 +109,51 @@ const sendBroadcast = async (req, res, next) => {
       return res.status(400).json({ error: 'هذا الجمهور غير مدعوم حالياً' });
     }
 
+    let selectedTemplate = null;
+    if (broadcastType === 'TEMPLATE') {
+      if (templateId) {
+        selectedTemplate = await prisma.campaignTemplate.findUnique({ where: { id: templateId } });
+      } else if (templateName?.trim()) {
+        selectedTemplate = await prisma.campaignTemplate.findUnique({ where: { name: templateName.trim() } });
+      }
+
+      if (!selectedTemplate && !templateName?.trim()) {
+        return res.status(400).json({ error: 'اختر قالباً محفوظاً قبل الإرسال' });
+      }
+    }
+
     const patients = await prisma.patient.findMany({
       where: { platform: 'WHATSAPP', phone: { not: '' } },
-      select: { id: true, phone: true, name: true }
+      select: { id: true, phone: true, name: true },
     });
 
     if (patients.length === 0) {
       return res.status(400).json({ error: 'لا يوجد مرضى متطابقين في قاعدة البيانات' });
     }
 
+    const resolvedTemplateName = selectedTemplate?.name || templateName?.trim();
+    const resolvedLanguageCode = selectedTemplate?.languageCode || 'ar';
+    const resolvedImageUrl = toAbsoluteUrl(req, selectedTemplate?.imageUrl || imageUrl);
+
     let successCount = 0;
     let failCount = 0;
 
-    // Send the blast
     for (const patient of patients) {
       try {
         if (broadcastType === 'TEMPLATE') {
-          // Send Meta approved template (can include image headers)
-          await whatsappService.sendTemplateMessage(patient.phone, templateName, 'ar', imageUrl);
+          await whatsappService.sendTemplateMessage(
+            patient.phone,
+            resolvedTemplateName,
+            resolvedLanguageCode,
+            resolvedImageUrl
+          );
         } else {
-          // Fallback to text (only works if within 24hr window)
           const personalizedMsg = messageText.replace(/{{name}}/g, patient.name);
           await whatsappService.sendTextMessage(patient.phone, personalizedMsg);
         }
+
         successCount++;
-        
-        // Minor delay to prevent Facebook rate limit blocking
-        await new Promise(resolve => setTimeout(resolve, 300));
+        await new Promise((resolve) => setTimeout(resolve, 300));
       } catch (error) {
         console.error(`Failed to send broadcast to ${patient.phone}:`, error.message);
         failCount++;
@@ -56,11 +162,17 @@ const sendBroadcast = async (req, res, next) => {
 
     res.json({
       success: true,
-      summary: `تم الإرسال لعدد ${successCount} مريض، وفشل ${failCount}.`
+      summary: `تم الإرسال لعدد ${successCount} مريض، وفشل ${failCount}.`,
     });
   } catch (error) {
     next(error);
   }
 };
 
-module.exports = { sendBroadcast };
+module.exports = {
+  listTemplates,
+  createTemplate,
+  updateTemplate,
+  removeTemplate,
+  sendBroadcast,
+};
