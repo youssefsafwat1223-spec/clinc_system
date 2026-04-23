@@ -165,6 +165,29 @@ const getAccessiblePatient = async (req, patientId) => {
   return { patient, scopedDoctor };
 };
 
+const resolveFallbackDoctorIdForPatient = async (patientId) => {
+  const latestAppointment = await prisma.appointment.findFirst({
+    where: {
+      patientId,
+      doctorId: { not: null },
+    },
+    orderBy: { scheduledTime: 'desc' },
+    select: { doctorId: true },
+  });
+
+  if (latestAppointment?.doctorId) {
+    return latestAppointment.doctorId;
+  }
+
+  const firstActiveDoctor = await prisma.doctor.findFirst({
+    where: { active: true },
+    orderBy: { createdAt: 'asc' },
+    select: { id: true },
+  });
+
+  return firstActiveDoctor?.id || null;
+};
+
 const getAccessiblePrescription = async (req, prescriptionId) => {
   const scopedDoctor = await getScopedDoctor(req);
 
@@ -222,13 +245,21 @@ const create = async (req, res, next) => {
       return res.status(404).json({ error: 'المريض غير موجود' });
     }
 
-    const resolvedDoctorId = scopedDoctor?.id || doctorId;
+    let resolvedDoctorId = scopedDoctor?.id || doctorId;
     if (!resolvedDoctorId) {
-      return res.status(400).json({ error: 'الطبيب مطلوب' });
+      resolvedDoctorId = await resolveFallbackDoctorIdForPatient(patient.id);
+    }
+
+    if (!resolvedDoctorId) {
+      return res.status(400).json({ error: 'الطبيب مطلوب لإنشاء الروشتة' });
     }
 
     if (!scopedDoctor) {
-      const doctor = await prisma.doctor.findUnique({ where: { id: resolvedDoctorId }, select: { id: true } });
+      const doctor = await prisma.doctor.findUnique({
+        where: { id: resolvedDoctorId },
+        select: { id: true },
+      });
+
       if (!doctor) {
         return res.status(404).json({ error: 'الطبيب غير موجود' });
       }
@@ -269,11 +300,13 @@ const sendToWhatsApp = async (req, res, next) => {
 
     const msg = buildPrescriptionText(prescription);
     const withinWindow = await isWithinWhatsAppCareWindow(prescription.patient.id);
+
     const pdfPayload = {
       ...prescription,
       formattedDate: formatDateAr(prescription.createdAt),
       formattedMedications: formatMedications(prescription.medications),
     };
+
     const { relativeUrl, filename } = await createPrescriptionPdf({
       prescription: pdfPayload,
       clinicName: 'عيادة د. إبراهيم',
