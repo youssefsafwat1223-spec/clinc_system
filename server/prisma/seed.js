@@ -325,7 +325,7 @@ async function main() {
     displayName: 'إشعار بوجود روشتة',
     category: 'UTILITY',
     languageCode: 'ar',
-    headerType: 'NONE',
+    headerType: 'DOCUMENT',
     bodyText:
       '💊 تم إصدار روشتة طبية جديدة من العيادة.\nيرجى متابعة هذه المحادثة لاستلام تفاصيل الروشتة.',
     footerText: null,

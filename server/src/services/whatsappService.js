@@ -120,21 +120,60 @@ const markAsRead = async (messageId) => {
 /**
  * Send an approved Meta Message Template (for broadcasts outside 24h window)
  * @param bodyParams array of strings for variables {{1}}, {{2}}, etc.
+ * @param headerMedia optional { type: 'image'|'document'|'video', link, filename? }
  */
-const sendTemplateMessage = async (to, templateName, languageCode = 'ar', imageUrl = null, bodyParams = []) => {
+const sendTemplateMessage = async (
+  to,
+  templateName,
+  languageCode = 'ar',
+  imageUrl = null,
+  bodyParams = [],
+  headerMedia = null
+) => {
   const components = [];
 
-  // If an image URL is provided, attach it as a header parameter
-  if (imageUrl) {
-    components.push({
-      type: 'header',
-      parameters: [
-        {
-          type: 'image',
-          image: { link: imageUrl }
-        }
-      ]
-    });
+  const resolvedHeaderMedia =
+    headerMedia && headerMedia.link
+      ? headerMedia
+      : imageUrl
+        ? { type: 'image', link: imageUrl }
+        : null;
+
+  if (resolvedHeaderMedia) {
+    if (resolvedHeaderMedia.type === 'document') {
+      components.push({
+        type: 'header',
+        parameters: [
+          {
+            type: 'document',
+            document: {
+              link: resolvedHeaderMedia.link,
+              ...(resolvedHeaderMedia.filename ? { filename: resolvedHeaderMedia.filename } : {}),
+            },
+          },
+        ],
+      });
+    } else if (resolvedHeaderMedia.type === 'video') {
+      components.push({
+        type: 'header',
+        parameters: [
+          {
+            type: 'video',
+            video: { link: resolvedHeaderMedia.link },
+          },
+        ],
+      });
+    } else {
+      components.push({
+        type: 'header',
+        parameters: [
+          {
+            type: 'image',
+            image: { link: resolvedHeaderMedia.link },
+          },
+        ],
+      });
+    }
   }
 
   // If there are body variables (e.g., patientName, date, time), attach them

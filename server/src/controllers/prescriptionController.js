@@ -269,27 +269,34 @@ const sendToWhatsApp = async (req, res, next) => {
 
     const msg = buildPrescriptionText(prescription);
     const withinWindow = await isWithinWhatsAppCareWindow(prescription.patient.id);
+    const pdfPayload = {
+      ...prescription,
+      formattedDate: formatDateAr(prescription.createdAt),
+      formattedMedications: formatMedications(prescription.medications),
+    };
+    const { relativeUrl, filename } = await createPrescriptionPdf({
+      prescription: pdfPayload,
+      clinicName: 'عيادة د. إبراهيم',
+    });
+    const documentUrl = toAbsoluteUrl(req, relativeUrl);
 
     if (withinWindow) {
-      const pdfPayload = {
-        ...prescription,
-        formattedDate: formatDateAr(prescription.createdAt),
-        formattedMedications: formatMedications(prescription.medications),
-      };
-      const { relativeUrl, filename } = await createPrescriptionPdf({
-        prescription: pdfPayload,
-        clinicName: 'عيادة د. إبراهيم',
-      });
-
       await whatsappService.sendDocumentMessage(
         prescription.patient.phone,
-        toAbsoluteUrl(req, relativeUrl),
+        documentUrl,
         filename,
         'روشتة طبية'
       );
       await whatsappService.sendTextMessage(prescription.patient.phone, msg);
     } else {
-      await whatsappService.sendTemplateMessage(prescription.patient.phone, PRESCRIPTION_TEMPLATE, 'ar');
+      await whatsappService.sendTemplateMessage(
+        prescription.patient.phone,
+        PRESCRIPTION_TEMPLATE,
+        'ar',
+        null,
+        [],
+        { type: 'document', link: documentUrl, filename }
+      );
     }
 
     res.json({ success: true, message: 'تم إرسال الروشتة للمريض' });
