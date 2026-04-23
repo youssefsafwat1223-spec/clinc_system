@@ -5,10 +5,10 @@ const instagramService = require('./instagramService');
 const { formatDateAr, formatTimeAr } = require('../utils/helpers');
 
 const WHATSAPP_TEMPLATES = {
-  bookingConfirmed: 'booking_confirmed_ar',
-  bookingRejected: 'booking_rejected_ar',
-  bookingRejectedWithAlternatives: 'booking_rejected_with_alternatives_ar',
-  appointmentReminder: 'appointment_reminder_ar',
+  bookingConfirmed: 'booking_confirmed_ar_v2',
+  bookingRejected: 'booking_rejected_ar_v2',
+  bookingRejectedWithAlternatives: 'booking_rejected_with_alternatives_ar_v2',
+  appointmentReminder: 'appointment_reminder_ar_v2',
 };
 
 const CARE_WINDOW_HOURS = 24;

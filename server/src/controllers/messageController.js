@@ -42,24 +42,9 @@ const getDoctorPatientIds = async (doctorId) => {
   return [...new Set([...appointments, ...consultations, ...prescriptions].map((item) => item.patientId))];
 };
 
-const getScopedPatientIds = async (req) => {
-  const scopedDoctor = await getScopedDoctor(req);
-  if (!scopedDoctor) {
-    return null;
-  }
+const getScopedPatientIds = async () => null;
 
-  return getDoctorPatientIds(scopedDoctor.id);
-};
-
-const getScopedPatient = async (req, patientId) => {
-  const scopedPatientIds = await getScopedPatientIds(req);
-
-  if (scopedPatientIds && !scopedPatientIds.includes(patientId)) {
-    return null;
-  }
-
-  return prisma.patient.findUnique({ where: { id: patientId } });
-};
+const getScopedPatient = async (req, patientId) => prisma.patient.findUnique({ where: { id: patientId } });
 
 const extractCommentTarget = (metadata) => {
   if (!metadata || typeof metadata !== 'object') {

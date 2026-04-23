@@ -568,6 +568,9 @@ export default function CampaignsPage() {
                         </option>
                       ))}
                     </select>
+                    <p className="mt-2 text-xs text-dark-muted">
+                      إذا كان القالب في Meta من نوع Image Header، اختر IMAGE ليظهر رفع الصورة أسفل النموذج.
+                    </p>
                   </div>
                 </div>
 
@@ -590,6 +593,26 @@ export default function CampaignsPage() {
                     placeholder="للحجز والاستفسار"
                   />
                 </div>
+
+                {templateForm.headerType !== 'IMAGE' ? (
+                  <div className="rounded-2xl border border-dark-border bg-dark-bg/20 p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-bold text-white">رفع صورة القالب غير مفعّل الآن</p>
+                        <p className="mt-1 text-xs text-dark-muted">
+                          الرفع يظهر فقط عندما يكون نوع الـ Header هو Image Header.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setTemplateForm((prev) => ({ ...prev, headerType: 'IMAGE' }))}
+                        className="rounded-xl border border-primary-500/30 px-4 py-2 text-sm font-bold text-primary-300"
+                      >
+                        تفعيل Image Header
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
 
                 {templateForm.headerType === 'IMAGE' ? (
                   <div>

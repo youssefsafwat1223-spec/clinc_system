@@ -269,7 +269,17 @@ async function main() {
       footerText: 'خدمتكم تهمنا',
     },
     {
-      name: 'booking_confirmed_ar',
+      name: 'booking_pending_ar_v2',
+      displayName: 'طلب الحجز قيد المراجعة',
+      category: 'UTILITY',
+      languageCode: 'ar',
+      headerType: 'NONE',
+      bodyText:
+        '⏳ تم استلام طلب حجزك بنجاح!\n\nرقم الحجز: *{{1}}*\n\nسيتم مراجعة طلبك من قبل العيادة وإبلاغك بالتأكيد في أقرب وقت.\nشكرًا لاختياركم عيادتنا! 🙏',
+      footerText: null,
+    },
+    {
+      name: 'booking_confirmed_ar_v2',
       displayName: 'تأكيد الحجز',
       category: 'UTILITY',
       languageCode: 'ar',
@@ -279,7 +289,7 @@ async function main() {
       footerText: null,
     },
     {
-      name: 'booking_rejected_ar',
+      name: 'booking_rejected_ar_v2',
       displayName: 'رفض الحجز',
       category: 'UTILITY',
       languageCode: 'ar',
@@ -289,7 +299,7 @@ async function main() {
       footerText: null,
     },
     {
-      name: 'booking_rejected_with_alternatives_ar',
+      name: 'booking_rejected_with_alternatives_ar_v2',
       displayName: 'رفض الحجز مع بدائل',
       category: 'UTILITY',
       languageCode: 'ar',
@@ -299,7 +309,7 @@ async function main() {
       footerText: null,
     },
     {
-      name: 'appointment_reminder_ar',
+      name: 'appointment_reminder_ar_v2',
       displayName: 'تذكير بالموعد',
       category: 'UTILITY',
       languageCode: 'ar',
@@ -309,6 +319,17 @@ async function main() {
       footerText: null,
     },
   ];
+
+  templatesData.push({
+    name: 'prescription_ready_ar_v1',
+    displayName: 'إشعار بوجود روشتة',
+    category: 'UTILITY',
+    languageCode: 'ar',
+    headerType: 'NONE',
+    bodyText:
+      '💊 تم إصدار روشتة طبية جديدة من العيادة.\nيرجى متابعة هذه المحادثة لاستلام تفاصيل الروشتة.',
+    footerText: null,
+  });
 
   for (const data of templatesData) {
     await prisma.campaignTemplate.upsert({

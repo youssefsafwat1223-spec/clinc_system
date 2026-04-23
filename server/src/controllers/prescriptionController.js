@@ -1,5 +1,19 @@
 const prisma = require('../lib/prisma');
 const whatsappService = require('../services/whatsappService');
+const { formatDateAr } = require('../utils/helpers');
+const config = require('../config/env');
+const { createPrescriptionPdf } = require('../utils/prescriptionPdf');
+
+const CARE_WINDOW_HOURS = 24;
+const PRESCRIPTION_TEMPLATE = 'prescription_ready_ar_v1';
+
+const toAbsoluteUrl = (req, url) => {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+
+  const baseUrl = (config.dashboardUrl || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+  return new URL(url, `${baseUrl}/`).toString();
+};
 
 const getScopedDoctor = async (req) => {
   if (req.user?.role !== 'DOCTOR') {
@@ -87,6 +101,45 @@ const formatMedications = (medications) => {
     })
     .filter(Boolean)
     .join('\n');
+};
+
+const isWithinWhatsAppCareWindow = async (patientId) => {
+  if (!patientId) {
+    return false;
+  }
+
+  const since = new Date(Date.now() - CARE_WINDOW_HOURS * 60 * 60 * 1000);
+  const inboundMessage = await prisma.message.findFirst({
+    where: {
+      patientId,
+      platform: 'WHATSAPP',
+      type: 'INBOUND',
+      createdAt: { gte: since },
+    },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true },
+  });
+
+  return Boolean(inboundMessage);
+};
+
+const buildPrescriptionText = (prescription) => {
+  const medicationsText = formatMedications(prescription.medications);
+
+  return [
+    '💊 *روشتة طبية إلكترونية*',
+    '',
+    `العيادة: د. ${prescription.doctor?.name || 'غير محدد'}`,
+    `تاريخ الكشف: ${formatDateAr(prescription.createdAt)}`,
+    '',
+    `التشخيص: ${prescription.diagnosis || 'غير مسجل'}`,
+    '',
+    `الأدوية:\n${medicationsText}`,
+    '',
+    `ملاحظات: ${prescription.notes || 'لا يوجد'}`,
+    '',
+    'مع تمنياتنا لك بالشفاء العاجل! 🙏',
+  ].join('\n');
 };
 
 const getAccessiblePatient = async (req, patientId) => {
@@ -214,11 +267,30 @@ const sendToWhatsApp = async (req, res, next) => {
       return res.status(400).json({ error: 'رقم هاتف المريض غير متوفر' });
     }
 
-    const { formatDateAr } = require('../utils/helpers');
-    const medicationsText = formatMedications(prescription.medications);
-    const msg = `💊 *روشتة طبية إلكترونية*\n\nالعيادة: د. ${prescription.doctor?.name}\nتاريخ الكشف: ${formatDateAr(prescription.createdAt)}\n\nالتشخيص: ${prescription.diagnosis || 'غير مسجل'}\n\nالأدوية:\n${medicationsText}\n\nملاحظات: ${prescription.notes || 'لا يوجد'}\n\nمع تمنياتنا لك بالشفاء العاجل! 🙏`;
+    const msg = buildPrescriptionText(prescription);
+    const withinWindow = await isWithinWhatsAppCareWindow(prescription.patient.id);
 
-    await whatsappService.sendTextMessage(prescription.patient.phone, msg);
+    if (withinWindow) {
+      const pdfPayload = {
+        ...prescription,
+        formattedDate: formatDateAr(prescription.createdAt),
+        formattedMedications: formatMedications(prescription.medications),
+      };
+      const { relativeUrl, filename } = await createPrescriptionPdf({
+        prescription: pdfPayload,
+        clinicName: 'عيادة د. إبراهيم',
+      });
+
+      await whatsappService.sendDocumentMessage(
+        prescription.patient.phone,
+        toAbsoluteUrl(req, relativeUrl),
+        filename,
+        'روشتة طبية'
+      );
+      await whatsappService.sendTextMessage(prescription.patient.phone, msg);
+    } else {
+      await whatsappService.sendTemplateMessage(prescription.patient.phone, PRESCRIPTION_TEMPLATE, 'ar');
+    }
 
     res.json({ success: true, message: 'تم إرسال الروشتة للمريض' });
   } catch (error) {

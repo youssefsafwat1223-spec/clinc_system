@@ -30,6 +30,8 @@ const sendMessage = async (messageData) => {
           let textContent = '[رد آلي]';
           if (messageData.type === 'text' && messageData.text) {
             textContent = messageData.text.body;
+          } else if (messageData.type === 'document' && messageData.document) {
+            textContent = `[ملف] ${messageData.document.caption || messageData.document.filename || 'مرفق'}`;
           } else if (messageData.type === 'interactive') {
             if (messageData.interactive.type === 'list') {
               textContent = `[قائمة خيارات] ${messageData.interactive.body?.text || ''}`;
@@ -69,6 +71,20 @@ const sendTextMessage = async (to, text) => {
     to,
     type: 'text',
     text: { body: text },
+  });
+};
+
+const sendDocumentMessage = async (to, documentUrl, filename, caption = '') => {
+  return sendMessage({
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'document',
+    document: {
+      link: documentUrl,
+      filename,
+      ...(caption ? { caption } : {}),
+    },
   });
 };
 
@@ -145,6 +161,7 @@ const sendTemplateMessage = async (to, templateName, languageCode = 'ar', imageU
 module.exports = {
   sendMessage,
   sendTextMessage,
+  sendDocumentMessage,
   sendInteractiveMessage,
   sendTemplateMessage,
   markAsRead,
