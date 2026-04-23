@@ -1,0 +1,11 @@
+const express = require('express');
+const router = express.Router();
+const reviewController = require('../controllers/reviewController');
+const { auth } = require('../middleware/auth');
+
+router.use(auth);
+
+router.get('/', reviewController.getAll);
+router.get('/stats', reviewController.getStats);
+
+module.exports = router;

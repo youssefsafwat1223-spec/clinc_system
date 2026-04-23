@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle,
   Bell,
@@ -29,7 +29,8 @@ const routeTitles = {
   '/campaigns': 'الحملات والرسائل الجماعية',
   '/settings': 'إعدادات النظام الأساسية',
   '/ai-settings': 'تخصيص مساعد الذكاء الاصطناعي',
-  '/analytics': 'مؤشرات الأداء والتحليلات',
+  '/analytics': 'مؤشرات الأداء والتحليلات',\r
+  '/reviews': 'تقييمات المرضى وآرائهم',
 };
 
 const roleLabels = {

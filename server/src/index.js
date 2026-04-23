@@ -8,6 +8,7 @@ const prisma = require('./lib/prisma');
 const errorHandler = require('./middleware/errorHandler');
 const { startReminderCrons } = require('./cron/reminderCron');
 const { startExpiryCron } = require('./cron/expiryCron');
+const { startReviewCron } = require('./cron/reviewCron');
 
 // Route imports
 const authRoutes = require('./routes/auth');
@@ -25,6 +26,7 @@ const campaignRoutes = require('./routes/campaigns');
 const prescriptionRoutes = require('./routes/prescriptions');
 const notificationsRoutes = require('./routes/notifications');
 const uploadRoutes = require('./routes/upload');
+const reviewRoutes = require('./routes/reviews');
 
 const app = express();
 
@@ -83,6 +85,7 @@ app.use('/api/campaigns', campaignRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/reviews', reviewRoutes);
 
 app.use(errorHandler);
 
@@ -109,6 +112,7 @@ const startServer = async () => {
       console.log('[DB] Prisma connected successfully');
       startReminderCrons();
       startExpiryCron();
+      startReviewCron();
     } catch (error) {
       console.error('[DB] Prisma startup connection failed:', error.message);
       console.log('[Cron] Skipped startup because database connection is unavailable');

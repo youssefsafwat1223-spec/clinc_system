@@ -74,6 +74,7 @@ model Doctor {
   appointments   Appointment[]
   consultations  Consultation[]
   prescriptions  Prescription[]
+  reviews        Review[]
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
@@ -94,6 +95,7 @@ model Patient {
   messages      Message[]
   consultations Consultation[]
   prescriptions Prescription[]
+  reviews       Review[]
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
 
@@ -128,7 +130,9 @@ model Appointment {
   status        AppointmentStatus @default(PENDING)
   lockedUntil   DateTime?         @map("locked_until")
   notes         String?
+  reviewSent    Boolean           @default(false) @map("review_sent")
   notifications Notification[]
+  review        Review?
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
 
@@ -234,4 +238,21 @@ model AdminNotification {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("admin_notifications")
+}
+
+model Review {
+  id            String      @id @default(uuid())
+  appointmentId String      @unique @map("appointment_id")
+  appointment   Appointment @relation(fields: [appointmentId], references: [id])
+  patientId     String      @map("patient_id")
+  patient       Patient     @relation(fields: [patientId], references: [id])
+  doctorId      String      @map("doctor_id")
+  doctor        Doctor      @relation(fields: [doctorId], references: [id])
+  rating        Int?
+  comment       String?
+  sentAt        DateTime    @map("sent_at")
+  repliedAt     DateTime?   @map("replied_at")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  @@map("reviews")
 }

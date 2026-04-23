@@ -462,6 +462,51 @@ const handleWhatsAppMessage = async (message, contact) => {
       },
     });
 
+    // ── Handle review rating buttons ──
+    if (buttonId && buttonId.startsWith('review_')) {
+      const ratingValue = parseInt(buttonId.replace('review_', ''), 10);
+      if ([1, 3, 5].includes(ratingValue)) {
+        const pendingReview = await prisma.review.findFirst({
+          where: { patientId: patient.id, rating: null },
+          orderBy: { sentAt: 'desc' },
+        });
+
+        if (pendingReview) {
+          await prisma.review.update({
+            where: { id: pendingReview.id },
+            data: { rating: ratingValue, repliedAt: new Date() },
+          });
+
+          // Ask for optional comment
+          setBookingSession(from, { step: 'review_comment', reviewId: pendingReview.id, patientId: patient.id });
+
+          const thankYouMsg = ratingValue >= 4
+            ? 'شكراً جزيلاً لتقييمك الرائع! ⭐ نسعد بخدمتك دائماً.\n\nهل تحب تضيف تعليق أو ملاحظة؟ (اكتبها أو أرسل "لا")'
+            : ratingValue >= 2
+              ? 'شكراً لتقييمك! 🙏 نعمل على تحسين خدماتنا باستمرار.\n\nهل تحب تضيف تعليق أو ملاحظة؟ (اكتبها أو أرسل "لا")'
+              : 'نأسف لعدم رضاك 😔 رأيك مهم جداً لنا ونعمل على التحسين.\n\nهل تحب تضيف تعليق أو ملاحظة؟ (اكتبها أو أرسل "لا")';
+
+          return await whatsappService.sendTextMessage(from, thankYouMsg);
+        }
+      }
+    }
+
+    // ── Handle review comment (follow-up text after rating) ──
+    const reviewSession = getBookingSession(from);
+    if (reviewSession?.step === 'review_comment' && content) {
+      const isSkip = /^(لا|no|skip|تخطي)$/i.test(content.trim());
+
+      if (!isSkip) {
+        await prisma.review.update({
+          where: { id: reviewSession.reviewId },
+          data: { comment: content.trim() },
+        });
+      }
+
+      clearBookingSession(from);
+      return await whatsappService.sendTextMessage(from, 'شكراً لوقتك! نتمنى لك دوام الصحة والعافية 🌿');
+    }
+
     // If human handover is active
     if (patient.chatState === 'HUMAN') {
       if (content && /رجوع|العودة|القائمة|بداية|إلغاء/i.test(content)) {

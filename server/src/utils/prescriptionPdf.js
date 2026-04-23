@@ -24,39 +24,43 @@ const FONT_BOLD_CANDIDATES = [
   'C:\\Windows\\Fonts\\tahomabd.ttf',
 ];
 
+/* ─── Color palette ─── */
 const C = {
-  teal:       '#0D9488',
-  tealDark:   '#0F766E',
-  tealLight:  '#CCFBF1',
-  tealMid:    '#5EEAD4',
-  navy:       '#0F172A',
-  text:       '#1E293B',
-  muted:      '#64748B',
-  lightMuted: '#94A3B8',
-  border:     '#E2E8F0',
-  panelBg:    '#F8FAFC',
-  white:      '#FFFFFF',
-  pillBg:     '#F0FDFA',
-  accent:     '#14B8A6',
+  navy: '#0B1929',
+  navyMid: '#162840',
+  gold: '#C9A84C',
+  goldLight: '#E8C97A',
+  goldPale: '#FDF6E3',
+  cream: '#FAFAF7',
+  ink: '#1A1A2E',
+  inkMid: '#3D3D5C',
+  inkMuted: '#7A7A9A',
+  border: '#E8E8F0',
+  teal: '#0D7E75',
+  tealLight: '#E6F5F4',
+  white: '#FFFFFF',
 };
 
+/* ─── Helpers ─── */
 const ensureDir = async (dirPath) => {
   await fs.promises.mkdir(dirPath, { recursive: true });
 };
 
 const resolveFont = (candidates) => {
   for (const candidate of candidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
+    if (fs.existsSync(candidate)) return candidate;
   }
   return null;
 };
 
-const toSafeFilenamePart = (value) => String(value || 'rx').replace(/[^\w-]+/g, '_');
+const toSafeFilenamePart = (value) =>
+  String(value || 'rx').replace(/[^\w-]+/g, '_');
 
 const normalizeMedicationLines = (prescription) => {
-  if (typeof prescription.formattedMedications === 'string' && prescription.formattedMedications.trim()) {
+  if (
+    typeof prescription.formattedMedications === 'string' &&
+    prescription.formattedMedications.trim()
+  ) {
     return prescription.formattedMedications
       .split(/\r?\n/)
       .map((line) => line.replace(/\*/g, '').trim())
@@ -67,206 +71,370 @@ const normalizeMedicationLines = (prescription) => {
     return prescription.medications
       .map((item, index) => {
         if (!item) return null;
-        if (typeof item === 'string') return `${index + 1}. ${item}`;
+        if (typeof item === 'string') return { name: item, detail: null };
         if (typeof item !== 'object') return null;
 
         const name = item.name || `دواء ${index + 1}`;
-        const dosage = item.dosage ? ` | الجرعة: ${item.dosage}` : '';
-        const duration = item.duration ? ` | المدة: ${item.duration}` : '';
-        return `${index + 1}. ${name}${dosage}${duration}`;
+        const parts = [];
+        if (item.dosage) parts.push(`الجرعة: ${item.dosage}`);
+        if (item.duration) parts.push(`المدة: ${item.duration}`);
+        return { name, detail: parts.join(' · ') || null };
       })
       .filter(Boolean);
   }
 
-  return ['لا توجد أدوية مسجلة'];
+  return [{ name: 'لا توجد أدوية مسجلة', detail: null }];
 };
 
-/* ─── helpers ─── */
+/* convenience wrappers */
 const pageW = (doc) => doc.page.width - doc.page.margins.left - doc.page.margins.right;
 const leftX = (doc) => doc.page.margins.left;
-
 const useBold = (doc) => { if (doc._hasBold) doc.font('Bold'); };
 const useRegular = (doc) => { doc.font('Regular'); };
 
-/* ─── header ─── */
-const addHeader = (doc, clinicName) => {
+/* ─────────────────────────────────────────────
+   HEADER  (navy two-band)
+───────────────────────────────────────────── */
+const addHeader = (doc, clinicName, prescription) => {
   const x = leftX(doc);
   const w = pageW(doc);
-  const y = doc.page.margins.top;
-  const h = 100;
+  const mt = doc.page.margins.top;
 
-  // teal gradient band
+  /* ── top band ── */
+  const band1H = 80;
+  doc.rect(x, mt, w, band1H).fill(C.navy);
+
+  /* gold shimmer line at bottom of top band */
   doc.save();
-  doc.rect(x, y, w, h).fill(C.teal);
-  doc.rect(x, y + h - 6, w, 6).fill(C.tealDark);
+  doc.rect(x, mt + band1H - 2, w, 2).fill(C.gold);
   doc.restore();
 
-  // Rx symbol
-  doc.fillColor(C.white).opacity(0.15).fontSize(64).text('℞', x + 24, y + 14, { width: 80 });
-  doc.opacity(1);
-
-  // title
+  /* clinic name – right aligned */
   useBold(doc);
-  doc.fillColor(C.white).fontSize(26).text('روشتة طبية إلكترونية', x + 20, y + 20, {
-    width: w - 40,
-    align: 'right',
-  });
+  doc
+    .fillColor(C.white)
+    .fontSize(18)
+    .text(clinicName || 'العيادة', x + 16, mt + 16, {
+      width: w - 32,
+      align: 'right',
+    });
 
-  // clinic name
   useRegular(doc);
-  doc.fillColor(C.tealLight).fontSize(13).text(clinicName || 'العيادة', x + 20, y + 58, {
-    width: w - 40,
-    align: 'right',
+  doc
+    .fillColor('rgba(255,255,255,0.45)')
+    .fontSize(10)
+    .text('نظام إدارة العيادة الذكي', x + 16, mt + 44, {
+      width: w - 32,
+      align: 'right',
+    });
+
+  /* RX id – left side */
+  doc
+    .fillColor('rgba(201,168,76,0.7)')
+    .fontSize(9)
+    .text(`RX-${(prescription?.id || '').slice(-8).toUpperCase() || 'N/A'}`, x + 16, mt + 20, {
+      width: 160,
+      align: 'left',
+    });
+
+  doc
+    .fillColor('rgba(255,255,255,0.25)')
+    .fontSize(8)
+    .text('VERIFIED PRESCRIPTION', x + 16, mt + 36, {
+      width: 160,
+      align: 'left',
+    });
+
+  /* ── second band (navy-mid) ── */
+  const band2Y = mt + band1H;
+  const band2H = 36;
+  doc.rect(x, band2Y, w, band2H).fill(C.navyMid);
+
+  /* "روشتة طبية" title – right */
+  useBold(doc);
+  doc
+    .fillColor(C.white)
+    .fontSize(20)
+    .text('روشتة طبية', x + 16, band2Y + 8, {
+      width: w - 32,
+      align: 'right',
+    });
+
+  /* meta pills: date / age / gender – left */
+  const pillData = [
+    { label: 'التاريخ', value: prescription?.formattedDate || '—' },
+    { label: 'العمر', value: prescription?.patient?.age ? `${prescription.patient.age} سنة` : '—' },
+    { label: 'النوع', value: prescription?.patient?.gender || '—' },
+  ];
+
+  useRegular(doc);
+  let pillX = x + 16;
+  pillData.forEach(({ label, value }) => {
+    const pw = 80;
+    doc.roundedRect(pillX, band2Y + 7, pw, 22, 4).fill('rgba(255,255,255,0.08)');
+
+    doc.fillColor('rgba(255,255,255,0.4)').fontSize(7)
+      .text(label, pillX + 4, band2Y + 9, { width: pw - 8, align: 'center' });
+
+    doc.fillColor(C.goldLight).fontSize(9)
+      .text(value, pillX + 4, band2Y + 19, { width: pw - 8, align: 'center' });
+
+    pillX += pw + 6;
   });
 
-  doc.y = y + h + 20;
+  doc.y = band2Y + band2H + 20;
 };
 
-/* ─── section title ─── */
-const drawSectionTitle = (doc, title, icon) => {
-  const x = leftX(doc);
-  const w = pageW(doc);
-  const sy = doc.y;
-
-  // left accent bar
-  doc.save();
-  doc.roundedRect(x, sy, 4, 22, 2).fill(C.accent);
-  doc.restore();
-
-  // background pill
-  doc.save();
-  doc.roundedRect(x + 10, sy, w - 10, 22, 4).fill(C.pillBg);
-  doc.restore();
-
-  // text
-  useBold(doc);
-  const label = icon ? `${icon}  ${title}` : title;
-  doc.fillColor(C.tealDark).fontSize(12).text(label, x + 18, sy + 5, {
-    width: w - 36,
-    align: 'right',
-  });
-  useRegular(doc);
-
-  doc.y = sy + 30;
-};
-
-/* ─── key:value row ─── */
-const writeKeyValue = (doc, label, value) => {
-  const x = leftX(doc);
-  const w = pageW(doc);
-
-  useBold(doc);
-  doc.fillColor(C.muted).fontSize(10).text(label, x + 20, doc.y, {
-    width: w - 40,
-    align: 'right',
-    continued: true,
-  });
-  useRegular(doc);
-  doc.fillColor(C.text).fontSize(11).text(`:  ${value || 'غير متوفر'}`, {
-    align: 'right',
-    lineGap: 3,
-  });
-};
-
-/* ─── info card (patient / doctor side-by-side) ─── */
+/* ─────────────────────────────────────────────
+   INFO CARDS  (patient | doctor side-by-side)
+───────────────────────────────────────────── */
 const drawInfoCards = (doc, prescription) => {
   const x = leftX(doc);
   const w = pageW(doc);
-  const cardH = 70;
-  const gap = 12;
-  const halfW = (w - gap) / 2;
+  const gap = 14;
+  const hw = (w - gap) / 2;
   const sy = doc.y;
+  const h = 72;
+  const r = 10;
 
-  // patient card
-  doc.save();
-  doc.roundedRect(x + halfW + gap, sy, halfW, cardH, 8).fill(C.panelBg);
-  doc.roundedRect(x + halfW + gap, sy, halfW, cardH, 8).lineWidth(0.5).stroke(C.border);
-  doc.restore();
+  const cards = [
+    {
+      xPos: x + hw + gap,
+      accent: C.teal,
+      type: 'بيانات المريض',
+      name: prescription?.patient?.name || 'غير متوفر',
+      detail: prescription?.patient?.phone || '',
+    },
+    {
+      xPos: x,
+      accent: C.gold,
+      type: 'الطبيب المعالج',
+      name: prescription?.doctor?.name || 'غير محدد',
+      detail: prescription?.doctor?.specialty || '',
+    },
+  ];
 
-  useBold(doc);
-  doc.fillColor(C.tealDark).fontSize(10).text('بيانات المريض', x + halfW + gap + 12, sy + 10, { width: halfW - 24, align: 'right' });
-  useRegular(doc);
-  doc.fillColor(C.text).fontSize(11).text(prescription?.patient?.name || 'غير متوفر', x + halfW + gap + 12, sy + 28, { width: halfW - 24, align: 'right' });
-  doc.fillColor(C.muted).fontSize(9).text(prescription?.patient?.phone || '', x + halfW + gap + 12, sy + 46, { width: halfW - 24, align: 'right' });
+  cards.forEach(({ xPos, accent, type, name, detail }) => {
+    /* card bg */
+    doc.roundedRect(xPos, sy, hw, h, r).fill(C.cream);
+    doc.roundedRect(xPos, sy, hw, h, r).lineWidth(0.5).stroke(C.border);
 
-  // doctor card
-  doc.save();
-  doc.roundedRect(x, sy, halfW, cardH, 8).fill(C.panelBg);
-  doc.roundedRect(x, sy, halfW, cardH, 8).lineWidth(0.5).stroke(C.border);
-  doc.restore();
+    /* right accent bar */
+    doc.roundedRect(xPos + hw - 4, sy + r, 4, h - r * 2, 2).fill(accent);
 
-  useBold(doc);
-  doc.fillColor(C.tealDark).fontSize(10).text('الطبيب المعالج', x + 12, sy + 10, { width: halfW - 24, align: 'right' });
-  useRegular(doc);
-  doc.fillColor(C.text).fontSize(11).text(prescription?.doctor?.name || 'غير محدد', x + 12, sy + 28, { width: halfW - 24, align: 'right' });
-  doc.fillColor(C.muted).fontSize(9).text(prescription?.formattedDate || '', x + 12, sy + 46, { width: halfW - 24, align: 'right' });
+    /* texts */
+    useBold(doc);
+    doc.fillColor(C.inkMuted).fontSize(8)
+      .text(type, xPos + 12, sy + 12, { width: hw - 28, align: 'right' });
 
-  doc.y = sy + cardH + 16;
+    useBold(doc);
+    doc.fillColor(C.ink).fontSize(13)
+      .text(name, xPos + 12, sy + 28, { width: hw - 28, align: 'right' });
+
+    useRegular(doc);
+    doc.fillColor(C.inkMuted).fontSize(9)
+      .text(detail, xPos + 12, sy + 50, { width: hw - 28, align: 'right' });
+  });
+
+  doc.y = sy + h + 18;
 };
 
-/* ─── medication rows ─── */
+/* ─────────────────────────────────────────────
+   SECTION HEADER
+───────────────────────────────────────────── */
+const drawSectionTitle = (doc, title) => {
+  const x = leftX(doc);
+  const w = pageW(doc);
+  const sy = doc.y;
+
+  /* icon circle */
+  doc.circle(x + w - 14, sy + 10, 10).fill(C.navyMid);
+
+  useBold(doc);
+  doc.fillColor(C.inkMid).fontSize(10)
+    .text(title, x + 32, sy + 5, { width: w - 56, align: 'right' });
+
+  /* rule */
+  doc.moveTo(x + 24, sy + 20)
+    .lineTo(x + w - 28, sy + 20)
+    .lineWidth(0.4)
+    .stroke(C.border);
+
+  useRegular(doc);
+  doc.y = sy + 28;
+};
+
+/* ─────────────────────────────────────────────
+   DIAGNOSIS BOX
+───────────────────────────────────────────── */
+const drawDiagnosis = (doc, text) => {
+  const x = leftX(doc);
+  const w = pageW(doc);
+  const sy = doc.y;
+
+  /* measure text height */
+  const textH = doc.heightOfString(text || 'لا يوجد تشخيص مسجل', {
+    width: w - 40, align: 'right', lineGap: 4,
+  });
+  const boxH = textH + 24;
+
+  doc.roundedRect(x, sy, w, boxH, 8).fill(C.tealLight);
+  doc.roundedRect(x, sy, w, boxH, 8).lineWidth(0.5).stroke('rgba(13,126,117,0.2)');
+  /* left accent */
+  doc.roundedRect(x, sy, 4, boxH, 2).fill(C.teal);
+
+  doc.fillColor(C.ink).fontSize(12)
+    .text(text || 'لا يوجد تشخيص مسجل', x + 16, sy + 12, {
+      width: w - 40, align: 'right', lineGap: 4,
+    });
+
+  doc.y = sy + boxH + 16;
+};
+
+/* ─────────────────────────────────────────────
+   MEDICATION ROWS
+───────────────────────────────────────────── */
 const drawMedications = (doc, lines) => {
   const x = leftX(doc);
   const w = pageW(doc);
 
-  lines.forEach((line, i) => {
-    const rowY = doc.y;
-    const isEven = i % 2 === 0;
+  /* outer border */
+  const startY = doc.y;
 
-    // alternate row bg
-    if (isEven) {
-      doc.save();
-      doc.rect(x + 8, rowY - 2, w - 16, 20).fill(C.panelBg);
-      doc.restore();
+  lines.forEach((item, i) => {
+    const isEven = i % 2 === 0;
+    const rowH = typeof item === 'object' && item.detail ? 36 : 24;
+    const rowY = doc.y;
+
+    /* alternate bg */
+    doc.rect(x, rowY, w, rowH).fill(isEven ? C.cream : C.white);
+
+    /* bottom rule */
+    if (i < lines.length - 1) {
+      doc.moveTo(x + 16, rowY + rowH)
+        .lineTo(x + w - 16, rowY + rowH)
+        .lineWidth(0.3)
+        .stroke(C.border);
     }
 
-    // bullet
-    doc.save();
-    doc.circle(x + w - 22, rowY + 6, 3).fill(C.accent);
-    doc.restore();
+    /* number badge */
+    const badgeColor = isEven ? C.navyMid : C.teal;
+    doc.circle(x + w - 18, rowY + (rowH / 2), 8).fill(badgeColor);
+    doc.fillColor(C.white).fontSize(7)
+      .text(`${i + 1}`, x + w - 24, rowY + (rowH / 2) - 4, {
+        width: 12, align: 'center',
+      });
 
-    doc.fillColor(C.text).fontSize(11).text(line, x + 20, rowY, {
-      width: w - 52,
-      align: 'right',
-      lineGap: 5,
-    });
+    /* text */
+    if (typeof item === 'object' && item.name) {
+      useBold(doc);
+      doc.fillColor(C.ink).fontSize(11)
+        .text(item.name, x + 16, rowY + 6, { width: w - 48, align: 'right' });
 
-    doc.y = doc.y + 4;
+      if (item.detail) {
+        useRegular(doc);
+        doc.fillColor(C.inkMuted).fontSize(9)
+          .text(item.detail, x + 16, rowY + 21, { width: w - 48, align: 'right' });
+      }
+    } else {
+      useRegular(doc);
+      doc.fillColor(C.ink).fontSize(11)
+        .text(String(item), x + 16, rowY + 6, { width: w - 48, align: 'right' });
+    }
+
+    doc.y = rowY + rowH;
   });
+
+  /* outer border rect */
+  const totalH = doc.y - startY;
+  doc.roundedRect(x, startY, w, totalH, 10)
+    .lineWidth(0.5)
+    .stroke(C.border);
+
+  doc.y += 16;
 };
 
-/* ─── divider ─── */
-const drawDivider = (doc) => {
+/* ─────────────────────────────────────────────
+   NOTES BOX
+───────────────────────────────────────────── */
+const drawNotes = (doc, text) => {
   const x = leftX(doc);
   const w = pageW(doc);
-  doc.save();
-  doc.moveTo(x + 30, doc.y).lineTo(x + w - 30, doc.y).lineWidth(0.4).dash(3, { space: 3 }).stroke(C.border);
-  doc.restore();
-  doc.y += 10;
+  const sy = doc.y;
+
+  const textH = doc.heightOfString(text, { width: w - 40, align: 'right', lineGap: 4 });
+  const boxH = textH + 24;
+
+  doc.roundedRect(x, sy, w, boxH, 8).fill(C.goldPale);
+  doc.roundedRect(x, sy, w, boxH, 8).lineWidth(0.5).stroke('rgba(201,168,76,0.25)');
+  doc.roundedRect(x, sy, 4, boxH, 2).fill(C.gold);
+
+  doc.fillColor(C.inkMid).fontSize(11)
+    .text(text, x + 16, sy + 12, { width: w - 40, align: 'right', lineGap: 4 });
+
+  doc.y = sy + boxH + 16;
 };
 
-/* ─── footer ─── */
-const addFooter = (doc) => {
+/* ─────────────────────────────────────────────
+   SIGNATURE ROW
+───────────────────────────────────────────── */
+const drawSignatureRow = (doc) => {
   const x = leftX(doc);
   const w = pageW(doc);
-  const footerY = doc.page.height - doc.page.margins.bottom - 44;
+  const sy = doc.y + 12;
 
-  // teal strip
-  doc.save();
-  doc.rect(x, footerY, w, 36).fill(C.teal);
-  doc.restore();
+  /* stamp circle */
+  const cxStamp = x + 44;
+  const cyStamp = sy + 36;
+  doc.circle(cxStamp, cyStamp, 36).lineWidth(1).dash(3, { space: 3 }).stroke('rgba(201,168,76,0.35)');
+  doc.circle(cxStamp, cyStamp, 28).lineWidth(0.5).stroke('rgba(201,168,76,0.2)');
+  doc.fillColor('rgba(201,168,76,0.4)').fontSize(8)
+    .text('ختم العيادة', cxStamp - 22, cyStamp - 6, { width: 44, align: 'center' });
 
-  doc.fillColor(C.white).fontSize(9).text(
-    'هذه الروشتة صادرة إلكترونيًا من نظام إدارة العيادة الذكي  •  لا يُعتدّ بها بدون توقيع الطبيب',
-    x + 16,
-    footerY + 12,
-    { width: w - 32, align: 'center' }
-  );
+  /* signature lines */
+  const sigs = [
+    { label: 'توقيع الطبيب', lx: x + w - 160 },
+    { label: 'توقيع الصيدلي', lx: x + w - 310 },
+  ];
+
+  sigs.forEach(({ label, lx }) => {
+    doc.moveTo(lx, sy + 62).lineTo(lx + 120, sy + 62)
+      .lineWidth(0.7).stroke(C.ink);
+
+    doc.fillColor(C.inkMuted).fontSize(8)
+      .text(label, lx, sy + 66, { width: 120, align: 'center' });
+  });
+
+  doc.y = sy + 80;
+};
+
+/* ─────────────────────────────────────────────
+   FOOTER BAR
+───────────────────────────────────────────── */
+const addFooter = (doc, prescription) => {
+  const x = leftX(doc);
+  const w = pageW(doc);
+  const footerY = doc.page.height - doc.page.margins.bottom - 28;
+
+  doc.rect(x, footerY, w, 28).fill(C.navy);
+
+  /* left: rx id + expiry */
+  const rxId = `RX-${(prescription?.id || '').slice(-8).toUpperCase() || 'N/A'}`;
+  doc.fillColor('rgba(201,168,76,0.6)').fontSize(8)
+    .text(rxId, x + 12, footerY + 10, { width: 200, align: 'left' });
+
+  /* right: disclaimer */
+  doc.fillColor('rgba(255,255,255,0.3)').fontSize(8)
+    .text(
+      'هذه الروشتة صادرة إلكترونياً · صالحة لمدة 7 أيام من تاريخ الإصدار',
+      x + 16, footerY + 10,
+      { width: w - 32, align: 'right' }
+    );
 };
 
 /* ═══════════════════════════════════════════════════════════════════
    Main export
-   ═══════════════════════════════════════════════════════════════════ */
+═══════════════════════════════════════════════════════════════════ */
 const createPrescriptionPdf = async ({ prescription, clinicName }) => {
   await ensureDir(DOCUMENTS_DIR);
 
@@ -287,7 +455,7 @@ const createPrescriptionPdf = async ({ prescription, clinicName }) => {
     },
   });
 
-  // register fonts
+  /* ── register fonts ── */
   const fontRegular = resolveFont(FONT_CANDIDATES);
   const fontBold = resolveFont(FONT_BOLD_CANDIDATES);
 
@@ -300,7 +468,6 @@ const createPrescriptionPdf = async ({ prescription, clinicName }) => {
     doc.registerFont('Bold', fontBold);
     doc._hasBold = true;
   } else if (fontRegular) {
-    // fallback: use regular for both
     doc.registerFont('Bold', fontRegular);
     doc._hasBold = true;
   }
@@ -308,37 +475,26 @@ const createPrescriptionPdf = async ({ prescription, clinicName }) => {
   const stream = fs.createWriteStream(filePath);
   doc.pipe(stream);
 
-  /* ── layout ── */
-  addHeader(doc, clinicName);
+  /* ══ layout ══ */
+  addHeader(doc, clinicName, prescription);
 
   drawInfoCards(doc, prescription);
 
-  drawDivider(doc);
-
   drawSectionTitle(doc, 'التشخيص');
-  doc.fillColor(C.text).fontSize(12).text(prescription?.diagnosis || 'لا يوجد تشخيص مسجل', {
-    align: 'right',
-    lineGap: 5,
-    indent: 20,
-  });
-  doc.moveDown(0.8);
+  drawDiagnosis(doc, prescription?.diagnosis);
 
-  drawSectionTitle(doc, 'الأدوية والتعليمات');
+  drawSectionTitle(doc, 'الأدوية والجرعات');
   const medicationLines = normalizeMedicationLines(prescription);
   drawMedications(doc, medicationLines);
-  doc.moveDown(0.6);
 
   if (prescription?.notes) {
-    drawDivider(doc);
     drawSectionTitle(doc, 'ملاحظات الطبيب');
-    doc.fillColor(C.muted).fontSize(11).text(prescription.notes, {
-      align: 'right',
-      lineGap: 5,
-      indent: 20,
-    });
+    drawNotes(doc, prescription.notes);
   }
 
-  addFooter(doc);
+  drawSignatureRow(doc);
+
+  addFooter(doc, prescription);
 
   doc.end();
 
@@ -350,6 +506,4 @@ const createPrescriptionPdf = async ({ prescription, clinicName }) => {
   return { filePath, relativeUrl, filename };
 };
 
-module.exports = {
-  createPrescriptionPdf,
-};
+module.exports = { createPrescriptionPdf };

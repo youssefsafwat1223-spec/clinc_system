@@ -10,6 +10,7 @@ import {
   Megaphone,
   MessageSquare,
   Settings,
+  Star,
   Stethoscope,
   UserSquare2,
   Users,
@@ -29,6 +30,7 @@ const navItems = [
   { path: '/settings', label: 'إعدادات العيادة', icon: Settings, allowedRoles: ['ADMIN'] },
   { path: '/ai-settings', label: 'الذكاء الاصطناعي', icon: Bot, allowedRoles: ['ADMIN'] },
   { path: '/analytics', label: 'التحليلات', icon: LineChart, allowedRoles: ['ADMIN'] },
+  { path: '/reviews', label: 'التقييمات', icon: Star, allowedRoles: ['ADMIN', 'DOCTOR'] },
 ];
 
 export default function Sidebar({ isOpen = false, onClose }) {
