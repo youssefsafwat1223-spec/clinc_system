@@ -34,7 +34,12 @@ const navItems = [
 export default function Sidebar({ isOpen = false, onClose }) {
   const location = useLocation();
   const userStr = localStorage.getItem('user');
-  const userRole = userStr ? JSON.parse(userStr).role : 'STAFF';
+  let userRole = 'STAFF';
+  try {
+    userRole = userStr ? JSON.parse(userStr).role : 'STAFF';
+  } catch {
+    userRole = 'STAFF';
+  }
   const [counts, setCounts] = useState({
     unreadMessages: 0,
     pendingAppointments: 0,

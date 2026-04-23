@@ -328,7 +328,7 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated 
             <p className="text-xs text-slate-400 flex items-center gap-2">
               <Clock3 className="w-3.5 h-3.5" />
               {selectedService.duration} دقيقة
-              {selectedService.price ? `• ${selectedService.price} ريال` : ''}
+              {selectedService.price ? `• ${Number(selectedService.price).toLocaleString('ar-IQ')} د.ع` : ''}
             </p>
           ) : null}
         </div>

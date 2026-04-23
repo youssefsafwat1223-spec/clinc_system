@@ -123,7 +123,7 @@ export default function InboxPage() {
         setLoadingList(true);
       }
 
-      const res = await api.get('/messages', { params: { limit: 100 } });
+      const res = await api.get('/messages', { params: { limit: 500 } });
       const uniquePatientsMap = new Map();
 
       (res.data.messages || []).forEach((msg) => {
@@ -344,8 +344,8 @@ export default function InboxPage() {
   return (
     <AppLayout noPadding={true}>
       <div className="relative z-20 flex h-full min-h-0 flex-col overflow-hidden bg-dark-bg/80 backdrop-blur-3xl">
-        <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 gap-4 px-4 pb-4 pt-6 sm:px-6 sm:pb-6 lg:gap-6 lg:pt-7">
-          <div className="flex h-full min-h-0 w-80 shrink-0 flex-col overflow-hidden rounded-2xl border border-dark-border/60 bg-[#0a1120]/75 shadow-2xl backdrop-blur-xl lg:w-[26rem]">
+        <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4 pt-6 sm:px-6 sm:pb-6 lg:gap-6 lg:pt-7 xl:flex-row xl:overflow-hidden">
+          <div className="flex min-h-[320px] w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-dark-border/60 bg-[#0a1120]/75 shadow-2xl backdrop-blur-xl xl:h-full xl:w-[26rem]">
             <div className="space-y-4 border-b border-dark-border/50 bg-[#0a1120]/95 p-5">
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -496,7 +496,7 @@ export default function InboxPage() {
             </div>
           </div>
 
-          <div className="relative z-10 flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-dark-border/60 bg-[#060a12]/80 shadow-2xl">
+          <div className="relative z-10 flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-2xl border border-dark-border/60 bg-[#060a12]/80 shadow-2xl xl:h-full xl:min-h-0">
             <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:24px_24px] opacity-5"></div>
 
             {selectedPatientData ? (

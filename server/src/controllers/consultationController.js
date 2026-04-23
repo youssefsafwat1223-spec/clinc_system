@@ -1,5 +1,7 @@
 const prisma = require('../lib/prisma');
 const whatsappService = require('../services/whatsappService');
+const messengerService = require('../services/messengerService');
+const instagramService = require('../services/instagramService');
 
 const getScopedDoctor = async (req) => {
   if (req.user?.role !== 'DOCTOR') {
@@ -26,7 +28,7 @@ exports.getAll = async (req, res, next) => {
     const consultations = await prisma.consultation.findMany({
       where: scopedDoctor
         ? {
-            OR: [{ doctorId: scopedDoctor.id }, { doctorId: null }, { status: 'PENDING' }],
+            OR: [{ doctorId: scopedDoctor.id }, { doctorId: null }],
           }
         : undefined,
       include: {
@@ -46,6 +48,18 @@ exports.reply = async (req, res, next) => {
     const { id } = req.params;
     const { reply, doctorId, requestAppointment } = req.body;
     const scopedDoctor = await getScopedDoctor(req);
+    const existing = await prisma.consultation.findUnique({
+      where: { id },
+      select: { id: true, doctorId: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'الاستشارة غير موجودة' });
+    }
+
+    if (scopedDoctor && existing.doctorId && existing.doctorId !== scopedDoctor.id) {
+      return res.status(403).json({ error: 'لا يمكنك الرد على استشارة لطبيب آخر' });
+    }
 
     const resolvedDoctorId = scopedDoctor?.id || doctorId || undefined;
 
@@ -70,7 +84,13 @@ exports.reply = async (req, res, next) => {
       messageBody += `\n\nبناءً على التقييم، يُرجى حجز موعد للكشف في العيادة لمتابعة الحالة بدقة أعلى. يمكنك الحجز من القائمة الرئيسية.`;
     }
 
-    await whatsappService.sendTextMessage(consultation.patient.phone, messageBody);
+    if (consultation.patient.platform === 'FACEBOOK') {
+      await messengerService.sendTextMessage(consultation.patient.facebookId || consultation.patient.phone, messageBody);
+    } else if (consultation.patient.platform === 'INSTAGRAM') {
+      await instagramService.sendTextMessage(consultation.patient.instagramId || consultation.patient.phone, messageBody);
+    } else {
+      await whatsappService.sendTextMessage(consultation.patient.phone, messageBody);
+    }
 
     res.json(consultation);
   } catch (error) {
@@ -81,6 +101,20 @@ exports.reply = async (req, res, next) => {
 exports.close = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const scopedDoctor = await getScopedDoctor(req);
+    const existing = await prisma.consultation.findUnique({
+      where: { id },
+      select: { id: true, doctorId: true },
+    });
+
+    if (!existing) {
+      return res.status(404).json({ error: 'الاستشارة غير موجودة' });
+    }
+
+    if (scopedDoctor && existing.doctorId && existing.doctorId !== scopedDoctor.id) {
+      return res.status(403).json({ error: 'لا يمكنك إغلاق استشارة لطبيب آخر' });
+    }
+
     const consultation = await prisma.consultation.update({
       where: { id },
       data: { status: 'CLOSED' },

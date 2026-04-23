@@ -1,4 +1,5 @@
 const config = require('../config/env');
+const { formatCurrency } = require('./helpers');
 
 /**
  * Build WhatsApp welcome message with quick reply buttons
@@ -51,7 +52,7 @@ const buildServiceSelection = (to, services, doctorNames = '') => ({
         {
           title: 'الخدمات المتاحة',
           rows: services.map((s) => {
-            let desc = s.price ? `${s.price} جنيه` : '';
+            let desc = s.price ? formatCurrency(s.price) : '';
             if (doctorNames) {
               desc = desc ? `${desc} - د. ${doctorNames}` : `د. ${doctorNames}`;
             }

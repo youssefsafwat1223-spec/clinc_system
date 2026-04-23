@@ -3,7 +3,7 @@ const whatsappService = require('../services/whatsappService');
 
 const sendBroadcast = async (req, res, next) => {
   try {
-    const { platform, audience, messageText, broadcastType = 'TEXT', templateName, imageUrl } = req.body;
+    const { platform = 'WHATSAPP', audience = 'ALL', messageText, broadcastType = 'TEXT', templateName, imageUrl } = req.body;
     
     // Validate
     if (broadcastType === 'TEXT' && !messageText) {
@@ -13,18 +13,18 @@ const sendBroadcast = async (req, res, next) => {
       return res.status(400).json({ error: 'يرجى إدخال اسم الـ Template المعتمد من ميتا' });
     }
 
-    let patients = [];
-    if (audience === 'ALL') {
-      patients = await prisma.patient.findMany({
-        where: { platform: 'WHATSAPP' },
-        select: { id: true, phone: true, name: true }
-      });
-    } else {
-      patients = await prisma.patient.findMany({
-        where: { platform: 'WHATSAPP' }, // default to all for now
-        select: { id: true, phone: true, name: true }
-      });
+    if (platform !== 'WHATSAPP') {
+      return res.status(400).json({ error: 'الحملات متاحة للواتساب فقط حالياً' });
     }
+
+    if (audience !== 'ALL') {
+      return res.status(400).json({ error: 'هذا الجمهور غير مدعوم حالياً' });
+    }
+
+    const patients = await prisma.patient.findMany({
+      where: { platform: 'WHATSAPP', phone: { not: '' } },
+      select: { id: true, phone: true, name: true }
+    });
 
     if (patients.length === 0) {
       return res.status(400).json({ error: 'لا يوجد مرضى متطابقين في قاعدة البيانات' });

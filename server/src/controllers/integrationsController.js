@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const prisma = require('../lib/prisma');
 const openaiService = require('../services/openaiService');
+const { formatCurrency } = require('../utils/helpers');
+const { resolveWhatsAppChatLink } = require('../utils/clinicLinks');
 
 const DEFAULT_QUICK_REPLIES = [
   'احجز موعد',
@@ -165,13 +167,6 @@ const persistSocialMessage = async ({ patientId, platform, content, type, metada
     },
   });
 
-const formatCurrency = (value) => {
-  if (typeof value !== 'number') {
-    return 'غير محدد';
-  }
-  return `${value} ريال`;
-};
-
 const formatWorkingHours = (workingHours = {}, heading = 'مواعيد العمل') => {
   if (!workingHours || typeof workingHours !== 'object') {
     return `${heading} غير متاحة الآن.`;
@@ -237,6 +232,29 @@ const buildDoctorsSchedulesText = (doctors) => {
 const detectIntent = (text) => {
   if (!text) {
     return 'default';
+  }
+
+  // Prefer actionable intents over greeting so messages like "اهلا عاوز احجز" route correctly.
+  if (/(\u0627\u0633\u062a\u0641\u0633\u0627\u0631|\u0645\u0634\u0643\u0644\u0629|\u0627\u0644\u0645|\u0623\u0644\u0645|\u062a\u0648\u0631\u0645|\u0646\u0632\u064a\u0641|\u062d\u0633\u0627\u0633\u064a\u0629|\u0634\u0643\u0648\u0649)/i.test(text)) {
+    return 'problem_inquiry';
+  }
+  if (/(\u0627\u062d\u062c\u0632|\u062d\u062c\u0632|\u0645\u0648\u0639\u062f|appointment|book)/i.test(text)) {
+    return 'booking';
+  }
+  if (/(\u0627\u0633\u0639\u0627\u0631|\u0623\u0633\u0639\u0627\u0631|\u0633\u0639\u0631|\u062a\u0643\u0644\u0641\u0629|\u0627\u0644\u0643\u0634\u0641|\u0627\u0644\u062e\u062f\u0645\u0627\u062a|service|price)/i.test(text)) {
+    return 'prices';
+  }
+  if (/(\u0639\u0646\u0648\u0627\u0646|\u0644\u0648\u0643\u064a\u0634\u0646|location|map|maps|google maps)/i.test(text)) {
+    return 'address';
+  }
+  if (/(\u0645\u0648\u0627\u0639\u064a\u062f\s+\u0627\u0644\u062f\u0643\u0627\u062a\u0631|\u062f\u0648\u0627\u0645\s+\u0627\u0644\u062f\u0643\u0627\u062a\u0631|doctor schedules?)/i.test(text)) {
+    return 'doctor_schedules';
+  }
+  if (/(\u0645\u0648\u0627\u0639\u064a\u062f|\u0633\u0627\u0639\u0627\u062a|\u062f\u0648\u0627\u0645|working|hours)/i.test(text)) {
+    return 'hours';
+  }
+  if (/(\u062f\u0643\u062a\u0648\u0631|\u062f\u0643\u0627\u062a\u0631|\u0627\u0637\u0628\u0627\u0621|\u0623\u0637\u0628\u0627\u0621|doctor)/i.test(text)) {
+    return 'doctors';
   }
 
   if (/(مرحبا|أهلا|اهلا|السلام عليكم|سلام|هاي|hello|hi|hey|start)/i.test(text)) {
@@ -325,7 +343,10 @@ const manychatWebhook = async (req, res) => {
     const incomingText = normalizeText(incomingTextRaw);
     const intent = detectIntent(incomingText);
     const clinicName = settings?.clinicNameAr || settings?.clinicName || 'العيادة';
-    const whatsappLink = settings?.whatsappChatLink || '';
+    const whatsappLink = resolveWhatsAppChatLink({
+      whatsappChatLink: settings?.whatsappChatLink,
+      phone: settings?.phone,
+    });
     const mapsLink = settings?.googleMapsLink || '';
     const address = settings?.address || 'العنوان غير متاح حالياً.';
 

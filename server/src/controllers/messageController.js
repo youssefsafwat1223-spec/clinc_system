@@ -210,7 +210,7 @@ const getConversation = async (req, res, next) => {
 
 const sendManual = async (req, res, next) => {
   try {
-    const { patientId, content, platform } = req.body;
+    const { patientId, content, platform, replyToComment = false } = req.body;
     const whatsappService = require('../services/whatsappService');
     const messengerService = require('../services/messengerService');
     const instagramService = require('../services/instagramService');
@@ -235,7 +235,7 @@ const sendManual = async (req, res, next) => {
         break;
 
       case 'FACEBOOK': {
-        const commentTarget = await getLatestCommentTarget(patientId, 'FACEBOOK');
+        const commentTarget = replyToComment ? await getLatestCommentTarget(patientId, 'FACEBOOK') : null;
         if (commentTarget?.commentId) {
           await messengerService.sendCommentReply(commentTarget.commentId, trimmedContent);
           metadata = {
@@ -259,7 +259,7 @@ const sendManual = async (req, res, next) => {
       }
 
       case 'INSTAGRAM': {
-        const commentTarget = await getLatestCommentTarget(patientId, 'INSTAGRAM');
+        const commentTarget = replyToComment ? await getLatestCommentTarget(patientId, 'INSTAGRAM') : null;
         if (commentTarget?.commentId) {
           await instagramService.sendCommentReply(commentTarget.commentId, trimmedContent);
           metadata = {

@@ -232,6 +232,32 @@ const update = async (req, res, next) => {
     }
 
     const { scheduledTime, notes, status } = req.body;
+    if (scheduledTime) {
+      const existingWithService = await prisma.appointment.findUnique({
+        where: { id: req.params.id },
+        include: { service: true, doctor: true },
+      });
+      const conflict = await appointmentService.getAppointmentConflict({
+        doctorId: existingWithService.doctorId,
+        scheduledTime: new Date(scheduledTime),
+        duration: existingWithService.service?.duration || 30,
+        excludeAppointmentId: req.params.id,
+      });
+
+      if (conflict) {
+        const alternatives = await appointmentService.getAlternativeSlots(
+          existingWithService.doctorId,
+          scheduledTime,
+          existingWithService.doctor.workingHours,
+          existingWithService.service?.duration || 30
+        );
+        return res.status(409).json({
+          error: 'هذا الموعد غير متاح',
+          alternatives,
+        });
+      }
+    }
+
     const appointment = await prisma.appointment.update({
       where: { id: req.params.id },
       data: {
@@ -284,7 +310,7 @@ const block = async (req, res, next) => {
 const getStats = async (req, res, next) => {
   try {
     const scopedDoctor = await getScopedDoctor(req);
-    const statuses = ['PENDING', 'CONFIRMED', 'CANCELLED', 'REJECTED', 'BLOCKED'];
+    const statuses = ['PENDING', 'CONFIRMED', 'CANCELLED', 'REJECTED', 'EXPIRED', 'BLOCKED'];
     const counts = { ALL: 0, RESCHEDULED: 0 };
     const where = scopedDoctor ? { doctorId: scopedDoctor.id } : {};
 

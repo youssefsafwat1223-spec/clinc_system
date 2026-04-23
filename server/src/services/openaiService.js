@@ -2,6 +2,7 @@
 const config = require('../config/env');
 const prisma = require('../lib/prisma');
 const { resolveWhatsAppChatLink } = require('../utils/clinicLinks');
+const { formatCurrency } = require('../utils/helpers');
 const {
   formatFaqsForPrompt,
   formatKnowledgeForPrompt,
@@ -56,7 +57,7 @@ const buildServicesInfo = async () => {
       ...services.map(
         (service) =>
           `- ${service.nameAr || service.name}: ${service.description || ''}${
-            service.price ? ` (${service.price} ريال)` : ''
+            service.price ? ` (${formatCurrency(service.price)})` : ''
           }`
       ),
     ].join('\n');
@@ -84,7 +85,7 @@ const buildServicePricesReplySuffix = async () => {
 
     return [
       'أسعار الخدمات المتاحة:',
-      ...services.map((service) => `- ${service.nameAr || service.name || 'خدمة'}: ${service.price} ريال`),
+      ...services.map((service) => `- ${service.nameAr || service.name || 'خدمة'}: ${formatCurrency(service.price)}`),
     ].join('\n');
   } catch (error) {
     return '';
@@ -112,7 +113,7 @@ const buildServicesDirectReply = async () => {
       'الخدمات المتاحة في العيادة:',
       ...services.map((service) => {
         const serviceName = service.nameAr || service.name || 'خدمة';
-        const pricePart = service.price ? ` - ${service.price} ريال` : '';
+        const pricePart = service.price ? ` - ${formatCurrency(service.price)}` : '';
         const descriptionPart = service.description ? `\n${service.description}` : '';
         return `- ${serviceName}${pricePart}${descriptionPart}`;
       }),

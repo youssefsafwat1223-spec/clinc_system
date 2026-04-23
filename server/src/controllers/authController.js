@@ -50,6 +50,10 @@ const getMe = async (req, res) => {
 const changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || typeof newPassword !== 'string' || newPassword.length < 8) {
+      return res.status(400).json({ error: 'كلمة السر الجديدة يجب أن تكون 8 أحرف على الأقل' });
+    }
+
     const user = await prisma.user.findUnique({ where: { id: req.user.id } });
 
     const isValid = await bcrypt.compare(currentPassword, user.password);

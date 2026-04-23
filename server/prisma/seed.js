@@ -4,6 +4,7 @@ const { buildAiConfig, DEFAULT_FAQS, DEFAULT_KNOWLEDGE_CASES } = require('../src
 const { buildWhatsAppChatLink } = require('../src/utils/clinicLinks');
 
 const prisma = new PrismaClient();
+const clinicPhone = process.env.CLINIC_WHATSAPP_NUMBER || '+9647882332330';
 
 const DENTAL_SYSTEM_PROMPT = `أنت مساعد ذكي لعيادة أسنان.
 أجب على أسئلة المرضى بأسلوب مهني وواضح ومطمئن.
@@ -92,7 +93,7 @@ async function main() {
     update: {
       name: 'د. أحمد محمد',
       specialization: 'طب الأسنان',
-      phone: '+966501234567',
+      phone: clinicPhone,
       workingHours: {
         sunday: { start: '09:00', end: '17:00' },
         monday: { start: '09:00', end: '17:00' },
@@ -106,7 +107,7 @@ async function main() {
     create: {
       name: 'د. أحمد محمد',
       specialization: 'طب الأسنان',
-      phone: '+966501234567',
+      phone: clinicPhone,
       userId: doctorUser.id,
       workingHours: {
         sunday: { start: '09:00', end: '17:00' },
@@ -171,10 +172,10 @@ async function main() {
       data: {
         clinicName: 'My Clinic',
         clinicNameAr: 'عيادتي',
-        phone: '+966501234567',
-        whatsappChatLink: buildWhatsAppChatLink('+966501234567'),
-        googleMapsLink: 'https://maps.google.com/?q=%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6%D8%8C%20%D8%A7%D9%84%D9%85%D9%85%D9%84%D9%83%D8%A9%20%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9%20%D8%A7%D9%84%D8%B3%D8%B9%D9%88%D8%AF%D9%8A%D8%A9',
-        address: 'الرياض، المملكة العربية السعودية',
+        phone: clinicPhone,
+        whatsappChatLink: buildWhatsAppChatLink(clinicPhone),
+        googleMapsLink: 'https://maps.google.com/?q=Iraq',
+        address: 'العراق',
         systemPrompt: DENTAL_SYSTEM_PROMPT,
         workingHours: {
           sunday: { start: '09:00', end: '17:00' },

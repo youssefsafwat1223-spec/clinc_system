@@ -261,7 +261,13 @@ const persistSocialMessage = async ({ patientId, platform, content, type, metada
   });
 
 const verifyWebhookSignature = (req, appSecret, label) => {
-  if (!appSecret || !req.rawBody) return true;
+  if (!appSecret || !req.rawBody) {
+    if (config.nodeEnv === 'production') {
+      console.error(`[${label}] Webhook signature cannot be verified: missing app secret or raw body`);
+      return false;
+    }
+    return true;
+  }
 
   const signature = req.get('x-hub-signature-256');
   if (!signature) {
@@ -1779,6 +1785,10 @@ const handleMessengerInboundClean = async (event) => {
       },
     });
 
+    if (patient.chatState === 'HUMAN') {
+      return;
+    }
+
     if (SOCIAL_BOOKING_PATTERN.test(routingContent)) {
       await messengerService.sendWhatsAppRedirect(senderId);
       return;
@@ -1844,6 +1854,10 @@ const handleInstagramInboundClean = async (event) => {
         metadata: event,
       },
     });
+
+    if (patient.chatState === 'HUMAN') {
+      return;
+    }
 
     if (SOCIAL_BOOKING_PATTERN.test(routingContent)) {
       await instagramService.sendWhatsAppRedirect(senderId);

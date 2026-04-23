@@ -27,6 +27,7 @@ const sendReminders = async (hoursBeforeAppointment = 24) => {
   });
 
   const reminderType = `reminder_${hoursBeforeAppointment}h`;
+  let sentCount = 0;
 
   for (const appointment of upcomingAppointments) {
     const alreadySent = appointment.notifications.some((notification) => notification.type === reminderType);
@@ -34,7 +35,8 @@ const sendReminders = async (hoursBeforeAppointment = 24) => {
       continue;
     }
 
-    if (!appointment.patient?.phone) {
+    const channel = resolveChannel(appointment.patient);
+    if (!channel) {
       continue;
     }
 
@@ -48,22 +50,37 @@ const sendReminders = async (hoursBeforeAppointment = 24) => {
     ].join('\n');
 
     try {
-      await whatsappService.sendTextMessage(appointment.patient.phone, reminderText);
+      await sendTextByChannel({
+        channel,
+        patient: appointment.patient,
+        content: reminderText,
+      });
 
       await prisma.notification.create({
         data: {
           appointmentId: appointment.id,
           type: reminderType,
           sentAt: new Date(),
-          channel: 'WHATSAPP',
+          channel,
         },
       });
+      await logOutboundMessageIfNeeded({
+        appointment,
+        channel,
+        content: reminderText,
+        metadata: {
+          source: 'APPOINTMENT_REMINDER',
+          reminderType,
+          appointmentId: appointment.id,
+        },
+      });
+      sentCount++;
     } catch (error) {
       console.error(`[Reminder] Failed for appointment ${appointment.id}:`, error.message);
     }
   }
 
-  return upcomingAppointments.length;
+  return sentCount;
 };
 
 const buildBookingConfirmationText = (appointment) => {

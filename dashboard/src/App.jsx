@@ -15,6 +15,8 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage.jsx'));
 const ConsultationsPage = lazy(() => import('./pages/ConsultationsPage.jsx'));
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage.jsx'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage.jsx'));
+const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage.jsx'));
+const DataDeletionPage = lazy(() => import('./pages/DataDeletionPage.jsx'));
 
 const ProtectedRoute = ({ children, allowedRoles }) => {
   const token = localStorage.getItem('token');
@@ -57,6 +59,8 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicyPage />} />
+          <Route path="/terms" element={<TermsOfServicePage />} />
+          <Route path="/data-deletion" element={<DataDeletionPage />} />
 
           {/* Protected dashboard routes */}
           <Route

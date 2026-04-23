@@ -226,7 +226,7 @@ export default function ServicesPage() {
                   <div className="flex flex-col">
                     <span className="mb-0.5 text-[10px] uppercase tracking-wider text-dark-muted">التكلفة</span>
                     <span className="text-lg font-bold text-emerald-400">
-                      {service.price !== null && service.price !== undefined ? `${service.price} ر.س` : 'متغير'}
+                      {service.price !== null && service.price !== undefined ? `${Number(service.price).toLocaleString('ar-IQ')} د.ع` : 'متغير'}
                     </span>
                   </div>
 

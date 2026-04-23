@@ -44,11 +44,16 @@ const generateTimeSlots = (date, workingHours, duration = 30, bookedSlots = []) 
 
   while (current < end) {
     const slotTime = new Date(current);
-    const isBooked = bookedSlots.some(
-      (booked) => Math.abs(new Date(booked).getTime() - slotTime.getTime()) < duration * 60 * 1000
-    );
+    const slotEnd = new Date(slotTime.getTime() + duration * 60 * 1000);
+    const isBooked = bookedSlots.some((booked) => {
+      const bookedStart = new Date(booked.start || booked).getTime();
+      const bookedEnd = new Date(
+        booked.end || bookedStart + (booked.duration || duration) * 60 * 1000
+      ).getTime();
+      return slotTime.getTime() < bookedEnd && slotEnd.getTime() > bookedStart;
+    });
 
-    if (!isBooked && slotTime > new Date()) {
+    if (!isBooked && slotTime > new Date() && slotEnd <= end) {
       slots.push({
         time: slotTime.toISOString(),
         label: `${formatDateAr(slotTime)} ${formatTimeAr(slotTime)}`,
@@ -75,6 +80,14 @@ const hasConflict = (newTime, existingTimes, duration = 30) => {
   });
 };
 
+const formatCurrency = (value, fallback = 'غير محدد') => {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return fallback;
+  }
+
+  return `${Number(value).toLocaleString('ar-IQ')} د.ع`;
+};
+
 /**
  * Paginate query results
  */
@@ -88,5 +101,6 @@ module.exports = {
   formatTimeAr,
   generateTimeSlots,
   hasConflict,
+  formatCurrency,
   paginate,
 };

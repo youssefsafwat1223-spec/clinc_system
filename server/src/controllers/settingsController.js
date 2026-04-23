@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const openaiService = require('../services/openaiService');
+const config = require('../config/env');
 const { buildWhatsAppChatLink } = require('../utils/clinicLinks');
 const {
   DEFAULT_FAQS,
@@ -13,10 +14,10 @@ const {
 
 const createDefaultSettings = () => ({
   clinicName: 'My Clinic',
-  phone: '+966501234567',
-  address: 'الرياض، المملكة العربية السعودية',
-  whatsappChatLink: buildWhatsAppChatLink('+966501234567'),
-  googleMapsLink: 'https://maps.google.com/?q=%D8%A7%D9%84%D8%B1%D9%8A%D8%A7%D8%B6%D8%8C%20%D8%A7%D9%84%D9%85%D9%85%D9%84%D9%83%D8%A9%20%D8%A7%D9%84%D8%B9%D8%B1%D8%A8%D9%8A%D8%A9%20%D8%A7%D9%84%D8%B3%D8%B9%D9%88%D8%AF%D9%8A%D8%A9',
+  phone: config.clinicWhatsappNumber || '+9647882332330',
+  address: 'العراق',
+  whatsappChatLink: buildWhatsAppChatLink(config.clinicWhatsappNumber || '+9647882332330'),
+  googleMapsLink: 'https://maps.google.com/?q=Iraq',
   clinicNameAr: 'عيادتي',
   systemPrompt: `أنت مساعد ذكي لعيادة أسنان.
 أجب على أسئلة المرضى بأسلوب مهني وواضح ومطمئن.
@@ -245,6 +246,12 @@ const update = async (req, res, next) => {
 
     const currentAiConfig = getAiConfigFromSettings(existing);
     const incomingAiConfig = faqData !== undefined ? normalizeAiConfig(faqData) : null;
+    const resolvedWhatsAppChatLink =
+      whatsappChatLink !== undefined
+        ? whatsappChatLink
+        : phone !== undefined
+          ? buildWhatsAppChatLink(phone)
+          : undefined;
 
     const nextFaqs =
       faqs !== undefined
@@ -267,7 +274,7 @@ const update = async (req, res, next) => {
         ...(clinicNameAr !== undefined && { clinicNameAr }),
         ...(phone !== undefined && { phone }),
         ...(address !== undefined && { address }),
-        ...(whatsappChatLink !== undefined && { whatsappChatLink }),
+        ...(resolvedWhatsAppChatLink !== undefined && { whatsappChatLink: resolvedWhatsAppChatLink }),
         ...(googleMapsLink !== undefined && { googleMapsLink }),
         ...(workingHours !== undefined && { workingHours }),
         ...(systemPrompt !== undefined && { systemPrompt }),
