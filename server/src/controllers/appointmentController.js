@@ -297,24 +297,6 @@ const complete = async (req, res, next) => {
   }
 };
 
-const complete = async (req, res, next) => {
-  try {
-    const { appointment: existingAppointment } = await getAccessibleAppointment(req, req.params.id);
-    if (!existingAppointment) {
-      return res.status(404).json({ error: 'الموعد غير موجود' });
-    }
-
-    const appointment = await prisma.appointment.update({
-      where: { id: req.params.id },
-      data: { status: 'COMPLETED' },
-      include: { patient: true, doctor: true, service: true },
-    });
-
-    res.json({ appointment });
-  } catch (error) {
-    next(error);
-  }
-};
 
 const cancel = async (req, res, next) => {
   try {
