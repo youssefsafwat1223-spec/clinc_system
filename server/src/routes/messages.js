@@ -9,5 +9,6 @@ router.get('/', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageCon
 router.get('/conversation/:patientId', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageController.getConversation);
 router.post('/send', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageController.sendManual);
 router.post('/:patientId/end', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageController.endConversation);
+router.post('/:patientId/pause', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageController.pauseBot);
 
 module.exports = router;

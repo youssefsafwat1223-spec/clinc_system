@@ -274,6 +274,64 @@ const update = async (req, res, next) => {
   }
 };
 
+const complete = async (req, res, next) => {
+  try {
+    const { appointment: existingAppointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!existingAppointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    if (existingAppointment.status !== 'CONFIRMED') {
+      return res.status(400).json({ error: 'لا يمكن تحديد "تم الكشف" إلا للمواعيد المؤكدة' });
+    }
+
+    const appointment = await prisma.appointment.update({
+      where: { id: req.params.id },
+      data: { status: 'COMPLETED' },
+      include: { patient: true, doctor: true, service: true },
+    });
+
+    res.json({ appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const cancel = async (req, res, next) => {
+  try {
+    const { appointment: existingAppointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!existingAppointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    if (!['PENDING', 'CONFIRMED'].includes(existingAppointment.status)) {
+      return res.status(400).json({ error: 'لا يمكن إلغاء هذا الموعد في حالته الحالية' });
+    }
+
+    const { reason } = req.body || {};
+    const cancellationReason = (reason && String(reason).trim()) || 'إلغاء إداري للحجز';
+
+    const appointment = await prisma.appointment.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'CANCELLED',
+        notes: cancellationReason,
+      },
+      include: { patient: true, doctor: true, service: true },
+    });
+
+    try {
+      await notificationService.sendBookingCancelled(appointment, cancellationReason);
+    } catch (e) {
+      console.error('Notification error:', e.message);
+    }
+
+    res.json({ appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const block = async (req, res, next) => {
   try {
     const appointmentId = req.params.id;
@@ -310,7 +368,7 @@ const block = async (req, res, next) => {
 const getStats = async (req, res, next) => {
   try {
     const scopedDoctor = await getScopedDoctor(req);
-    const statuses = ['PENDING', 'CONFIRMED', 'CANCELLED', 'REJECTED', 'EXPIRED', 'BLOCKED'];
+    const statuses = ['PENDING', 'CONFIRMED', 'CANCELLED', 'REJECTED', 'EXPIRED', 'BLOCKED', 'COMPLETED'];
     const counts = { ALL: 0, RESCHEDULED: 0 };
     const where = scopedDoctor ? { doctorId: scopedDoctor.id } : {};
 
@@ -351,5 +409,7 @@ module.exports = {
   reject,
   update,
   block,
+  complete,
+  cancel,
   getStats,
 };

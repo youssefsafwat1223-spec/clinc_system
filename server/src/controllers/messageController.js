@@ -280,6 +280,26 @@ const sendManual = async (req, res, next) => {
   }
 };
 
+const pauseBot = async (req, res, next) => {
+  try {
+    const { patientId } = req.params;
+    const existingPatient = await getScopedPatient(req, patientId);
+    if (!existingPatient) {
+      return res.status(404).json({ error: 'المريض غير موجود' });
+    }
+
+    const patient = await prisma.patient.update({
+      where: { id: patientId },
+      data: { chatState: 'HUMAN' },
+      select: { id: true, name: true, phone: true, platform: true, chatState: true },
+    });
+
+    res.json({ success: true, patient });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const endConversation = async (req, res, next) => {
   try {
     const { patientId } = req.params;
@@ -335,4 +355,4 @@ const endConversation = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, getConversation, sendManual, endConversation };
+module.exports = { getAll, getConversation, sendManual, endConversation, pauseBot };

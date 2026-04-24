@@ -1,5 +1,5 @@
 const express = require('express');
-const { getAll, getOne, create, confirm, reject, update, block, getStats } = require('../controllers/appointmentController');
+const { getAll, getOne, create, confirm, reject, update, block, complete, cancel, getStats } = require('../controllers/appointmentController');
 const { auth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -13,5 +13,7 @@ router.put('/:id', update);
 router.post('/:id/confirm', confirm);
 router.post('/:id/reject', reject);
 router.post('/:id/block', block);
+router.post('/:id/complete', complete);
+router.post('/:id/cancel', cancel);
 
 module.exports = router;

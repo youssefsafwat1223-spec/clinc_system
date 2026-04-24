@@ -5,14 +5,17 @@ import { toast } from 'react-toastify';
 import {
   Activity,
   Edit2,
+  Filter,
   ImagePlus,
   Loader2,
   Megaphone,
   Plus,
   Save,
+  Search,
   Send,
   Trash2,
   UploadCloud,
+  Users,
 } from 'lucide-react';
 
 const TEMPLATE_CATEGORIES = [
@@ -66,6 +69,20 @@ export default function CampaignsPage() {
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
 
+  const [allPatients, setAllPatients] = useState([]);
+  const [patientsLoading, setPatientsLoading] = useState(false);
+  const [selectedPatientIds, setSelectedPatientIds] = useState([]);
+  const [patientSearch, setPatientSearch] = useState('');
+
+  const [doctors, setDoctors] = useState([]);
+  const [services, setServices] = useState([]);
+  const [filters, setFilters] = useState({
+    doctorId: '',
+    serviceId: '',
+    lastVisitFrom: '',
+    lastVisitTo: '',
+  });
+
   const [templates, setTemplates] = useState([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -88,6 +105,70 @@ export default function CampaignsPage() {
   useEffect(() => {
     fetchTemplates();
   }, []);
+
+  const fetchPatientsForSelection = async () => {
+    try {
+      setPatientsLoading(true);
+      const res = await api.get('/patients', { params: { limit: 500 } });
+      const items = res.data.patients || res.data.items || res.data || [];
+      setAllPatients(
+        items
+          .filter((patient) => patient.platform === 'WHATSAPP' && patient.phone)
+          .map((patient) => ({ id: patient.id, name: patient.name, phone: patient.phone }))
+      );
+    } catch (error) {
+      toast.error('فشل تحميل قائمة المرضى');
+    } finally {
+      setPatientsLoading(false);
+    }
+  };
+
+  const fetchFilterOptions = async () => {
+    try {
+      const [doctorsRes, servicesRes] = await Promise.all([
+        api.get('/doctors').catch(() => ({ data: { doctors: [] } })),
+        api.get('/services').catch(() => ({ data: { services: [] } })),
+      ]);
+      setDoctors(doctorsRes.data.doctors || doctorsRes.data || []);
+      setServices(servicesRes.data.services || servicesRes.data || []);
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  useEffect(() => {
+    if (audience === 'SELECTED' && allPatients.length === 0) {
+      fetchPatientsForSelection();
+    }
+    if (audience === 'FILTERED' && doctors.length === 0 && services.length === 0) {
+      fetchFilterOptions();
+    }
+  }, [audience]);
+
+  const filteredPatientsList = useMemo(() => {
+    const term = patientSearch.trim().toLowerCase();
+    if (!term) return allPatients;
+    return allPatients.filter(
+      (patient) =>
+        (patient.name || '').toLowerCase().includes(term) || (patient.phone || '').includes(term)
+    );
+  }, [allPatients, patientSearch]);
+
+  const togglePatientSelection = (patientId) => {
+    setSelectedPatientIds((prev) =>
+      prev.includes(patientId) ? prev.filter((id) => id !== patientId) : [...prev, patientId]
+    );
+  };
+
+  const toggleAllVisiblePatients = () => {
+    const visibleIds = filteredPatientsList.map((patient) => patient.id);
+    const allSelected = visibleIds.every((id) => selectedPatientIds.includes(id));
+    if (allSelected) {
+      setSelectedPatientIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+    } else {
+      setSelectedPatientIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
+    }
+  };
 
   const activeTemplates = useMemo(
     () => templates.filter((template) => template.active),
@@ -126,6 +207,16 @@ export default function CampaignsPage() {
     if (broadcastType === 'TEXT' && !messageText.trim()) return;
     if (broadcastType === 'TEMPLATE' && !templateId) return;
 
+    if (audience === 'SELECTED' && selectedPatientIds.length === 0) {
+      toast.error('اختر مريضًا واحدًا على الأقل قبل الإرسال');
+      return;
+    }
+
+    if (audience === 'FILTERED' && !filters.doctorId && !filters.serviceId && !filters.lastVisitFrom && !filters.lastVisitTo) {
+      toast.error('حدد فلترًا واحدًا على الأقل للجمهور');
+      return;
+    }
+
     if (!window.confirm('سيتم إرسال الحملة فورًا. هل تريد المتابعة؟')) return;
 
     try {
@@ -135,6 +226,8 @@ export default function CampaignsPage() {
       const res = await api.post('/campaigns/broadcast', {
         platform: 'WHATSAPP',
         audience,
+        patientIds: audience === 'SELECTED' ? selectedPatientIds : undefined,
+        filters: audience === 'FILTERED' ? filters : undefined,
         broadcastType,
         messageText: broadcastType === 'TEXT' ? messageText : undefined,
         templateId: broadcastType === 'TEMPLATE' ? templateId : undefined,
@@ -278,8 +371,132 @@ export default function CampaignsPage() {
                     className="w-full rounded-xl border border-dark-border bg-dark-bg px-4 py-3 text-white focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   >
                     <option value="ALL">جميع مرضى واتساب</option>
+                    <option value="SELECTED">مرضى محددين (اختيار من القائمة)</option>
+                    <option value="FILTERED">فلترة ذكية (دكتور، خدمة، تاريخ)</option>
                   </select>
                 </div>
+
+                {audience === 'SELECTED' ? (
+                  <div className="rounded-2xl border border-dark-border bg-dark-bg/30 p-4">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-sm font-bold text-white">
+                        <Users className="h-4 w-4 text-primary-400" />
+                        <span>اختر المرضى ({selectedPatientIds.length} مختار)</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={toggleAllVisiblePatients}
+                        className="rounded-lg border border-primary-500/30 px-3 py-1 text-xs font-bold text-primary-300"
+                      >
+                        تحديد / إلغاء الكل الظاهر
+                      </button>
+                    </div>
+
+                    <div className="relative mb-3">
+                      <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                      <input
+                        value={patientSearch}
+                        onChange={(e) => setPatientSearch(e.target.value)}
+                        placeholder="ابحث باسم المريض أو رقم الهاتف..."
+                        className="w-full rounded-xl border border-dark-border bg-dark-bg px-4 py-2 pr-10 text-sm text-white focus:border-primary-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div className="max-h-72 overflow-y-auto rounded-xl border border-dark-border bg-dark-bg/50 p-2 custom-scrollbar">
+                      {patientsLoading ? (
+                        <div className="flex items-center justify-center py-6 text-sm text-dark-muted">
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" /> جاري التحميل...
+                        </div>
+                      ) : filteredPatientsList.length === 0 ? (
+                        <p className="py-6 text-center text-sm text-dark-muted">لا يوجد مرضى مطابقين للبحث.</p>
+                      ) : (
+                        <ul className="divide-y divide-dark-border/40">
+                          {filteredPatientsList.map((patient) => {
+                            const isChecked = selectedPatientIds.includes(patient.id);
+                            return (
+                              <li key={patient.id}>
+                                <label className="flex cursor-pointer items-center justify-between gap-3 px-2 py-2 hover:bg-dark-bg/70">
+                                  <div>
+                                    <p className="text-sm font-bold text-white">{patient.name || 'بدون اسم'}</p>
+                                    <p className="text-xs text-dark-muted" dir="ltr">{patient.phone}</p>
+                                  </div>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={() => togglePatientSelection(patient.id)}
+                                    className="h-4 w-4 rounded border-dark-border bg-dark-bg text-primary-500 focus:ring-primary-500"
+                                  />
+                                </label>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                {audience === 'FILTERED' ? (
+                  <div className="rounded-2xl border border-dark-border bg-dark-bg/30 p-4">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-bold text-white">
+                      <Filter className="h-4 w-4 text-primary-400" />
+                      <span>فلاتر ذكية (يتم الإرسال للمرضى اللي عندهم حجز مطابق)</span>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <label className="mb-1 block text-xs text-dark-muted">الدكتور</label>
+                        <select
+                          value={filters.doctorId}
+                          onChange={(e) => setFilters((prev) => ({ ...prev, doctorId: e.target.value }))}
+                          className="w-full rounded-xl border border-dark-border bg-dark-bg px-3 py-2 text-sm text-white"
+                        >
+                          <option value="">الكل</option>
+                          {doctors.map((doctor) => (
+                            <option key={doctor.id} value={doctor.id}>
+                              {doctor.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-dark-muted">الخدمة</label>
+                        <select
+                          value={filters.serviceId}
+                          onChange={(e) => setFilters((prev) => ({ ...prev, serviceId: e.target.value }))}
+                          className="w-full rounded-xl border border-dark-border bg-dark-bg px-3 py-2 text-sm text-white"
+                        >
+                          <option value="">الكل</option>
+                          {services.map((service) => (
+                            <option key={service.id} value={service.id}>
+                              {service.nameAr || service.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-dark-muted">آخر زيارة من</label>
+                        <input
+                          type="date"
+                          value={filters.lastVisitFrom}
+                          onChange={(e) => setFilters((prev) => ({ ...prev, lastVisitFrom: e.target.value }))}
+                          className="w-full rounded-xl border border-dark-border bg-dark-bg px-3 py-2 text-sm text-white"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-dark-muted">آخر زيارة إلى</label>
+                        <input
+                          type="date"
+                          value={filters.lastVisitTo}
+                          onChange={(e) => setFilters((prev) => ({ ...prev, lastVisitTo: e.target.value }))}
+                          className="w-full rounded-xl border border-dark-border bg-dark-bg px-3 py-2 text-sm text-white"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-3 text-xs text-dark-muted">
+                      مثال: لو اخترت دكتور معين + تاريخ الشهر اللي فات، هيتبعت للمرضى اللي كشفوا عنده في الشهر ده فقط.
+                    </p>
+                  </div>
+                ) : null}
 
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-300">نوع الحملة</label>

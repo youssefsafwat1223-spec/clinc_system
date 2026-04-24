@@ -15,6 +15,7 @@ enum AppointmentStatus {
   REJECTED
   EXPIRED
   BLOCKED
+  COMPLETED
 }
 
 enum MessageType {

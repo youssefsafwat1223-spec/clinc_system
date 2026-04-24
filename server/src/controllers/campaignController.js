@@ -85,11 +85,67 @@ const removeTemplate = async (req, res, next) => {
   }
 };
 
+const buildAudienceWhere = async ({ audience, patientIds, filters }) => {
+  const baseWhere = { platform: 'WHATSAPP', phone: { not: '' } };
+
+  if (audience === 'SELECTED') {
+    const ids = Array.isArray(patientIds) ? patientIds.filter(Boolean) : [];
+    if (!ids.length) {
+      return null;
+    }
+    return { ...baseWhere, id: { in: ids } };
+  }
+
+  if (audience === 'FILTERED') {
+    const { doctorId, serviceId, lastVisitFrom, lastVisitTo, chatState } = filters || {};
+
+    const appointmentWhere = {};
+    if (doctorId) appointmentWhere.doctorId = doctorId;
+    if (serviceId) appointmentWhere.serviceId = serviceId;
+
+    if (lastVisitFrom || lastVisitTo) {
+      appointmentWhere.scheduledTime = {};
+      if (lastVisitFrom) appointmentWhere.scheduledTime.gte = new Date(lastVisitFrom);
+      if (lastVisitTo) {
+        const end = new Date(lastVisitTo);
+        end.setHours(23, 59, 59, 999);
+        appointmentWhere.scheduledTime.lte = end;
+      }
+    }
+
+    const hasAppointmentFilter = Object.keys(appointmentWhere).length > 0;
+    const where = { ...baseWhere };
+
+    if (hasAppointmentFilter) {
+      const matchedAppointments = await prisma.appointment.findMany({
+        where: appointmentWhere,
+        select: { patientId: true },
+        distinct: ['patientId'],
+      });
+      const ids = matchedAppointments.map((item) => item.patientId);
+      if (!ids.length) {
+        return null;
+      }
+      where.id = { in: ids };
+    }
+
+    if (chatState) {
+      where.chatState = chatState;
+    }
+
+    return where;
+  }
+
+  return baseWhere;
+};
+
 const sendBroadcast = async (req, res, next) => {
   try {
     const {
       platform = 'WHATSAPP',
       audience = 'ALL',
+      patientIds,
+      filters,
       messageText,
       broadcastType = 'TEXT',
       templateId,
@@ -105,8 +161,8 @@ const sendBroadcast = async (req, res, next) => {
       return res.status(400).json({ error: 'الحملات متاحة للواتساب فقط حالياً' });
     }
 
-    if (audience !== 'ALL') {
-      return res.status(400).json({ error: 'هذا الجمهور غير مدعوم حالياً' });
+    if (!['ALL', 'SELECTED', 'FILTERED'].includes(audience)) {
+      return res.status(400).json({ error: 'نوع الجمهور غير مدعوم' });
     }
 
     let selectedTemplate = null;
@@ -122,8 +178,13 @@ const sendBroadcast = async (req, res, next) => {
       }
     }
 
+    const audienceWhere = await buildAudienceWhere({ audience, patientIds, filters });
+    if (!audienceWhere) {
+      return res.status(400).json({ error: 'لا يوجد مرضى مطابقين للفلاتر المحددة' });
+    }
+
     const patients = await prisma.patient.findMany({
-      where: { platform: 'WHATSAPP', phone: { not: '' } },
+      where: audienceWhere,
       select: { id: true, phone: true, name: true },
     });
 

@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, CheckCheck, MessageSquare, Phone, Search, Send, User } from 'lucide-react';
+import { CheckCheck, MessageSquare, Pause, Phone, Play, Search, Send, User } from 'lucide-react';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'react-toastify';
@@ -275,6 +275,25 @@ export default function InboxPage() {
     }
   };
 
+  const handlePauseBot = async () => {
+    if (!selectedPatientId) {
+      return;
+    }
+
+    try {
+      await api.post(`/messages/${selectedPatientId}/pause`);
+      toast.success('تم إيقاف الرد الآلي لهذه المحادثة.');
+      setPatients((current) =>
+        current.map((patient) =>
+          patient.id === selectedPatientId ? { ...patient, chatState: 'HUMAN' } : patient
+        )
+      );
+      fetchConversation(selectedPatientId, false);
+    } catch (error) {
+      toast.error('فشل في إيقاف الرد الآلي');
+    }
+  };
+
   const platformCounts = useMemo(
     () =>
       patients.reduce(
@@ -531,14 +550,23 @@ export default function InboxPage() {
                       <p className="mt-1 text-sm font-bold text-white">{conversation.length}</p>
                     </div>
 
-                    {selectedPatientData.chatState === 'HUMAN' && (
+                    {selectedPatientData.chatState === 'HUMAN' ? (
                       <button
                         onClick={handleEndConversation}
-                        className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-2 text-xs font-bold text-red-400 transition-all duration-300 hover:-translate-y-0.5 hover:bg-red-500 hover:text-white hover:shadow-[0_0_15px_rgba(239,68,68,0.4)]"
+                        className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-bold text-emerald-400 transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-500 hover:text-white hover:shadow-[0_0_15px_rgba(16,185,129,0.4)]"
                         title="إرجاع المحادثة إلى الرد الآلي"
                       >
-                        <Bot className="h-4 w-4" />
-                        إنهاء المحادثة
+                        <Play className="h-4 w-4" />
+                        تشغيل البوت
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handlePauseBot}
+                        className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-400 transition-all duration-300 hover:-translate-y-0.5 hover:bg-amber-500 hover:text-white hover:shadow-[0_0_15px_rgba(245,158,11,0.4)]"
+                        title="إيقاف الرد الآلي لهذه المحادثة"
+                      >
+                        <Pause className="h-4 w-4" />
+                        إيقاف البوت
                       </button>
                     )}
                   </div>

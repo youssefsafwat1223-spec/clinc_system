@@ -8,6 +8,7 @@ const WHATSAPP_TEMPLATES = {
   bookingConfirmed: 'booking_confirmed_ar_v2',
   bookingRejected: 'booking_rejected_ar_v2',
   bookingRejectedWithAlternatives: 'booking_rejected_with_alternatives_ar_v2',
+  bookingCancelled: 'booking_cancelled_ar_v2',
   appointmentReminder: 'appointment_reminder_ar_v2',
 };
 
@@ -300,6 +301,70 @@ const sendBookingConfirmed = async (appointment) => {
   await createNotificationRecord(appointment.id, 'booking_confirmed', channel);
 };
 
+const buildBookingCancelledText = (appointment, reason) => {
+  const lines = ['❌ تم إلغاء حجزك.', ''];
+
+  if (appointment.bookingRef) {
+    lines.push(`رقم الحجز: *${appointment.bookingRef}*`);
+  }
+
+  lines.push(
+    `📋 الخدمة: ${getServiceName(appointment)}`,
+    `👨‍⚕️ الدكتور: ${getDoctorName(appointment)}`,
+    `📅 الموعد: ${formatDateAr(appointment.scheduledTime)}`,
+    `⏰ الوقت: ${formatTimeAr(appointment.scheduledTime)}`,
+    '',
+    reason ? `السبب: ${reason}` : 'تم الإلغاء بناء على طلب إداري.',
+    '',
+    'يسعدنا خدمتك في أي وقت لحجز موعد جديد. 🙏'
+  );
+
+  return lines.join('\n');
+};
+
+const sendBookingCancelled = async (appointment, reason) => {
+  const channel = resolveChannel(appointment.patient);
+  if (!channel) {
+    return;
+  }
+
+  const content = buildBookingCancelledText(appointment, reason);
+  const cancellationReason = reason || 'إلغاء الحجز';
+
+  if (channel === 'WHATSAPP') {
+    const appointmentSummary = `${getServiceName(appointment)} مع د. ${getDoctorName(appointment)} يوم ${formatDateAr(appointment.scheduledTime)} الساعة ${formatTimeAr(appointment.scheduledTime)}`;
+    await sendWhatsAppTextOrTemplate({
+      patient: appointment.patient,
+      textContent: content,
+      templateName: WHATSAPP_TEMPLATES.bookingCancelled,
+      bodyParams: [
+        appointment.bookingRef || '-',
+        appointmentSummary,
+      ],
+    });
+  } else {
+    await sendTextByChannel({
+      channel,
+      patient: appointment.patient,
+      content,
+    });
+  }
+
+  await logOutboundMessageIfNeeded({
+    appointment,
+    channel,
+    content,
+    metadata: {
+      source: 'APPOINTMENT_CANCELLATION',
+      appointmentId: appointment.id,
+      bookingRef: appointment.bookingRef,
+      reason: cancellationReason,
+    },
+  });
+
+  await createNotificationRecord(appointment.id, 'booking_cancelled', channel);
+};
+
 const sendBookingRejected = async (appointment, alternatives = []) => {
   const channel = resolveChannel(appointment.patient);
   if (!channel) {
@@ -362,4 +427,5 @@ module.exports = {
   sendReminders,
   sendBookingConfirmed,
   sendBookingRejected,
+  sendBookingCancelled,
 };

@@ -4,7 +4,7 @@ import AppLayout from '../components/Layout';
 import { toast } from 'react-toastify';
 import { format, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { AlertCircle, Calendar as CalendarIcon, CheckCircle, Clock, Save, User, XCircle } from 'lucide-react';
+import { AlertCircle, Ban, Calendar as CalendarIcon, CheckCircle, CircleCheckBig, Clock, Save, User, XCircle } from 'lucide-react';
 import ManualBookingPanel from '../components/appointments/ManualBookingPanel';
 
 const daysAr = {
@@ -26,6 +26,7 @@ export default function AppointmentsPage() {
     ALL: 0,
     PENDING: 0,
     CONFIRMED: 0,
+    COMPLETED: 0,
     RESCHEDULED: 0,
     CANCELLED: 0,
     REJECTED: 0,
@@ -90,6 +91,15 @@ export default function AppointmentsPage() {
         if (!window.confirm('هل أنت متأكد من إغلاق هذا الموعد نهائيًا؟')) return;
         await api.post(`/appointments/${id}/block`);
         toast.success('تم إغلاق الموعد ومنع الحجز فيه');
+      } else if (action === 'complete') {
+        if (!window.confirm('هل تم الكشف على المريض؟ سيتم تحويل الحجز إلى "تم الكشف".')) return;
+        await api.post(`/appointments/${id}/complete`);
+        toast.success('تم تسجيل الحجز كمكتمل');
+      } else if (action === 'cancel') {
+        const reason = prompt('سبب إلغاء الحجز (سيتم إرسال رسالة إلغاء للمريض):');
+        if (reason === null) return;
+        await api.post(`/appointments/${id}/cancel`, { reason });
+        toast.success('تم إلغاء الحجز وإرسال رسالة الإلغاء للمريض');
       } else {
         const reason = prompt('سبب الرفض (اختياري):');
         if (reason === null) return;
@@ -98,7 +108,7 @@ export default function AppointmentsPage() {
       }
       fetchAppointments();
     } catch (error) {
-      toast.error(error.message || 'حدث خطأ أثناء تنفيذ الإجراء');
+      toast.error(error.response?.data?.error || error.message || 'حدث خطأ أثناء تنفيذ الإجراء');
     }
   };
 
@@ -156,6 +166,12 @@ export default function AppointmentsPage() {
         return (
           <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1">
             <CheckCircle className="w-3 h-3" /> مؤكد
+          </span>
+        );
+      case 'COMPLETED':
+        return (
+          <span className="px-3 py-1 bg-teal-500/10 text-teal-300 ring-1 ring-teal-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1">
+            <CircleCheckBig className="w-3 h-3" /> تم الكشف
           </span>
         );
       case 'REJECTED':
@@ -244,7 +260,7 @@ export default function AppointmentsPage() {
           </div>
 
           <div className="flex flex-wrap bg-dark-card/50 p-1 border border-dark-border rounded-xl backdrop-blur-md gap-1">
-            {['ALL', 'PENDING', 'CONFIRMED', 'RESCHEDULED', 'CANCELLED', 'REJECTED', 'BLOCKED'].map((opt) => (
+            {['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'RESCHEDULED', 'CANCELLED', 'REJECTED', 'BLOCKED'].map((opt) => (
               <button
                 key={opt}
                 onClick={() => setFilter(opt)}
@@ -260,13 +276,15 @@ export default function AppointmentsPage() {
                     ? 'قيد الانتظار'
                     : opt === 'CONFIRMED'
                       ? 'مؤكد'
-                      : opt === 'RESCHEDULED'
-                        ? 'معدل'
-                        : opt === 'CANCELLED'
-                          ? 'ملغي'
-                          : opt === 'REJECTED'
-                            ? 'مرفوض'
-                            : 'مغلق'}
+                      : opt === 'COMPLETED'
+                        ? 'تم الكشف'
+                        : opt === 'RESCHEDULED'
+                          ? 'معدل'
+                          : opt === 'CANCELLED'
+                            ? 'ملغي'
+                            : opt === 'REJECTED'
+                              ? 'مرفوض'
+                              : 'مغلق'}
 
                 {stats[opt] > 0 && (
                   <span
@@ -279,7 +297,9 @@ export default function AppointmentsPage() {
                             ? 'bg-rose-500'
                             : opt === 'CONFIRMED'
                               ? 'bg-emerald-500'
-                              : 'bg-primary-500'
+                              : opt === 'COMPLETED'
+                                ? 'bg-teal-500'
+                                : 'bg-primary-500'
                     }`}
                   >
                     {stats[opt] > 99 ? '99+' : stats[opt]}
@@ -540,6 +560,25 @@ export default function AppointmentsPage() {
                                 title="إغلاق التوقيت لهذا الموعد"
                               >
                                 <Clock className="w-4.5 h-4.5" />
+                              </button>
+                            </div>
+                          )}
+
+                          {apt.status === 'CONFIRMED' && (
+                            <div className="flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all absolute top-4 left-4 sm:relative sm:top-0 sm:left-0 bg-dark-card/95 sm:bg-transparent p-1.5 sm:p-0 rounded-xl shadow-xl sm:shadow-none border border-dark-border sm:border-0 backdrop-blur-md sm:backdrop-blur-none z-20">
+                              <button
+                                onClick={() => handleAction(apt.id, 'complete')}
+                                className="w-9 h-9 rounded-lg bg-teal-500/10 text-teal-300 hover:bg-teal-500 hover:text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg hover:shadow-teal-500/20"
+                                title="تم الكشف على المريض"
+                              >
+                                <CircleCheckBig className="w-4.5 h-4.5" />
+                              </button>
+                              <button
+                                onClick={() => handleAction(apt.id, 'cancel')}
+                                className="w-9 h-9 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg hover:shadow-rose-500/20"
+                                title="إلغاء الحجز وإرسال رسالة للمريض"
+                              >
+                                <Ban className="w-4.5 h-4.5" />
                               </button>
                             </div>
                           )}

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"require\\('@babel/parser'\\).parse\\(require\\('fs'\\).readFileSync\\('src/pages/CampaignsPage.jsx','utf8'\\),{sourceType:'module',plugins:['jsx']}\\); console.log\\('CampaignsPage OK'\\);\")",
+      "Bash(node -e \"['src/pages/InboxPage.jsx','src/pages/AppointmentsPage.jsx','src/pages/CampaignsPage.jsx'].forEach\\(f => { try { require\\('@babel/parser'\\).parse\\(require\\('fs'\\).readFileSync\\(f,'utf8'\\),{sourceType:'module',plugins:['jsx']}\\); console.log\\(f,'OK'\\); } catch\\(e\\) { console.log\\(f,'FAIL',e.message\\); } }\\);\")",
+      "Bash(node -c src/controllers/appointmentController.js)",
+      "Bash(node -c src/controllers/messageController.js)",
+      "Bash(node -c src/controllers/campaignController.js)",
+      "Bash(node -c src/services/notificationService.js)",
+      "Bash(node -c src/utils/aiKnowledge.js)"
+    ]
+  }
+}
