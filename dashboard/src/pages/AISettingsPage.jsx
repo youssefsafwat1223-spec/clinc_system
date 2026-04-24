@@ -1,5 +1,5 @@
-﻿import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Bot, BrainCircuit, Plus, Save, Sparkles, Stethoscope, Trash2 } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertCircle, Bot, BrainCircuit, CheckCircle, Plus, Save, Sparkles, Stethoscope, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
@@ -293,405 +293,244 @@ export default function AISettingsPage() {
           <SummaryCard title="طول الـ Prompt" value={summary.promptLength} hint="عدد الأحرف في التوجيه الأساسي" icon={BrainCircuit} accentClass="border-sky-500/20" />
         </section>
 
-        <div className="glass-card p-6">
-          <SectionHeader
-            icon={Bot}
-            title="التوجيه الأساسي للنظام"
-            subtitle="هذا النص يحدد أسلوب المساعد، وما الذي يجب أن يقوله أو يتجنبه."
-          />
-
-          <div className="mb-6 flex gap-3 rounded-xl border border-amber-500/20 bg-amber-500/10 p-4">
-            <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
-            <p className="text-sm leading-relaxed text-amber-100">
-              الأفضل أن يبقى هذا القسم عاما وواضحا، بينما التفاصيل التشغيلية للحالات تدار من قسم "قاعدة المعرفة المنظمة" أدناه.
-            </p>
-          </div>
-
-          <textarea
-            value={settings?.systemPrompt || ''}
-            onChange={(event) => setSettings((current) => ({ ...current, systemPrompt: event.target.value }))}
-            className="input-field min-h-[260px] w-full resize-y border-sky-500/20 bg-dark-bg/60 p-6 font-mono text-sm leading-loose shadow-inner focus:border-sky-500"
-            placeholder="أنت مساعد ذكي لعيادة..."
-          />
-        </div>
-
-        <div className="glass-card p-6">
-          <SectionHeader
-            icon={BrainCircuit}
-            title="اختبار الرد"
-            subtitle="جرّب رسالة مريض باستخدام الإعدادات الحالية حتى قبل الحفظ النهائي."
-            action={
-              <button
-                onClick={handlePreview}
-                disabled={previewLoading}
-                className="flex items-center gap-2 rounded-lg border border-primary-500/20 bg-primary-500/10 px-4 py-2 text-sm font-medium text-primary-300 transition-colors hover:bg-primary-500/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {previewLoading ? (
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                ) : (
-                  <Sparkles className="h-4 w-4" />
-                )}
-                اختبار الآن
-              </button>
-            }
-          />
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-4">
-              <textarea
-                value={previewMessage}
-                onChange={(event) => setPreviewMessage(event.target.value)}
-                className="input-field min-h-[180px] w-full resize-y"
-                placeholder="اكتب رسالة مريض للتجربة..."
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
+          {/* Left Column: Management */}
+          <div className="flex-1 space-y-8">
+            {/* System Prompt Section */}
+            <div className="glass-card p-6">
+              <SectionHeader
+                icon={Bot}
+                title="توجيهات المساعد الذكي"
+                subtitle="هذه التوجيهات تحدد شخصية البوت، اللهجة المستخدمة، والقواعد العامة للرد."
               />
-
-              <p className="text-xs text-dark-muted">
-                يتم استخدام الـ prompt الحالي مع الـ FAQ والحالات المنظمة الموجودة الآن في الشاشة نفسها.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
-                <p className="mb-3 text-sm font-bold text-white">الرد المتوقع</p>
-                <div className="min-h-[180px] whitespace-pre-wrap text-sm leading-7 text-slate-200">
-                  {previewResult?.reply || 'لم يتم تشغيل الاختبار بعد.'}
-                </div>
+              <div className="mb-4 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs text-amber-200/80">
+                <AlertCircle className="mb-1 h-4 w-4" />
+                الأفضل أن يبقى هذا القسم عاماً، بينما التفاصيل الطبية تدار من "قاعدة المعرفة" أدناه.
               </div>
-
-              <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
-                <p className="mb-3 text-sm font-bold text-white">الحالات الملتقطة</p>
-                {previewResult?.matchedKnowledgeCases?.length ? (
-                  <div className="space-y-2">
-                    {previewResult.matchedKnowledgeCases.map((entry, index) => (
-                      <div key={`${entry.title}-${index}`} className="rounded-lg border border-dark-border bg-dark-card/60 p-3 text-xs text-slate-300">
-                        <p className="font-bold text-white">{entry.title || `حالة ${index + 1}`}</p>
-                        <p className="mt-1">الشكوى: {entry.symptom || 'غير محددة'}</p>
-                        <p className="mt-1">التخصص: {entry.specialty || 'غير محدد'}</p>
-                        <p className="mt-1">الاستعجال: {entry.urgency || 'غير محدد'}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-xs text-dark-muted">لا توجد حالات مطابقة ملتقطة حاليا.</p>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card p-6">
-          <SectionHeader
-            icon={Sparkles}
-            title="استيراد نصي للحالات"
-            subtitle="الصق المستند الخام الذي يحتوي على الحالات، وسيتم تحويله تلقائيا إلى knowledge cases مع إزالة التكرار."
-            action={
-              <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={importMode}
-                  onChange={(event) => setImportMode(event.target.value)}
-                  className="input-field min-w-[140px] py-2"
-                >
-                  <option value="append">دمج مع الموجود</option>
-                  <option value="replace">استبدال الموجود</option>
-                </select>
-
-                <button
-                  onClick={handlePreviewImport}
-                  disabled={importPreviewLoading}
-                  className="flex items-center gap-2 rounded-lg border border-dark-border bg-dark-bg/60 px-4 py-2 text-sm font-medium text-slate-300 transition-colors hover:border-primary-500/30 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {importPreviewLoading ? (
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4" />
-                  )}
-                  معاينة
-                </button>
-
-                <button
-                  onClick={handleImportKnowledge}
-                  disabled={importLoading}
-                  className="flex items-center gap-2 rounded-lg border border-primary-500/20 bg-primary-500/10 px-4 py-2 text-sm font-medium text-primary-300 transition-colors hover:bg-primary-500/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {importLoading ? (
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                  ) : (
-                    <Sparkles className="h-4 w-4" />
-                  )}
-                  استيراد وحفظ
-                </button>
-              </div>
-            }
-          />
-
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-4">
               <textarea
-                value={importText}
-                onChange={(event) => setImportText(event.target.value)}
-                className="input-field min-h-[260px] w-full resize-y"
-                placeholder={`1. الحالة:
-المريض: دكتور عندي ألم شديد بالأسنان ومرتبط بـ عصب، شنو وضعي؟
-
-التفسير الطبي:
-...
-
-هل أأجل؟
-...
-
-الحل:
-...
-
-نصيحة منزلية:
-...
-
-تطمين:
-...`}
+                value={settings?.systemPrompt || ''}
+                onChange={(event) => setSettings((current) => ({ ...current, systemPrompt: event.target.value }))}
+                className="input-field min-h-[200px] w-full resize-y font-mono text-sm leading-relaxed"
+                placeholder="أنت مساعد ذكي لعيادة..."
               />
-
-              <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-4 text-xs leading-6 text-amber-100">
-                هذا الاستيراد يحفظ مباشرة في الإعدادات الحالية. وضع <strong>دمج مع الموجود</strong> يضيف الحالات الجديدة فقط بعد إزالة التكرار،
-                بينما <strong>استبدال الموجود</strong> يحذف الحالات الحالية ويضع الناتج المستخرج من النص فقط.
-              </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
-                <p className="mb-3 text-sm font-bold text-white">نتيجة آخر استيراد</p>
-
-                {importResult ? (
-                  <div className="space-y-4">
-                    <div className="space-y-2 text-sm text-slate-300">
-                      <p>الوضع: <span className="font-bold text-white">{importResult.mode === 'replace' ? 'استبدال' : 'دمج'}</span></p>
-                      <p>الحالات السابقة: <span className="font-bold text-white">{importResult.existingCases}</span></p>
-                      <p>الحالات النهائية: <span className="font-bold text-white">{importResult.finalCases}</span></p>
-                      <p>الحالات المضافة: <span className="font-bold text-white">{importResult.addedCases}</span></p>
-                      <p>البلوكات الخام: <span className="font-bold text-white">{importResult.stats?.rawBlocks ?? 0}</span></p>
-                      <p>الحالات المستخرجة: <span className="font-bold text-white">{importResult.stats?.parsedCases ?? 0}</span></p>
-                      <p>بعد إزالة التكرار الداخلي: <span className="font-bold text-white">{importResult.stats?.dedupedCases ?? 0}</span></p>
-                      <p>التكرارات داخل النص: <span className="font-bold text-white">{importResult.stats?.removedDuplicates ?? 0}</span></p>
-                      <p>التكرارات مقابل الموجود: <span className="font-bold text-white">{importResult.duplicatesAgainstExisting ?? 0}</span></p>
-                    </div>
-
-                    {importResult.previewCases?.length ? (
-                      <div className="space-y-2 border-t border-dark-border pt-4">
-                        <p className="text-sm font-bold text-white">نماذج من الحالات المستخرجة</p>
-                        {importResult.previewCases.map((entry, index) => (
-                          <div key={`${entry.title}-${index}`} className="rounded-lg border border-dark-border bg-dark-card/60 p-3 text-xs text-slate-300">
-                            <p className="font-bold text-white">{entry.title || `حالة ${index + 1}`}</p>
-                            <p className="mt-1">الشكوى: {entry.symptom || 'غير محددة'}</p>
-                            <p className="mt-1">التخصص: {entry.specialty || 'غير محدد'}</p>
-                            <p className="mt-1">الاستعجال: {entry.urgency || 'غير محدد'}</p>
-                            {entry.explanation ? <p className="mt-1 line-clamp-3">التفسير: {entry.explanation}</p> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
+            {/* Knowledge Base Section */}
+            <div className="glass-card p-6">
+              <SectionHeader
+                icon={Stethoscope}
+                title="قاعدة المعرفة المنظمة"
+                subtitle="توجيه البوت حسب الشكوى والتخصص والاستعجال."
+                action={
+                  <button
+                    onClick={addKnowledgeCase}
+                    className="flex items-center gap-1 rounded-lg border border-primary-500/20 bg-primary-500/10 px-3 py-1.5 text-sm font-medium text-primary-300 transition-colors hover:bg-primary-500/20 hover:text-white"
+                  >
+                    <Plus className="h-4 w-4" />
+                    إضافة حالة
+                  </button>
+                }
+              />
+              <div className="space-y-4">
+                {knowledgeCases.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-dark-border bg-dark-bg/40 p-8 text-center text-dark-muted">
+                    لا توجد حالات مضافة.
                   </div>
                 ) : (
-                  <p className="text-xs text-dark-muted">لم يتم تنفيذ أي استيراد بعد.</p>
+                  knowledgeCases.map((entry, index) => (
+                    <div key={index} className="rounded-2xl border border-dark-border bg-dark-bg/40 p-5">
+                      <div className="mb-4 flex items-center justify-between">
+                        <h3 className="text-sm font-bold text-white">الحالة #{index + 1}</h3>
+                        <button
+                          onClick={() => removeKnowledgeCase(index)}
+                          className="rounded-md bg-red-500/10 p-2 text-red-400 transition-colors hover:bg-red-500 hover:text-white"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <input
+                          type="text"
+                          value={entry.title || ''}
+                          onChange={(e) => updateKnowledgeCase(index, 'title', e.target.value)}
+                          className="input-field"
+                          placeholder="عنوان الحالة"
+                        />
+                        <input
+                          type="text"
+                          value={entry.symptom || ''}
+                          onChange={(e) => updateKnowledgeCase(index, 'symptom', e.target.value)}
+                          className="input-field"
+                          placeholder="الشكوى الأساسية"
+                        />
+                        <input
+                          type="text"
+                          value={entry.specialty || ''}
+                          onChange={(e) => updateKnowledgeCase(index, 'specialty', e.target.value)}
+                          className="input-field"
+                          placeholder="التخصص"
+                        />
+                        <select
+                          value={entry.urgency || 'medium'}
+                          onChange={(e) => updateKnowledgeCase(index, 'urgency', e.target.value)}
+                          className="input-field"
+                        >
+                          <option value="low">منخفض</option>
+                          <option value="medium">متوسط</option>
+                          <option value="high">مرتفع</option>
+                          <option value="urgent">عاجل</option>
+                        </select>
+                        <textarea
+                          value={listToText(entry.keywords)}
+                          onChange={(e) => updateKnowledgeCase(index, 'keywords', textToList(e.target.value))}
+                          className="input-field min-h-[80px] resize-y md:col-span-2"
+                          placeholder="الكلمات المفتاحية (فواصل)"
+                        />
+                        <textarea
+                          value={entry.explanation || ''}
+                          onChange={(e) => updateKnowledgeCase(index, 'explanation', e.target.value)}
+                          className="input-field min-h-[100px] resize-y md:col-span-2"
+                          placeholder="التفسير الطبي"
+                        />
+                      </div>
+                    </div>
+                  ))
                 )}
               </div>
-
-              <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
-                <p className="mb-3 text-sm font-bold text-white">متى تستخدمه؟</p>
-                <ul className="space-y-2 text-xs leading-6 text-slate-300">
-                  <li>إذا كان عندك مستند طويل فيه مئات الحالات المكررة بصيغة واحدة وتريد تحويله لمدخلات منظمة.</li>
-                  <li>إذا استلمت ملف محتوى جديد من العميل وتريد ضمه بسرعة بدون تحرير يدوي لكل حالة.</li>
-                  <li>إذا أردت تنظيف النصوص الضخمة وتحويلها إلى قاعدة معرفة قابلة للاختبار من نفس الشاشة.</li>
-                </ul>
-              </div>
             </div>
-          </div>
-        </div>
 
-        <div className="glass-card p-6">
-          <SectionHeader
-            icon={Stethoscope}
-            title="قاعدة المعرفة المنظمة"
-            subtitle="هذه المداخل تستخدم لتوجيه البوت حسب الشكوى والتخصص والاستعجال بدل تخزين مئات الردود المكررة."
-            action={
-              <button
-                onClick={addKnowledgeCase}
-                className="flex items-center gap-1 rounded-lg border border-primary-500/20 bg-primary-500/10 px-3 py-1.5 text-sm font-medium text-primary-300 transition-colors hover:bg-primary-500/20 hover:text-white"
-              >
-                <Plus className="h-4 w-4" />
-                إضافة حالة
-              </button>
-            }
-          />
-
-          <div className="space-y-4">
-            {knowledgeCases.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-dark-border bg-dark-bg/40 p-8 text-center text-dark-muted">
-                لا توجد حالات منظمة. أضف مداخل تصف الشكوى، التخصص، درجة الاستعجال، والتوجيه المطلوب.
-              </div>
-            ) : (
-              knowledgeCases.map((entry, index) => (
-                <div key={index} className="rounded-2xl border border-dark-border bg-dark-bg/40 p-5">
-                  <div className="mb-4 flex items-center justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-bold text-white">الحالة #{index + 1}</h3>
-                      <p className="mt-1 text-xs text-dark-muted">مدخل منظم يستخدمه البوت عند مطابقة الرسالة مع الكلمات أو الشكوى.</p>
+            {/* FAQ Section */}
+            <div className="glass-card p-6">
+              <SectionHeader
+                icon={BrainCircuit}
+                title="الأسئلة الشائعة (FAQ)"
+                subtitle="إجابات مباشرة لأسئلة محددة."
+                action={
+                  <button
+                    onClick={addFaq}
+                    className="flex items-center gap-1 rounded-lg border border-primary-500/20 bg-primary-500/10 px-3 py-1.5 text-sm font-medium text-primary-300 transition-colors hover:bg-primary-500/20 hover:text-white"
+                  >
+                    <Plus className="h-4 w-4" />
+                    إضافة FAQ
+                  </button>
+                }
+              />
+              <div className="space-y-4">
+                {faqs.map((faq, index) => (
+                  <div key={index} className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs font-bold text-dark-muted">FAQ #{index + 1}</span>
+                      <button onClick={() => removeFaq(index)} className="text-red-400 hover:text-red-300">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => removeKnowledgeCase(index)}
-                      className="rounded-md bg-red-500/10 p-2 text-red-400 transition-colors hover:bg-red-500 hover:text-white"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
                     <input
                       type="text"
-                      value={entry.title || ''}
-                      onChange={(event) => updateKnowledgeCase(index, 'title', event.target.value)}
-                      className="input-field"
-                      placeholder="عنوان الحالة"
-                    />
-
-                    <input
-                      type="text"
-                      value={entry.symptom || ''}
-                      onChange={(event) => updateKnowledgeCase(index, 'symptom', event.target.value)}
-                      className="input-field"
-                      placeholder="الشكوى الأساسية"
-                    />
-
-                    <input
-                      type="text"
-                      value={entry.specialty || ''}
-                      onChange={(event) => updateKnowledgeCase(index, 'specialty', event.target.value)}
-                      className="input-field"
-                      placeholder="التخصص المرجح"
-                    />
-
-                    <select
-                      value={entry.urgency || 'medium'}
-                      onChange={(event) => updateKnowledgeCase(index, 'urgency', event.target.value)}
-                      className="input-field"
-                    >
-                      <option value="low">منخفض</option>
-                      <option value="medium">متوسط</option>
-                      <option value="high">مرتفع</option>
-                      <option value="urgent">عاجل</option>
-                    </select>
-
-                    <textarea
-                      value={listToText(entry.keywords)}
-                      onChange={(event) => updateKnowledgeCase(index, 'keywords', textToList(event.target.value))}
-                      className="input-field min-h-[96px] resize-y md:col-span-2"
-                      placeholder="الكلمات المفتاحية، مفصولة بفواصل"
-                    />
-
-                    <textarea
-                      value={listToText(entry.patientExamples)}
-                      onChange={(event) => updateKnowledgeCase(index, 'patientExamples', textToList(event.target.value))}
-                      className="input-field min-h-[96px] resize-y md:col-span-2"
-                      placeholder="أمثلة لعبارات المريض، مفصولة بفواصل"
-                    />
-
-                    <textarea
-                      value={entry.explanation || ''}
-                      onChange={(event) => updateKnowledgeCase(index, 'explanation', event.target.value)}
-                      className="input-field min-h-[110px] resize-y md:col-span-2"
-                      placeholder="التفسير الطبي المبسط"
-                    />
-
-                    <textarea
-                      value={entry.delayAdvice || ''}
-                      onChange={(event) => updateKnowledgeCase(index, 'delayAdvice', event.target.value)}
-                      className="input-field min-h-[110px] resize-y"
-                      placeholder="هل تؤجل؟"
-                    />
-
-                    <textarea
-                      value={entry.homeAdvice || ''}
-                      onChange={(event) => updateKnowledgeCase(index, 'homeAdvice', event.target.value)}
-                      className="input-field min-h-[110px] resize-y"
-                      placeholder="نصيحة منزلية"
-                    />
-
-                    <textarea
-                      value={entry.solution || ''}
-                      onChange={(event) => updateKnowledgeCase(index, 'solution', event.target.value)}
-                      className="input-field min-h-[110px] resize-y md:col-span-2"
-                      placeholder="الحل أو الإجراء المتوقع"
-                    />
-
-                    <textarea
-                      value={entry.bookingCta || ''}
-                      onChange={(event) => updateKnowledgeCase(index, 'bookingCta', event.target.value)}
-                      className="input-field min-h-[96px] resize-y"
-                      placeholder="دعوة للحجز أو الفحص"
-                    />
-
-                    <textarea
-                      value={entry.reassurance || ''}
-                      onChange={(event) => updateKnowledgeCase(index, 'reassurance', event.target.value)}
-                      className="input-field min-h-[96px] resize-y"
-                      placeholder="رسالة تطمين"
-                    />
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        <div className="glass-card p-6">
-          <SectionHeader
-            icon={Sparkles}
-            title="الأسئلة الشائعة"
-            subtitle="استخدمها للأسئلة المباشرة مثل الحجز، أوقات العمل، أو معلومات ثابتة قصيرة."
-            action={
-              <button
-                onClick={addFaq}
-                className="flex items-center gap-1 rounded-lg border border-primary-500/20 bg-primary-500/10 px-3 py-1.5 text-sm font-medium text-primary-300 transition-colors hover:bg-primary-500/20 hover:text-white"
-              >
-                <Plus className="h-4 w-4" />
-                إضافة FAQ
-              </button>
-            }
-          />
-
-          <div className="space-y-4">
-            {faqs.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-dark-border bg-dark-bg/40 p-8 text-center text-dark-muted">
-                لا توجد أسئلة شائعة مضافة حاليا.
-              </div>
-            ) : (
-              faqs.map((faq, index) => (
-                <div key={index} className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-white">FAQ #{index + 1}</p>
-                    <button
-                      onClick={() => removeFaq(index)}
-                      className="rounded-md bg-red-500/10 p-2 text-red-400 transition-colors hover:bg-red-500 hover:text-white"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    <input
-                      type="text"
-                      placeholder="السؤال الشائع"
                       value={faq.question}
-                      onChange={(event) => updateFaq(index, 'question', event.target.value)}
-                      className="input-field"
+                      onChange={(e) => updateFaq(index, 'question', e.target.value)}
+                      className="input-field mb-2"
+                      placeholder="السؤال"
                     />
                     <textarea
-                      placeholder="الإجابة النموذجية"
                       value={faq.answer}
-                      onChange={(event) => updateFaq(index, 'answer', event.target.value)}
-                      className="input-field min-h-[110px] resize-y"
+                      onChange={(e) => updateFaq(index, 'answer', e.target.value)}
+                      className="input-field min-h-[80px] resize-y"
+                      placeholder="الإجابة"
                     />
                   </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Column: Tools */}
+          <div className="w-full space-y-8 lg:w-[380px] xl:w-[440px]">
+            <div className="sticky top-24 space-y-8">
+              {/* Preview/Test Console */}
+              <div className="glass-card border-primary-500/20 p-6 shadow-2xl shadow-primary-500/5">
+                <SectionHeader
+                  icon={Sparkles}
+                  title="اختبار ومعاينة الرد"
+                  subtitle="جرب رد البوت بناءً على الإعدادات الحالية."
+                />
+                <div className="space-y-4">
+                  <textarea
+                    value={previewMessage}
+                    onChange={(e) => setPreviewMessage(e.target.value)}
+                    className="input-field min-h-[120px] w-full resize-none text-sm"
+                    placeholder="اكتب هنا محاكاة لرسالة مريض..."
+                  />
+                  <button
+                    onClick={handlePreview}
+                    disabled={previewLoading}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 py-3 text-sm font-bold text-white transition-all hover:bg-primary-500 disabled:opacity-50"
+                  >
+                    {previewLoading ? (
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                    اختبار الآن
+                  </button>
+
+                  {previewResult && (
+                    <div className="mt-4 space-y-4">
+                      <div className="rounded-xl border border-dark-border bg-dark-bg/60 p-4">
+                        <p className="mb-2 text-xs font-bold text-primary-400">الرد المتوقع:</p>
+                        <div className="text-sm leading-relaxed text-slate-200 whitespace-pre-wrap">
+                          {previewResult.reply}
+                        </div>
+                      </div>
+                      {previewResult.matchedKnowledgeCases?.length > 0 && (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-bold text-dark-muted uppercase tracking-wider">الحالات المطابقة:</p>
+                          {previewResult.matchedKnowledgeCases.map((match, i) => (
+                            <div key={i} className="flex items-center gap-2 rounded-lg bg-emerald-500/10 p-2 text-xs text-emerald-300 border border-emerald-500/20">
+                              <CheckCircle className="h-3 w-3" />
+                              {match.title}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
-              ))
-            )}
+              </div>
+
+              {/* Smart Import Section */}
+              <div className="glass-card p-6">
+                <SectionHeader
+                  icon={Sparkles}
+                  title="استيراد ذكي"
+                  subtitle="حول النصوص الخام إلى حالات منظمة."
+                />
+                <div className="space-y-4">
+                  <textarea
+                    value={importText}
+                    onChange={(e) => setImportText(e.target.value)}
+                    className="input-field min-h-[160px] w-full text-xs"
+                    placeholder="الصق هنا النص الطبي الخام..."
+                  />
+                  <div className="flex gap-2">
+                    <select
+                      value={importMode}
+                      onChange={(e) => setImportMode(e.target.value)}
+                      className="input-field flex-1 py-2 text-xs"
+                    >
+                      <option value="append">دمج</option>
+                      <option value="replace">استبدال</option>
+                    </select>
+                    <button
+                      onClick={handleImportKnowledge}
+                      disabled={importLoading}
+                      className="rounded-lg bg-dark-bg border border-dark-border px-4 text-xs font-bold text-white hover:bg-dark-card disabled:opacity-50"
+                    >
+                      {importLoading ? 'جاري...' : 'بدء'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

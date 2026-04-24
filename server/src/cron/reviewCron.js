@@ -14,7 +14,7 @@ const sendPendingReviewRequests = async () => {
 
   const appointments = await prisma.appointment.findMany({
     where: {
-      status: 'CONFIRMED',
+      status: { in: ['CONFIRMED', 'COMPLETED'] },
       reviewSent: false,
       scheduledTime: { lte: cutoff },
     },

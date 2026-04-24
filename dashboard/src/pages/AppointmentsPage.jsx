@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 import { toast } from 'react-toastify';
@@ -310,51 +310,17 @@ export default function AppointmentsPage() {
           </div>
         </div>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard
-            title={isDoctor ? 'إجمالي مواعيدي' : 'إجمالي المواعيد'}
-            value={stats.ALL || appointments.length}
-            hint={isDoctor ? 'تشمل كل الحالات المرتبطة بحسابك' : 'كل المواعيد داخل النظام'}
-            icon={CalendarIcon}
-            accentClass="border-primary-500/20"
-          />
-          <SummaryCard
-            title="قيد الانتظار"
-            value={stats.PENDING || 0}
-            hint="تحتاج تأكيدًا أو رفضًا"
-            icon={Clock}
-            accentClass="border-amber-500/20"
-          />
-          <SummaryCard
-            title="المواعيد المؤكدة"
-            value={stats.CONFIRMED || 0}
-            hint="جاهزة للتنفيذ"
-            icon={CheckCircle}
-            accentClass="border-emerald-500/20"
-          />
-          <SummaryCard
-            title={isDoctor ? 'مواعيد اليوم' : 'الحركة الحالية'}
-            value={todayAppointmentsCount}
-            hint={
-              nextAppointment
-                ? `التالي ${format(parseISO(nextAppointment.scheduledTime), 'hh:mm a', { locale: ar })}`
-                : isDoctor
-                  ? `${activeWorkingDaysCount} يوم عمل مفعل`
-                  : 'لا يوجد موعد قادم الآن'
-            }
-            icon={User}
-            accentClass="border-sky-500/20"
-          />
-        </section>
-
-        <ManualBookingPanel
-          isDoctor={isDoctor}
-          doctorProfile={doctorProfile}
-          onCreated={() => {
-            fetchAppointments();
-            fetchDoctorProfile();
-          }}
-        />
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
+          {/* Main Content Area */}
+          <div className="flex-1 space-y-6">
+            <ManualBookingPanel
+              isDoctor={isDoctor}
+              doctorProfile={doctorProfile}
+              onCreated={() => {
+                fetchAppointments();
+                fetchDoctorProfile();
+              }}
+            />
 
         {isDoctor && (
           <section className="glass-card p-6 md:p-8 space-y-6">
@@ -591,6 +557,51 @@ export default function AppointmentsPage() {
             )}
           </div>
         )}
+          </div>
+
+          {/* Right Sidebar: Stats */}
+          <div className="w-full xl:w-[300px] space-y-4 xl:sticky xl:top-24">
+            <SummaryCard
+              title={isDoctor ? 'إجمالي مواعيدي' : 'إجمالي المواعيد'}
+              value={stats.ALL || appointments.length}
+              hint={isDoctor ? 'كل الحالات' : 'كل المواعيد'}
+              icon={CalendarIcon}
+              accentClass="border-primary-500/20"
+            />
+            <SummaryCard
+              title="قيد الانتظار"
+              value={stats.PENDING || 0}
+              hint="تحتاج تأكيدًا"
+              icon={Clock}
+              accentClass="border-amber-500/20"
+            />
+            <SummaryCard
+              title="مؤكدة"
+              value={stats.CONFIRMED || 0}
+              hint="جاهزة للتنفيذ"
+              icon={CheckCircle}
+              accentClass="border-emerald-500/20"
+            />
+            <SummaryCard
+              title="تم الكشف"
+              value={stats.COMPLETED || 0}
+              hint="زيارات مكتملة"
+              icon={CheckCheck}
+              accentClass="border-teal-500/20"
+            />
+            <SummaryCard
+              title={isDoctor ? 'مواعيد اليوم' : 'الحركة الحالية'}
+              value={todayAppointmentsCount}
+              hint={
+                nextAppointment
+                  ? `التالي ${format(parseISO(nextAppointment.scheduledTime), 'hh:mm a', { locale: ar })}`
+                  : 'لا يوجد موعد قادم'
+              }
+              icon={User}
+              accentClass="border-sky-500/20"
+            />
+          </div>
+        </div>
       </div>
     </AppLayout>
   );

@@ -635,12 +635,22 @@ export default function CampaignsPage() {
               ) : (
                 <div className="space-y-3">
                   {templates.map((template) => (
-                    <div key={template.id} className="rounded-2xl border border-dark-border bg-dark-bg/40 p-4">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h4 className="font-bold text-white">{template.displayName}</h4>
-                          <p className="mt-1 text-xs text-dark-muted">{template.name}</p>
+                    <div key={template.id} className="group overflow-hidden rounded-2xl border border-dark-border bg-dark-bg/40 transition-all hover:border-primary-500/30">
+                      {template.headerType === 'IMAGE' && template.imageUrl && (
+                        <div className="relative aspect-video w-full overflow-hidden border-b border-dark-border bg-dark-bg/60">
+                          <img
+                            src={buildAssetUrl(template.imageUrl)}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
                         </div>
+                      )}
+                      <div className="p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <h4 className="font-bold text-white">{template.displayName}</h4>
+                            <p className="mt-1 text-xs text-dark-muted">{template.name}</p>
+                          </div>
                         <span
                           className={`rounded-full px-3 py-1 text-[11px] font-bold ${
                             template.active
@@ -675,6 +685,7 @@ export default function CampaignsPage() {
                           </button>
                         </div>
                       ) : null}
+                      </div>
                     </div>
                   ))}
                 </div>
