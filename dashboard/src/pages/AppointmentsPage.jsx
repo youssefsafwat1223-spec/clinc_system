@@ -4,7 +4,7 @@ import AppLayout from '../components/Layout';
 import { toast } from 'react-toastify';
 import { format, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { AlertCircle, Ban, Calendar as CalendarIcon, CheckCircle, CircleCheckBig, Clock, Save, User, XCircle } from 'lucide-react';
+import { AlertCircle, Ban, Calendar as CalendarIcon, CheckCircle, CheckCheck, Clock, Save, User, XCircle } from 'lucide-react';
 import ManualBookingPanel from '../components/appointments/ManualBookingPanel';
 
 const daysAr = {
@@ -171,7 +171,7 @@ export default function AppointmentsPage() {
       case 'COMPLETED':
         return (
           <span className="px-3 py-1 bg-teal-500/10 text-teal-300 ring-1 ring-teal-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <CircleCheckBig className="w-3 h-3" /> تم الكشف
+            <CheckCheck className="w-3 h-3" /> تم الكشف
           </span>
         );
       case 'REJECTED':
@@ -571,7 +571,7 @@ export default function AppointmentsPage() {
                                 className="w-9 h-9 rounded-lg bg-teal-500/10 text-teal-300 hover:bg-teal-500 hover:text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg hover:shadow-teal-500/20"
                                 title="تم الكشف على المريض"
                               >
-                                <CircleCheckBig className="w-4.5 h-4.5" />
+                                <CheckCheck className="w-4.5 h-4.5" />
                               </button>
                               <button
                                 onClick={() => handleAction(apt.id, 'cancel')}
