@@ -1,0 +1,1 @@
+ALTER TABLE "appointments" ADD COLUMN IF NOT EXISTS "review_sent" BOOLEAN NOT NULL DEFAULT false;
