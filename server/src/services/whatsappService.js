@@ -38,6 +38,25 @@ const sendMessage = async (messageData) => {
             } else if (messageData.interactive.type === 'button') {
               textContent = `[أزرار خيارات] ${messageData.interactive.body?.text || ''}`;
             }
+          } else if (messageData.type === 'template' && messageData.template) {
+            const templateName = messageData.template.name || '';
+            const bodyComponent = (messageData.template.components || []).find((c) => c.type === 'body');
+            const params = (bodyComponent?.parameters || []).map((p) => p.text).filter(Boolean);
+            const paramsSuffix = params.length ? ` (${params.join(' • ')})` : '';
+
+            if (/review/i.test(templateName)) {
+              textContent = `[طلب تقييم الزيارة]${paramsSuffix}`;
+            } else if (/confirmed/i.test(templateName)) {
+              textContent = `[تأكيد حجز]${paramsSuffix}`;
+            } else if (/cancelled|canceled/i.test(templateName)) {
+              textContent = `[إلغاء حجز]${paramsSuffix}`;
+            } else if (/rejected/i.test(templateName)) {
+              textContent = `[رفض حجز]${paramsSuffix}`;
+            } else if (/reminder/i.test(templateName)) {
+              textContent = `[تذكير بالموعد]${paramsSuffix}`;
+            } else {
+              textContent = `[قالب: ${templateName}]${paramsSuffix}`;
+            }
           }
 
           await prisma.message.create({

@@ -449,6 +449,9 @@ const handleWhatsAppMessage = async (message, contact) => {
         listId = message.interactive.list_reply.id;
         content = message.interactive.list_reply.title;
       }
+    } else if (message.type === 'button') {
+      buttonId = message.button?.payload || '';
+      content = message.button?.text || message.button?.payload || '';
     }
 
     // Save inbound message
@@ -463,31 +466,42 @@ const handleWhatsAppMessage = async (message, contact) => {
     });
 
     // ── Handle review rating buttons ──
+    let ratingValue = null;
     if (buttonId && buttonId.startsWith('review_')) {
-      const ratingValue = parseInt(buttonId.replace('review_', ''), 10);
-      if ([1, 3, 5].includes(ratingValue)) {
-        const pendingReview = await prisma.review.findFirst({
-          where: { patientId: patient.id, rating: null },
-          orderBy: { sentAt: 'desc' },
+      const parsed = parseInt(buttonId.replace('review_', ''), 10);
+      if ([1, 3, 5].includes(parsed)) {
+        ratingValue = parsed;
+      }
+    }
+
+    if (!ratingValue && content) {
+      const normalized = content.trim();
+      if (/ممتاز|excellent|رائع/i.test(normalized)) ratingValue = 5;
+      else if (/جيد|good|متوسط/i.test(normalized)) ratingValue = 3;
+      else if (/ضعيف|سيء|سيئ|poor|bad/i.test(normalized)) ratingValue = 1;
+    }
+
+    if (ratingValue) {
+      const pendingReview = await prisma.review.findFirst({
+        where: { patientId: patient.id, rating: null },
+        orderBy: { sentAt: 'desc' },
+      });
+
+      if (pendingReview) {
+        await prisma.review.update({
+          where: { id: pendingReview.id },
+          data: { rating: ratingValue, repliedAt: new Date() },
         });
 
-        if (pendingReview) {
-          await prisma.review.update({
-            where: { id: pendingReview.id },
-            data: { rating: ratingValue, repliedAt: new Date() },
-          });
+        setBookingSession(from, { step: 'review_comment', reviewId: pendingReview.id, patientId: patient.id });
 
-          // Ask for optional comment
-          setBookingSession(from, { step: 'review_comment', reviewId: pendingReview.id, patientId: patient.id });
+        const thankYouMsg = ratingValue >= 4
+          ? 'شكراً جزيلاً لتقييمك الرائع! ⭐ نسعد بخدمتك دائماً.\n\nهل تحب تضيف تعليق أو ملاحظة؟ (اكتبها أو أرسل "لا")'
+          : ratingValue >= 2
+            ? 'شكراً لتقييمك! 🙏 نعمل على تحسين خدماتنا باستمرار.\n\nهل تحب تضيف تعليق أو ملاحظة؟ (اكتبها أو أرسل "لا")'
+            : 'نأسف لعدم رضاك 😔 رأيك مهم جداً لنا ونعمل على التحسين.\n\nهل تحب تضيف تعليق أو ملاحظة؟ (اكتبها أو أرسل "لا")';
 
-          const thankYouMsg = ratingValue >= 4
-            ? 'شكراً جزيلاً لتقييمك الرائع! ⭐ نسعد بخدمتك دائماً.\n\nهل تحب تضيف تعليق أو ملاحظة؟ (اكتبها أو أرسل "لا")'
-            : ratingValue >= 2
-              ? 'شكراً لتقييمك! 🙏 نعمل على تحسين خدماتنا باستمرار.\n\nهل تحب تضيف تعليق أو ملاحظة؟ (اكتبها أو أرسل "لا")'
-              : 'نأسف لعدم رضاك 😔 رأيك مهم جداً لنا ونعمل على التحسين.\n\nهل تحب تضيف تعليق أو ملاحظة؟ (اكتبها أو أرسل "لا")';
-
-          return await whatsappService.sendTextMessage(from, thankYouMsg);
-        }
+        return await whatsappService.sendTextMessage(from, thankYouMsg);
       }
     }
 

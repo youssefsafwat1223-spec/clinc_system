@@ -7,7 +7,9 @@
       "Bash(node -c src/controllers/messageController.js)",
       "Bash(node -c src/controllers/campaignController.js)",
       "Bash(node -c src/services/notificationService.js)",
-      "Bash(node -c src/utils/aiKnowledge.js)"
+      "Bash(node -c src/utils/aiKnowledge.js)",
+      "Bash(node -c src/controllers/webhookController.js)",
+      "Bash(node -c src/services/whatsappService.js)"
     ]
   }
 }
