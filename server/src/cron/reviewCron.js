@@ -4,6 +4,37 @@ const whatsappService = require('../services/whatsappService');
 
 const REVIEW_DELAY_HOURS = 3;
 const REVIEW_TEMPLATE = 'clinic_review_ar';
+const REVIEW_FALLBACK_LANGUAGES = ['ar', 'ar_EG', 'ar_AR', 'ar_SA'];
+
+const resolveTemplateLanguage = async (templateName) => {
+  const stored = await prisma.campaignTemplate
+    .findUnique({ where: { name: templateName }, select: { languageCode: true } })
+    .catch(() => null);
+  return stored?.languageCode || 'ar';
+};
+
+const sendReviewTemplateWithFallback = async (phone, params) => {
+  const primaryLang = await resolveTemplateLanguage(REVIEW_TEMPLATE);
+  const tried = new Set();
+  const order = [primaryLang, ...REVIEW_FALLBACK_LANGUAGES.filter((lang) => lang !== primaryLang)];
+
+  let lastError = null;
+  for (const lang of order) {
+    if (tried.has(lang)) continue;
+    tried.add(lang);
+    try {
+      await whatsappService.sendTemplateMessage(phone, REVIEW_TEMPLATE, lang, null, params);
+      return lang;
+    } catch (error) {
+      lastError = error;
+      const details = error?.response?.data?.error?.error_data?.details || '';
+      if (!/does not exist in/i.test(details)) {
+        throw error;
+      }
+    }
+  }
+  throw lastError || new Error('Review template language not resolved');
+};
 
 /**
  * Find confirmed appointments that ended 3+ hours ago and haven't had a review sent yet.
@@ -43,14 +74,12 @@ const sendPendingReviewRequests = async () => {
       const patientName = appointment.patient.name || 'عزيزي المريض';
       const doctorName = (appointment.doctor?.name || 'الطبيب').replace(/^د\.\s*/, '');
 
-      // Send the template
-      await whatsappService.sendTemplateMessage(
-        appointment.patient.phone,
-        REVIEW_TEMPLATE,
-        'ar',
-        null,
-        [patientName, doctorName]
-      );
+      const usedLang = await sendReviewTemplateWithFallback(appointment.patient.phone, [patientName, doctorName]);
+      if (usedLang !== 'ar') {
+        prisma.campaignTemplate
+          .updateMany({ where: { name: REVIEW_TEMPLATE }, data: { languageCode: usedLang } })
+          .catch(() => {});
+      }
 
       // Create review record (awaiting reply)
       await prisma.review.create({

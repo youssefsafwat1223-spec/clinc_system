@@ -65,6 +65,7 @@ export default function CampaignsPage() {
   const [broadcastType, setBroadcastType] = useState('TEXT');
   const [messageText, setMessageText] = useState('');
   const [templateId, setTemplateId] = useState('');
+  const [templateBodyParams, setTemplateBodyParams] = useState([]);
   const [audience, setAudience] = useState('ALL');
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
@@ -180,6 +181,17 @@ export default function CampaignsPage() {
     [templates, templateId]
   );
 
+  const templateVariableCount = useMemo(() => {
+    if (!selectedTemplate?.bodyText) return 0;
+    const matches = selectedTemplate.bodyText.match(/\{\{\s*\d+\s*\}\}/g) || [];
+    const indices = matches.map((token) => parseInt(token.replace(/[^0-9]/g, ''), 10)).filter(Number.isFinite);
+    return indices.length ? Math.max(...indices) : 0;
+  }, [selectedTemplate]);
+
+  useEffect(() => {
+    setTemplateBodyParams(Array(templateVariableCount).fill(''));
+  }, [templateVariableCount, templateId]);
+
   const openCreateTemplateModal = () => {
     setTemplateForm(emptyTemplateForm);
     setIsTemplateModalOpen(true);
@@ -207,6 +219,14 @@ export default function CampaignsPage() {
     if (broadcastType === 'TEXT' && !messageText.trim()) return;
     if (broadcastType === 'TEMPLATE' && !templateId) return;
 
+    if (broadcastType === 'TEMPLATE' && templateVariableCount > 0) {
+      const missingIndex = templateBodyParams.findIndex((value) => !String(value || '').trim());
+      if (missingIndex !== -1 || templateBodyParams.length < templateVariableCount) {
+        toast.error(`املأ كل متغيرات القالب (متبقي ${templateVariableCount - templateBodyParams.filter((v) => String(v || '').trim()).length})`);
+        return;
+      }
+    }
+
     if (audience === 'SELECTED' && selectedPatientIds.length === 0) {
       toast.error('اختر مريضًا واحدًا على الأقل قبل الإرسال');
       return;
@@ -231,6 +251,7 @@ export default function CampaignsPage() {
         broadcastType,
         messageText: broadcastType === 'TEXT' ? messageText : undefined,
         templateId: broadcastType === 'TEMPLATE' ? templateId : undefined,
+        templateBodyParams: broadcastType === 'TEMPLATE' ? templateBodyParams : undefined,
       });
 
       toast.success('تم إرسال الحملة');
@@ -582,6 +603,36 @@ export default function CampaignsPage() {
                         {selectedTemplate.footerText ? (
                           <p className="mt-3 text-xs text-dark-muted">Footer: {selectedTemplate.footerText}</p>
                         ) : null}
+                      </div>
+                    ) : null}
+
+                    {selectedTemplate && templateVariableCount > 0 ? (
+                      <div className="rounded-2xl border border-amber-500/30 bg-amber-500/5 p-4">
+                        <p className="mb-1 text-sm font-bold text-amber-200">
+                          هذا القالب يحتوي على {templateVariableCount} متغير. املأ القيم اللي هتتبعت لكل المرضى.
+                        </p>
+                        <p className="mb-3 text-xs text-amber-100/80">
+                          نصيحة: استخدم <span dir="ltr" className="font-mono">{'{{name}}'}</span> داخل أي قيمة عشان يتعوض تلقائياً باسم كل مريض.
+                        </p>
+                        <div className="space-y-3">
+                          {Array.from({ length: templateVariableCount }).map((_, index) => (
+                            <div key={index}>
+                              <label className="mb-1 block text-xs font-bold text-slate-300" dir="ltr">
+                                {`{{${index + 1}}}`}
+                              </label>
+                              <input
+                                value={templateBodyParams[index] || ''}
+                                onChange={(event) => {
+                                  const next = [...templateBodyParams];
+                                  next[index] = event.target.value;
+                                  setTemplateBodyParams(next);
+                                }}
+                                placeholder={index === 0 ? 'مثال: {{name}}' : 'اكتب قيمة المتغير'}
+                                className="w-full rounded-xl border border-dark-border bg-dark-bg px-4 py-2 text-sm text-white focus:border-primary-500 focus:outline-none"
+                              />
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     ) : null}
                   </div>

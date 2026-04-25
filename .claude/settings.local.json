@@ -11,7 +11,9 @@
       "Bash(node -c src/controllers/webhookController.js)",
       "Bash(node -c src/services/whatsappService.js)",
       "Bash(node -c src/index.js)",
-      "Bash(node -c src/lib/seedSystemTemplates.js)"
+      "Bash(node -c src/lib/seedSystemTemplates.js)",
+      "Bash(node -c src/cron/reviewCron.js)",
+      "Bash(node -e \"require\\('@babel/parser'\\).parse\\(require\\('fs'\\).readFileSync\\('src/pages/CampaignsPage.jsx','utf8'\\),{sourceType:'module',plugins:['jsx']}\\); console.log\\('FRONTEND OK'\\);\")"
     ]
   }
 }

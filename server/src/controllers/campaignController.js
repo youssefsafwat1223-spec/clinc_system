@@ -150,6 +150,7 @@ const sendBroadcast = async (req, res, next) => {
       broadcastType = 'TEXT',
       templateId,
       templateName,
+      templateBodyParams,
       imageUrl,
     } = req.body;
 
@@ -199,14 +200,27 @@ const sendBroadcast = async (req, res, next) => {
     let successCount = 0;
     let failCount = 0;
 
+    const personalizeParam = (value, patient) => {
+      if (typeof value !== 'string') return value;
+      return value
+        .replace(/\{\{name\}\}/gi, patient.name || 'عميلنا')
+        .replace(/\{\{phone\}\}/gi, patient.phone || '');
+    };
+
+    const sanitizedBodyParams = Array.isArray(templateBodyParams)
+      ? templateBodyParams.map((value) => (value === null || value === undefined ? '' : String(value)))
+      : [];
+
     for (const patient of patients) {
       try {
         if (broadcastType === 'TEMPLATE') {
+          const params = sanitizedBodyParams.map((value) => personalizeParam(value, patient));
           await whatsappService.sendTemplateMessage(
             patient.phone,
             resolvedTemplateName,
             resolvedLanguageCode,
-            resolvedImageUrl
+            resolvedImageUrl,
+            params
           );
         } else {
           const personalizedMsg = messageText.replace(/{{name}}/g, patient.name);
