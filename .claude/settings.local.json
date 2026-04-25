@@ -9,7 +9,9 @@
       "Bash(node -c src/services/notificationService.js)",
       "Bash(node -c src/utils/aiKnowledge.js)",
       "Bash(node -c src/controllers/webhookController.js)",
-      "Bash(node -c src/services/whatsappService.js)"
+      "Bash(node -c src/services/whatsappService.js)",
+      "Bash(node -c src/index.js)",
+      "Bash(node -c src/lib/seedSystemTemplates.js)"
     ]
   }
 }

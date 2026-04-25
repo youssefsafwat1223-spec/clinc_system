@@ -9,6 +9,7 @@ const errorHandler = require('./middleware/errorHandler');
 const { startReminderCrons } = require('./cron/reminderCron');
 const { startExpiryCron } = require('./cron/expiryCron');
 const { startReviewCron } = require('./cron/reviewCron');
+const { seedSystemTemplates } = require('./lib/seedSystemTemplates');
 
 // Route imports
 const authRoutes = require('./routes/auth');
@@ -110,6 +111,13 @@ const startServer = async () => {
     try {
       await prisma.$connect();
       console.log('[DB] Prisma connected successfully');
+
+      try {
+        await seedSystemTemplates();
+      } catch (seedError) {
+        console.error('[Seed] Failed to seed system templates:', seedError.message);
+      }
+
       startReminderCrons();
       startExpiryCron();
       startReviewCron();
