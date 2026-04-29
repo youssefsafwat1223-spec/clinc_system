@@ -12,7 +12,7 @@ const getAll = async (req, res, next) => {
     const doctors = await prisma.doctor.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        user: { select: { email: true, role: true, active: true } },
+        user: { select: { email: true, displayName: true, role: true, active: true } },
         _count: { select: { appointments: true } },
       },
     });
@@ -28,7 +28,7 @@ const getOne = async (req, res, next) => {
     const doctor = await prisma.doctor.findUnique({
       where: { id: req.params.id },
       include: {
-        user: { select: { email: true, role: true, active: true } },
+        user: { select: { email: true, displayName: true, role: true, active: true } },
         appointments: {
           include: { patient: true, service: true },
           orderBy: { scheduledTime: 'desc' },
@@ -50,7 +50,7 @@ const getOne = async (req, res, next) => {
 const getMine = async (req, res, next) => {
   try {
     const doctor = await getDoctorByUserId(req.user.id, {
-      user: { select: { email: true, role: true, active: true } },
+      user: { select: { email: true, displayName: true, role: true, active: true } },
       _count: { select: { appointments: true } },
     });
 
@@ -66,7 +66,7 @@ const getMine = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
-    const { name, specialization, phone, image, workingHours, email, password, active } = req.body;
+    const { name, displayName, specialization, phone, image, workingHours, email, password, active } = req.body;
 
     let userId = null;
 
@@ -77,6 +77,7 @@ const create = async (req, res, next) => {
           email,
           password: hashed,
           name,
+          displayName: displayName || name,
           role: 'DOCTOR',
           ...(active !== undefined && { active }),
         },
@@ -95,7 +96,7 @@ const create = async (req, res, next) => {
         userId,
       },
       include: {
-        user: { select: { email: true, role: true, active: true } },
+        user: { select: { email: true, displayName: true, role: true, active: true } },
       },
     });
 
@@ -107,7 +108,7 @@ const create = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const { name, specialization, phone, image, workingHours, active, email, password } = req.body;
+    const { name, displayName, specialization, phone, image, workingHours, active, email, password } = req.body;
     const existingDoctor = await prisma.doctor.findUnique({
       where: { id: req.params.id },
       include: { user: true },
@@ -123,6 +124,7 @@ const update = async (req, res, next) => {
       if (existingDoctor.userId) {
         const userData = {
           ...(name !== undefined && { name }),
+          ...(displayName !== undefined && { displayName: displayName || null }),
           ...(email !== undefined && email && { email }),
           ...(active !== undefined && { active }),
         };
@@ -144,6 +146,7 @@ const update = async (req, res, next) => {
             email,
             password: hashed,
             name: name || existingDoctor.name,
+            displayName: displayName || name || existingDoctor.name,
             role: 'DOCTOR',
             ...(active !== undefined && { active }),
           },
@@ -164,7 +167,7 @@ const update = async (req, res, next) => {
           ...(userId !== existingDoctor.userId && { userId }),
         },
         include: {
-          user: { select: { email: true, role: true, active: true } },
+          user: { select: { email: true, displayName: true, role: true, active: true } },
         },
       });
     });
@@ -192,7 +195,7 @@ const updateMySchedule = async (req, res, next) => {
       where: { id: existingDoctor.id },
       data: { workingHours },
       include: {
-        user: { select: { email: true, role: true, active: true } },
+        user: { select: { email: true, displayName: true, role: true, active: true } },
         _count: { select: { appointments: true } },
       },
     });

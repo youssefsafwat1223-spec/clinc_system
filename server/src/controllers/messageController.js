@@ -87,13 +87,14 @@ const getLatestCommentTarget = async (patientId, platform) => {
   return null;
 };
 
-const createOutboundMessage = async ({ patientId, platform, content, metadata = null }) =>
+const createOutboundMessage = async ({ patientId, platform, content, metadata = null, reviewedById = null }) =>
   prisma.message.create({
     data: {
       patientId,
       platform,
       content,
       type: 'OUTBOUND',
+      ...(reviewedById ? { reviewedById, reviewedAt: new Date() } : {}),
       ...(metadata ? { metadata } : {}),
     },
     include: {
@@ -103,7 +104,7 @@ const createOutboundMessage = async ({ patientId, platform, content, metadata = 
 
 const getAll = async (req, res, next) => {
   try {
-    const { page = 1, limit = 50, platform, patientId, unread, humanOnly } = req.query;
+    const { page = 1, limit = 50, platform, patientId, unread, humanOnly, reviewed } = req.query;
     const { skip, take } = paginate(Number(page), Number(limit));
     const scopedPatientIds = await getScopedPatientIds(req);
 
@@ -122,6 +123,12 @@ const getAll = async (req, res, next) => {
     if (unread === 'true') {
       where.type = 'INBOUND';
       where.readAt = null;
+    }
+
+    if (reviewed === 'true') {
+      where.reviewedAt = { not: null };
+    } else if (reviewed === 'false') {
+      where.reviewedAt = null;
     }
 
     if (scopedPatientIds) {
@@ -150,6 +157,7 @@ const getAll = async (req, res, next) => {
               displayName: true,
             },
           },
+          reviewedBy: { select: { id: true, name: true, displayName: true } },
         },
       }),
       prisma.message.count({ where: patientWhere ? { ...where, patient: patientWhere } : where }),
@@ -186,6 +194,7 @@ const getConversation = async (req, res, next) => {
           patient: {
             select: { name: true, displayName: true, phone: true, platform: true },
           },
+          reviewedBy: { select: { id: true, name: true, displayName: true } },
         },
       }),
       prisma.patient.findUnique({
@@ -223,18 +232,20 @@ const sendManual = async (req, res, next) => {
     }
 
     const sendPlatform = platform || patient.platform;
+    const senderName = req.user?.displayName || req.user?.name || '';
+    const deliveredContent = senderName ? `${senderName}: ${trimmedContent}` : trimmedContent;
     let message = null;
     let metadata = null;
 
     switch (sendPlatform) {
       case 'WHATSAPP':
-        await whatsappService.sendTextMessage(patient.phone, trimmedContent);
+        await whatsappService.sendTextMessage(patient.phone, deliveredContent);
         break;
 
       case 'FACEBOOK': {
         const commentTarget = replyToComment ? await getLatestCommentTarget(patientId, 'FACEBOOK') : null;
         if (commentTarget?.commentId) {
-          await messengerService.sendCommentReply(commentTarget.commentId, trimmedContent);
+          await messengerService.sendCommentReply(commentTarget.commentId, deliveredContent);
           metadata = {
             source: 'COMMENT_REPLY',
             delivery: 'PUBLIC_COMMENT',
@@ -243,14 +254,15 @@ const sendManual = async (req, res, next) => {
             manual: true,
           };
         } else {
-          await messengerService.sendTextMessage(patient.facebookId || patient.phone, trimmedContent);
+          await messengerService.sendTextMessage(patient.facebookId || patient.phone, deliveredContent);
         }
 
         message = await createOutboundMessage({
           patientId,
           platform: 'FACEBOOK',
-          content: trimmedContent,
-          metadata,
+          content: deliveredContent,
+          metadata: { ...(metadata || {}), originalContent: trimmedContent, senderName },
+          reviewedById: req.user?.id,
         });
         break;
       }
@@ -258,7 +270,7 @@ const sendManual = async (req, res, next) => {
       case 'INSTAGRAM': {
         const commentTarget = replyToComment ? await getLatestCommentTarget(patientId, 'INSTAGRAM') : null;
         if (commentTarget?.commentId) {
-          await instagramService.sendCommentReply(commentTarget.commentId, trimmedContent);
+          await instagramService.sendCommentReply(commentTarget.commentId, deliveredContent);
           metadata = {
             source: 'COMMENT_REPLY',
             delivery: 'PUBLIC_COMMENT',
@@ -267,14 +279,15 @@ const sendManual = async (req, res, next) => {
             manual: true,
           };
         } else {
-          await instagramService.sendTextMessage(patient.instagramId || patient.phone, trimmedContent);
+          await instagramService.sendTextMessage(patient.instagramId || patient.phone, deliveredContent);
         }
 
         message = await createOutboundMessage({
           patientId,
           platform: 'INSTAGRAM',
-          content: trimmedContent,
-          metadata,
+          content: deliveredContent,
+          metadata: { ...(metadata || {}), originalContent: trimmedContent, senderName },
+          reviewedById: req.user?.id,
         });
         break;
       }
@@ -289,6 +302,11 @@ const sendManual = async (req, res, next) => {
     await prisma.patient.update({
       where: { id: patientId },
       data: { chatState: 'HUMAN' },
+    });
+
+    await prisma.message.updateMany({
+      where: { patientId, type: 'INBOUND', reviewedAt: null },
+      data: { reviewedAt: new Date(), reviewedById: req.user?.id || null, readAt: new Date() },
     });
 
     res.status(201).json({ success: true, message });

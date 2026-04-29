@@ -189,6 +189,78 @@ const availability = async (req, res, next) => {
   }
 };
 
+const rescheduleByDoctor = async (req, res, next) => {
+  try {
+    const { fromDoctorId, toDoctorId, notifyPatient = true } = req.body;
+
+    if (!fromDoctorId || !toDoctorId || fromDoctorId === toDoctorId) {
+      return res.status(400).json({ error: 'اختر الطبيب القديم والطبيب البديل بشكل صحيح' });
+    }
+
+    const [fromDoctor, toDoctor] = await Promise.all([
+      prisma.doctor.findUnique({ where: { id: fromDoctorId } }),
+      prisma.doctor.findFirst({ where: { id: toDoctorId, active: true } }),
+    ]);
+
+    if (!fromDoctor || !toDoctor) {
+      return res.status(404).json({ error: 'الطبيب غير موجود أو غير مفعل' });
+    }
+
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        doctorId: fromDoctorId,
+        status: { in: ['PENDING', 'CONFIRMED'] },
+        scheduledTime: { gte: new Date() },
+      },
+      include: { patient: true, service: true },
+      orderBy: { scheduledTime: 'asc' },
+    });
+
+    const unavailableAppointmentIds = [];
+    for (const appointment of appointments) {
+      const available = await appointmentService.isDoctorAvailableAt({
+        doctorId: toDoctorId,
+        scheduledTime: appointment.scheduledTime,
+        duration: appointment.service?.duration || 30,
+      });
+      if (!available) unavailableAppointmentIds.push(appointment.id);
+    }
+
+    if (unavailableAppointmentIds.length) {
+      return res.status(409).json({
+        error: 'الطبيب البديل غير متاح في بعض المواعيد',
+        unavailableAppointmentIds,
+      });
+    }
+
+    await prisma.appointment.updateMany({
+      where: { id: { in: appointments.map((appointment) => appointment.id) } },
+      data: {
+        doctorId: toDoctorId,
+        notes: `تم نقل الموعد من ${fromDoctor.name} إلى ${toDoctor.name}`,
+      },
+    });
+
+    if (notifyPatient) {
+      const whatsappService = require('../services/whatsappService');
+      for (const appointment of appointments) {
+        try {
+          await whatsappService.sendTextMessage(
+            appointment.patient.phone,
+            `تم تعيين د. ${toDoctor.name} بدلاً من د. ${fromDoctor.name} لموعدك القادم. وقت الموعد والخدمة كما هما بدون تغيير.`
+          );
+        } catch (error) {
+          console.error('[Doctor reschedule] notify failed:', error.message);
+        }
+      }
+    }
+
+    res.json({ success: true, affectedAppointments: appointments.length });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const confirm = async (req, res, next) => {
   try {
     const { appointment } = await getAccessibleAppointment(req, req.params.id);
@@ -308,6 +380,16 @@ const complete = async (req, res, next) => {
       data: { status: 'COMPLETED' },
       include: { patient: true, doctor: true, service: true },
     });
+
+    if (appointment.service?.price) {
+      await prisma.patient.update({
+        where: { id: appointment.patientId },
+        data: {
+          totalSpent: { increment: Number(appointment.service.price) || 0 },
+          lastPaymentDate: new Date(),
+        },
+      });
+    }
 
     res.json({ appointment });
   } catch (error) {
@@ -432,4 +514,5 @@ module.exports = {
   cancel,
   getStats,
   availability,
+  rescheduleByDoctor,
 };

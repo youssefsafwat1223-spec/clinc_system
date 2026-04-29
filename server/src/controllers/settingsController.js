@@ -14,6 +14,7 @@ const {
 
 const createDefaultSettings = () => ({
   clinicName: 'My Clinic',
+  botName: 'My Clinic',
   phone: config.clinicWhatsappNumber || '+9647882332330',
   address: 'العراق',
   whatsappChatLink: buildWhatsAppChatLink(config.clinicWhatsappNumber || '+9647882332330'),
@@ -37,6 +38,7 @@ const createDefaultSettings = () => ({
     faqs: DEFAULT_FAQS,
     knowledgeCases: DEFAULT_KNOWLEDGE_CASES,
   }),
+  logoUrl: null,
   brandLogoUrl: null,
   brandPrimaryColor: '#0B1929',
   brandSecondaryColor: '#C9A84C',
@@ -92,6 +94,8 @@ const getPublic = async (req, res, next) => {
         address: settings.address,
         whatsappLink: settings.whatsappChatLink,
         googleMapsLink: settings.googleMapsLink,
+        botName: settings.botName || settings.clinicNameAr || settings.clinicName,
+        logoUrl: settings.logoUrl || settings.brandLogoUrl,
         workingHours: settings.workingHours,
       },
       doctors,
@@ -236,6 +240,7 @@ const update = async (req, res, next) => {
     const {
       clinicName,
       clinicNameAr,
+      botName,
       phone,
       address,
       whatsappChatLink,
@@ -246,6 +251,7 @@ const update = async (req, res, next) => {
       knowledgeCases,
       faqData,
       aiEnabled,
+      logoUrl,
       brandLogoUrl,
       brandPrimaryColor,
       brandSecondaryColor,
@@ -280,6 +286,7 @@ const update = async (req, res, next) => {
       data: {
         ...(clinicName !== undefined && { clinicName }),
         ...(clinicNameAr !== undefined && { clinicNameAr }),
+        ...(botName !== undefined && { botName }),
         ...(phone !== undefined && { phone }),
         ...(address !== undefined && { address }),
         ...(resolvedWhatsAppChatLink !== undefined && { whatsappChatLink: resolvedWhatsAppChatLink }),
@@ -293,6 +300,7 @@ const update = async (req, res, next) => {
           }),
         }),
         ...(aiEnabled !== undefined && { aiEnabled }),
+        ...(logoUrl !== undefined && { logoUrl }),
         ...(brandLogoUrl !== undefined && { brandLogoUrl }),
         ...(brandPrimaryColor !== undefined && { brandPrimaryColor }),
         ...(brandSecondaryColor !== undefined && { brandSecondaryColor }),

@@ -53,11 +53,13 @@ model User {
   email     String   @unique
   password  String
   name      String
+  displayName String? @map("display_name")
   role      UserRole @default(STAFF)
   active    Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
   doctor    Doctor?
+  reviewedMessages Message[] @relation("MessageReviewer")
 
   @@map("users")
 }
@@ -95,6 +97,10 @@ model Patient {
   notes         String?
   accountNotes  String?        @map("account_notes")
   accountBalance Float         @default(0) @map("account_balance")
+  accountingNotes String?       @map("accounting_notes")
+  totalSpent    Float          @default(0) @map("total_spent")
+  lastPaymentDate DateTime?    @map("last_payment_date")
+  creditBalance Float          @default(0) @map("credit_balance")
   appointments  Appointment[]
   messages      Message[]
   consultations Consultation[]
@@ -148,6 +154,9 @@ model Message {
   id        String      @id @default(uuid())
   patientId String      @map("patient_id")
   patient   Patient     @relation(fields: [patientId], references: [id])
+  reviewedById String?  @map("reviewed_by")
+  reviewedBy   User?    @relation("MessageReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt DateTime?  @map("reviewed_at")
   platform  Platform
   content   String
   type      MessageType
@@ -162,6 +171,7 @@ model ClinicSettings {
   id           String  @id @default(uuid())
   clinicName   String  @default("العيادة") @map("clinic_name")
   clinicNameAr String  @default("العيادة") @map("clinic_name_ar")
+  botName      String? @map("bot_name")
   phone        String?
   address      String?
   whatsappChatLink String? @map("whatsapp_chat_link")
@@ -170,6 +180,7 @@ model ClinicSettings {
   systemPrompt String  @default("") @map("system_prompt")
   faqData      Json    @default("[]") @map("faq_data")
   aiEnabled    Boolean @default(true) @map("ai_enabled")
+  logoUrl      String? @map("logo_url")
   brandLogoUrl String? @map("brand_logo_url")
   brandPrimaryColor String? @map("brand_primary_color")
   brandSecondaryColor String? @map("brand_secondary_color")
@@ -195,6 +206,19 @@ model CampaignTemplate {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("campaign_templates")
+}
+
+model DirectContact {
+  id          String   @id @default(uuid())
+  name        String
+  phone       String   @unique
+  description String?
+  priority    Int      @default(0)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("direct_contacts")
 }
 
 model PatientGroup {

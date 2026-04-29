@@ -6,12 +6,13 @@ import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 
-const platformTabs = ['ALL', 'HUMAN', 'UNREAD', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
+const platformTabs = ['ALL', 'HUMAN', 'UNREAD', 'REVIEWED', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
 
 const platformLabels = {
   ALL: 'الكل',
   HUMAN: 'متابعة بشرية',
   UNREAD: 'غير مقروء',
+  REVIEWED: 'تمت المراجعة',
   WHATSAPP: 'واتساب',
   FACEBOOK: 'فيسبوك',
   INSTAGRAM: 'انستجرام',
@@ -143,6 +144,7 @@ export default function InboxPage() {
             chatState: msg.patient?.chatState || 'BOT',
             messageCount: 1,
             unreadCount: msg.type === 'INBOUND' && !msg.readAt ? 1 : 0,
+            reviewedCount: msg.reviewedAt ? 1 : 0,
           });
           return;
         }
@@ -150,6 +152,9 @@ export default function InboxPage() {
         existing.messageCount += 1;
         if (msg.type === 'INBOUND' && !msg.readAt) {
           existing.unreadCount = (existing.unreadCount || 0) + 1;
+        }
+        if (msg.reviewedAt) {
+          existing.reviewedCount = (existing.reviewedCount || 0) + 1;
         }
       });
 
@@ -307,12 +312,13 @@ export default function InboxPage() {
           accumulator.ALL += 1;
           if (patient.chatState === 'HUMAN') accumulator.HUMAN = (accumulator.HUMAN || 0) + 1;
           if ((patient.unreadCount || 0) > 0) accumulator.UNREAD = (accumulator.UNREAD || 0) + 1;
+          if ((patient.reviewedCount || 0) > 0) accumulator.REVIEWED = (accumulator.REVIEWED || 0) + 1;
           if (patient.platform) {
             accumulator[patient.platform] = (accumulator[patient.platform] || 0) + 1;
           }
           return accumulator;
         },
-        { ALL: 0, HUMAN: 0, UNREAD: 0, WHATSAPP: 0, FACEBOOK: 0, INSTAGRAM: 0 }
+        { ALL: 0, HUMAN: 0, UNREAD: 0, REVIEWED: 0, WHATSAPP: 0, FACEBOOK: 0, INSTAGRAM: 0 }
       ),
     [patients]
   );
@@ -321,13 +327,15 @@ export default function InboxPage() {
     const query = searchTerm.trim().toLowerCase();
 
     return patients.filter((patient) => {
-      const isStateTab = activeTab === 'HUMAN' || activeTab === 'UNREAD';
+      const isStateTab = activeTab === 'HUMAN' || activeTab === 'UNREAD' || activeTab === 'REVIEWED';
       const matchesPlatform = activeTab === 'ALL' || isStateTab || patient.platform === activeTab;
       const matchesState =
         activeTab === 'HUMAN'
           ? patient.chatState === 'HUMAN'
           : activeTab === 'UNREAD'
             ? (patient.unreadCount || 0) > 0
+            : activeTab === 'REVIEWED'
+              ? (patient.reviewedCount || 0) > 0
             : true;
       const haystack = [patient.name, patient.phone, patient.lastMessage].filter(Boolean).join(' ').toLowerCase();
       const matchesSearch = !query || haystack.includes(query);
@@ -628,6 +636,13 @@ export default function InboxPage() {
                                   }`}
                                 >
                                   <p className="whitespace-pre-wrap text-sm font-medium leading-7">{message.content}</p>
+
+                                  {message.reviewedAt ? (
+                                    <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-[11px] font-bold text-emerald-200">
+                                      تمت المراجعة بواسطة {message.reviewedBy?.displayName || message.reviewedBy?.name || 'موظف'} في{' '}
+                                      <span dir="ltr">{formatTime(message.reviewedAt)}</span>
+                                    </div>
+                                  ) : null}
 
                                   <div
                                     className={`mt-3 flex flex-wrap items-center justify-end gap-1.5 text-[10px] font-bold tracking-wide ${

@@ -49,6 +49,7 @@ export default function StaffPage() {
     specialization: '',
     phone: '',
     image: '',
+    displayName: '',
     email: '',
     password: '',
     active: true,
@@ -78,6 +79,7 @@ export default function StaffPage() {
         specialization: doctor.specialization || '',
         phone: doctor.phone || '',
         image: doctor.image || '',
+        displayName: doctor.user?.displayName || doctor.name || '',
         email: doctor.user?.email || '',
         password: '',
         active: doctor.active ?? doctor.user?.active ?? true,
@@ -89,6 +91,7 @@ export default function StaffPage() {
         specialization: '',
         phone: '',
         image: '',
+        displayName: '',
         email: '',
         password: '',
         active: true,
@@ -290,6 +293,13 @@ export default function StaffPage() {
                         </div>
                       ) : null}
 
+                      {doctor.user?.displayName ? (
+                        <div className="flex items-center gap-3 rounded-lg border border-dark-border/50 bg-dark-bg/50 px-3 py-2 text-slate-300">
+                          <UserSquare2 className="h-4 w-4 text-dark-muted" />
+                          <span>{doctor.user.displayName}</span>
+                        </div>
+                      ) : null}
+
                       <div className="flex items-center gap-3 rounded-lg border border-dark-border/50 bg-dark-bg/50 px-3 py-2 text-slate-300">
                         <Mail className="h-4 w-4 text-dark-muted" />
                         <span dir="ltr" className="truncate">
@@ -348,6 +358,17 @@ export default function StaffPage() {
                     onChange={(event) => setFormData({ ...formData, specialization: event.target.value })}
                     className="input-field"
                     placeholder="باطنة - أطفال - جلدية"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-dark-muted">اسم الظهور في رسائل المرضى</label>
+                  <input
+                    type="text"
+                    value={formData.displayName}
+                    onChange={(event) => setFormData({ ...formData, displayName: event.target.value })}
+                    className="input-field"
+                    placeholder="مثال: الاستقبال - د. أحمد"
                   />
                 </div>
 

@@ -33,6 +33,8 @@ function SummaryCard({ title, value, hint, icon: Icon, accentClass }) {
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
+  const [contacts, setContacts] = useState([]);
+  const [contactForm, setContactForm] = useState({ name: '', phone: '', description: '', priority: 0, active: true });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -40,6 +42,8 @@ export default function SettingsPage() {
     try {
       const res = await api.get('/settings');
       setSettings(res.data.settings);
+      const contactsRes = await api.get('/contacts').catch(() => ({ data: { contacts: [] } }));
+      setContacts(contactsRes.data.contacts || []);
     } catch (error) {
       toast.error('فشل في تحميل الإعدادات');
     } finally {
@@ -64,6 +68,31 @@ export default function SettingsPage() {
       toast.error(error.message || 'فشل في الحفظ');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveContact = async () => {
+    if (!contactForm.name.trim() || !contactForm.phone.trim()) {
+      toast.error('اسم جهة الاتصال ورقم الهاتف مطلوبان');
+      return;
+    }
+
+    try {
+      const res = await api.post('/contacts', contactForm);
+      setContacts((current) => [res.data.contact, ...current]);
+      setContactForm({ name: '', phone: '', description: '', priority: 0, active: true });
+      toast.success('تمت إضافة جهة الاتصال');
+    } catch (error) {
+      toast.error(error.message || 'فشل حفظ جهة الاتصال');
+    }
+  };
+
+  const toggleContact = async (contact) => {
+    try {
+      const res = await api.put(`/contacts/${contact.id}`, { active: !contact.active });
+      setContacts((current) => current.map((item) => (item.id === contact.id ? res.data.contact : item)));
+    } catch (error) {
+      toast.error(error.message || 'فشل تحديث جهة الاتصال');
     }
   };
 
@@ -171,6 +200,17 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-1">
+                <label className="text-sm font-medium text-dark-muted">اسم المرسل الآلي في واتساب</label>
+                <input
+                  type="text"
+                  value={settings?.botName || ''}
+                  onChange={(event) => updateField('botName', event.target.value)}
+                  className="input-field"
+                  placeholder={settings?.clinicNameAr || 'اسم العيادة'}
+                />
+              </div>
+
+              <div className="space-y-1">
                 <label className="text-sm font-medium text-dark-muted">رقم هاتف التواصل</label>
                 <input
                   type="text"
@@ -228,8 +268,11 @@ export default function SettingsPage() {
                   type="text"
                   dir="ltr"
                   placeholder="/uploads/logo.png أو https://..."
-                  value={settings?.brandLogoUrl || ''}
-                  onChange={(event) => updateField('brandLogoUrl', event.target.value)}
+                  value={settings?.logoUrl || settings?.brandLogoUrl || ''}
+                  onChange={(event) => {
+                    updateField('logoUrl', event.target.value);
+                    updateField('brandLogoUrl', event.target.value);
+                  }}
                   className="input-field"
                 />
               </div>
@@ -262,6 +305,65 @@ export default function SettingsPage() {
                   onChange={(event) => updateField('brandSecondaryColor', event.target.value)}
                   className="h-12 w-full rounded-xl border border-dark-border bg-dark-bg p-1"
                 />
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h2 className="mb-4 border-b border-dark-border pb-2 text-lg font-bold text-white">أرقام التواصل المباشر</h2>
+
+            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+              <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
+                <div className="space-y-3">
+                  <input
+                    value={contactForm.name}
+                    onChange={(event) => setContactForm((current) => ({ ...current, name: event.target.value }))}
+                    className="input-field"
+                    placeholder="الاسم: الاستقبال، الحسابات، الطوارئ..."
+                  />
+                  <input
+                    value={contactForm.phone}
+                    onChange={(event) => setContactForm((current) => ({ ...current, phone: event.target.value }))}
+                    className="input-field"
+                    dir="ltr"
+                    placeholder="+964..."
+                  />
+                  <input
+                    value={contactForm.description}
+                    onChange={(event) => setContactForm((current) => ({ ...current, description: event.target.value }))}
+                    className="input-field"
+                    placeholder="وصف اختياري"
+                  />
+                  <button type="button" onClick={saveContact} className="btn-secondary w-full justify-center">
+                    <Phone className="h-4 w-4" />
+                    إضافة الرقم
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {contacts.length === 0 ? (
+                  <div className="rounded-xl border border-dark-border bg-dark-bg/30 p-6 text-center text-sm text-dark-muted">
+                    لا توجد أرقام مباشرة بعد.
+                  </div>
+                ) : (
+                  contacts.map((contact) => (
+                    <div key={contact.id} className="flex items-center justify-between gap-3 rounded-xl border border-dark-border bg-dark-bg/40 p-3">
+                      <div>
+                        <p className="font-bold text-white">{contact.name}</p>
+                        <p className="text-xs text-primary-300" dir="ltr">{contact.phone}</p>
+                        {contact.description ? <p className="mt-1 text-xs text-dark-muted">{contact.description}</p> : null}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleContact(contact)}
+                        className={`rounded-lg px-3 py-2 text-xs font-bold ${contact.active ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-700 text-slate-300'}`}
+                      >
+                        {contact.active ? 'مفعل' : 'معطل'}
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </section>

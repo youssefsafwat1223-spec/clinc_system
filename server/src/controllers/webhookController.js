@@ -282,6 +282,28 @@ const persistSocialMessage = async ({ patientId, platform, content, type, metada
     },
   });
 
+const CONTACT_REQUEST_PATTERN = /(اتصل|تواصل|رقم|ارقام|أرقام|phone|contact|call)/i;
+
+const buildDirectContactsMessage = async () => {
+  const contacts = await prisma.directContact.findMany({
+    where: { active: true },
+    orderBy: [{ priority: 'desc' }, { name: 'asc' }],
+    take: 10,
+  });
+
+  if (!contacts.length) {
+    return null;
+  }
+
+  return [
+    'أرقام التواصل المباشر:',
+    ...contacts.map((contact) => {
+      const description = contact.description ? ` - ${contact.description}` : '';
+      return `${contact.name}: ${contact.phone}${description}`;
+    }),
+  ].join('\n');
+};
+
 const verifyWebhookSignature = (req, appSecret, label) => {
   if (!appSecret || !req.rawBody) {
     if (config.nodeEnv === 'production') {
@@ -533,6 +555,13 @@ const handleWhatsAppMessage = async (message, contact) => {
       }
       // Do not process booking/AI logic
       return;
+    }
+
+    if (content && CONTACT_REQUEST_PATTERN.test(content)) {
+      const contactsMessage = await buildDirectContactsMessage();
+      if (contactsMessage) {
+        return await whatsappService.sendTextMessage(from, contactsMessage);
+      }
     }
 
     // If this is a new patient or first-time message (no session), send welcome message

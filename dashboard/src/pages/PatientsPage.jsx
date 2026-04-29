@@ -100,8 +100,8 @@ export default function PatientsPage() {
   const hydrateDrafts = (patient) => {
     setNotesDraft(patient?.notes || '');
     setDisplayNameDraft(patient?.displayName || '');
-    setAccountNotesDraft(patient?.accountNotes || '');
-    setAccountBalanceDraft(String(patient?.accountBalance || 0));
+    setAccountNotesDraft(patient?.accountingNotes || patient?.accountNotes || '');
+    setAccountBalanceDraft(String(patient?.creditBalance ?? patient?.accountBalance ?? 0));
     setGroupNamesDraft((patient?.groups || []).map((item) => item.group?.name).filter(Boolean).join(', '));
   };
 
@@ -151,6 +151,8 @@ export default function PatientsPage() {
         notes: notesDraft,
         accountNotes: accountNotesDraft,
         accountBalance: accountBalanceDraft,
+        accountingNotes: accountNotesDraft,
+        creditBalance: accountBalanceDraft,
         groupNames: groupNamesDraft,
       });
 
@@ -223,6 +225,7 @@ export default function PatientsPage() {
   const activePatient = patientDetails || selectedPatient;
   const patientAppointments = patientDetails?.appointments || [];
   const patientMessages = patientDetails?.messages || [];
+  const patientConsultations = patientDetails?.consultations || [];
   const patientPrescriptions = patientDetails?.prescriptions || [];
   const displayPatientName = activePatient?.displayName || activePatient?.name || 'مريض بدون اسم';
 
@@ -429,6 +432,21 @@ export default function PatientsPage() {
                       <SummaryCard title="الرصيد" value={Number(accountBalanceDraft || 0).toLocaleString('ar-IQ')} hint="متبقي أو ملاحظة حسابية" icon={FileText} accentClass="border-amber-500/20" />
                     </div>
 
+                    <div className="grid gap-4 md:grid-cols-3">
+                      <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
+                        <p className="text-xs font-bold text-dark-muted">إجمالي المدفوع</p>
+                        <p className="mt-2 text-xl font-bold text-white">{Number(activePatient?.totalSpent || 0).toLocaleString('ar-IQ')}</p>
+                      </div>
+                      <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
+                        <p className="text-xs font-bold text-dark-muted">رصيد / ديون</p>
+                        <p className="mt-2 text-xl font-bold text-white">{Number(activePatient?.creditBalance ?? accountBalanceDraft ?? 0).toLocaleString('ar-IQ')}</p>
+                      </div>
+                      <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
+                        <p className="text-xs font-bold text-dark-muted">آخر دفعة</p>
+                        <p className="mt-2 text-sm font-bold text-white">{activePatient?.lastPaymentDate ? formatDateTime(activePatient.lastPaymentDate) : 'غير مسجلة'}</p>
+                      </div>
+                    </div>
+
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <label className="text-sm font-bold text-slate-300">اسم العرض داخل النظام</label>
@@ -487,6 +505,27 @@ export default function PatientsPage() {
                           ))}
                         </div>
                       ) : <EmptyState text="لا توجد مواعيد مسجلة لهذا المريض." />}
+                    </div>
+
+                    <div className="space-y-4">
+                      <h3 className="flex items-center gap-2 font-bold text-white"><FileText className="h-4 w-4 text-primary-400" /> تاريخ الاستشارات</h3>
+                      {patientConsultations.length > 0 ? (
+                        <div className="space-y-3">
+                          {patientConsultations.slice(0, 10).map((consultation) => (
+                            <div key={consultation.id} className="rounded-xl border border-dark-border bg-dark-bg/50 p-4">
+                              <div className="mb-2 flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-bold text-white">{consultation.doctor?.name || 'بدون طبيب محدد'}</p>
+                                  <p className="mt-1 text-xs text-slate-400">{consultation.doctor?.specialization || 'استشارة عامة'}</p>
+                                </div>
+                                <span className="rounded-full bg-dark-bg px-2.5 py-1 text-[10px] font-bold text-slate-300">{consultation.status}</span>
+                              </div>
+                              <p className="text-xs text-slate-300" dir="ltr">{formatDateTime(consultation.createdAt)}</p>
+                              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{consultation.question}</p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : <EmptyState text="لا توجد استشارات مسجلة لهذا المريض." />}
                     </div>
 
                     <div className="space-y-4">

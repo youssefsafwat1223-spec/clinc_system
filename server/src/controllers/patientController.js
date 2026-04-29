@@ -124,6 +124,10 @@ const getOne = async (req, res, next) => {
         orderBy: { scheduledTime: 'desc' },
       },
       messages: { orderBy: { createdAt: 'desc' }, take: 50 },
+      consultations: {
+        include: { doctor: { select: { name: true, specialization: true } } },
+        orderBy: { createdAt: 'desc' },
+      },
       prescriptions: {
         include: { doctor: { select: { name: true, specialization: true } } },
         orderBy: { createdAt: 'desc' },
@@ -140,7 +144,21 @@ const getOne = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
-    const { name, displayName, phone, platform, notes, accountNotes, accountBalance, groupIds, groupNames } = req.body;
+    const {
+      name,
+      displayName,
+      phone,
+      platform,
+      notes,
+      accountNotes,
+      accountBalance,
+      accountingNotes,
+      totalSpent,
+      lastPaymentDate,
+      creditBalance,
+      groupIds,
+      groupNames,
+    } = req.body;
 
     if (!name?.trim() || !phone?.trim()) {
       return res.status(400).json({ error: 'الاسم ورقم الهاتف مطلوبان' });
@@ -159,6 +177,10 @@ const create = async (req, res, next) => {
           notes: notes || null,
           accountNotes: accountNotes || null,
           accountBalance: Number(accountBalance) || 0,
+          accountingNotes: accountingNotes || accountNotes || null,
+          totalSpent: Number(totalSpent) || 0,
+          lastPaymentDate: lastPaymentDate ? new Date(lastPaymentDate) : null,
+          creditBalance: Number(creditBalance) || 0,
         },
       });
 
@@ -181,7 +203,20 @@ const update = async (req, res, next) => {
     const existingPatient = await getAccessiblePatient(req, req.params.id);
     if (!existingPatient) return res.status(404).json({ error: 'المريض غير موجود' });
 
-    const { name, displayName, phone, notes, accountNotes, accountBalance, groupIds, groupNames } = req.body;
+    const {
+      name,
+      displayName,
+      phone,
+      notes,
+      accountNotes,
+      accountBalance,
+      accountingNotes,
+      totalSpent,
+      lastPaymentDate,
+      creditBalance,
+      groupIds,
+      groupNames,
+    } = req.body;
     if (name !== undefined && !name?.trim()) return res.status(400).json({ error: 'اسم المريض غير صالح' });
     if (phone !== undefined && !phone?.trim()) return res.status(400).json({ error: 'رقم الهاتف غير صالح' });
 
@@ -192,6 +227,10 @@ const update = async (req, res, next) => {
       ...(notes !== undefined && { notes }),
       ...(accountNotes !== undefined && { accountNotes }),
       ...(accountBalance !== undefined && { accountBalance: Number(accountBalance) || 0 }),
+      ...(accountingNotes !== undefined && { accountingNotes }),
+      ...(totalSpent !== undefined && { totalSpent: Number(totalSpent) || 0 }),
+      ...(lastPaymentDate !== undefined && { lastPaymentDate: lastPaymentDate ? new Date(lastPaymentDate) : null }),
+      ...(creditBalance !== undefined && { creditBalance: Number(creditBalance) || 0 }),
     };
     const shouldUpdateGroups = groupIds !== undefined || groupNames !== undefined;
 

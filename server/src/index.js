@@ -28,6 +28,8 @@ const prescriptionRoutes = require('./routes/prescriptions');
 const notificationsRoutes = require('./routes/notifications');
 const uploadRoutes = require('./routes/upload');
 const reviewRoutes = require('./routes/reviews');
+const contactRoutes = require('./routes/contacts');
+const discountRoutes = require('./routes/discounts');
 
 const app = express();
 
@@ -87,6 +89,8 @@ app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/contacts', contactRoutes);
+app.use('/api/discounts', discountRoutes);
 
 app.use(errorHandler);
 
