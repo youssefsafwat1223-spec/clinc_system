@@ -44,8 +44,15 @@ function PlatformBadge({ platform }) {
 }
 
 function formatDateTime(value) {
+  if (!value) return '';
   return format(parseISO(value), 'dd MMM yyyy - hh:mm a', { locale: ar });
 }
+
+const tabItems = [
+  { id: 'OVERVIEW', label: 'الملف والحسابات' },
+  { id: 'ACTIVITY', label: 'النشاط الأخير' },
+  { id: 'PRESCRIPTION', label: 'صرف روشتة' },
+];
 
 export default function PatientsPage() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -62,6 +69,7 @@ export default function PatientsPage() {
   const [patientDetailsLoading, setPatientDetailsLoading] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
   const [modalTab, setModalTab] = useState('OVERVIEW');
+
   const [notesDraft, setNotesDraft] = useState('');
   const [displayNameDraft, setDisplayNameDraft] = useState('');
   const [accountNotesDraft, setAccountNotesDraft] = useState('');
@@ -79,7 +87,6 @@ export default function PatientsPage() {
       const res = await api.get('/patients', {
         params: { page: currentPage, limit: 12, search: currentSearch || undefined },
       });
-
       setPatients(res.data.patients || []);
       setTotalPages(res.data.pagination?.pages || 1);
       setTotalPatients(res.data.pagination?.total || 0);
@@ -90,16 +97,21 @@ export default function PatientsPage() {
     }
   };
 
+  const hydrateDrafts = (patient) => {
+    setNotesDraft(patient?.notes || '');
+    setDisplayNameDraft(patient?.displayName || '');
+    setAccountNotesDraft(patient?.accountNotes || '');
+    setAccountBalanceDraft(String(patient?.accountBalance || 0));
+    setGroupNamesDraft((patient?.groups || []).map((item) => item.group?.name).filter(Boolean).join(', '));
+  };
+
   const fetchPatientDetails = async (patientId) => {
     try {
       setPatientDetailsLoading(true);
       const res = await api.get(`/patients/${patientId}`);
-      setPatientDetails(res.data.patient || null);
-      setNotesDraft(res.data.patient?.notes || '');
-      setDisplayNameDraft(res.data.patient?.displayName || '');
-      setAccountNotesDraft(res.data.patient?.accountNotes || '');
-      setAccountBalanceDraft(String(res.data.patient?.accountBalance || 0));
-      setGroupNamesDraft((res.data.patient?.groups || []).map((item) => item.group?.name).filter(Boolean).join(', '));
+      const patient = res.data.patient || null;
+      setPatientDetails(patient);
+      hydrateDrafts(patient);
     } catch (error) {
       toast.error('فشل في تحميل تفاصيل المريض');
     } finally {
@@ -125,18 +137,12 @@ export default function PatientsPage() {
     setSelectedPatient(null);
     setPatientDetails(null);
     setModalTab('OVERVIEW');
-    setNotesDraft('');
-    setDisplayNameDraft('');
-    setAccountNotesDraft('');
-    setAccountBalanceDraft('0');
-    setGroupNamesDraft('');
+    hydrateDrafts(null);
   };
 
   const handleSaveNotes = async () => {
     const activePatient = patientDetails || selectedPatient;
-    if (!activePatient) {
-      return;
-    }
+    if (!activePatient) return;
 
     try {
       setSavingNotes(true);
@@ -147,13 +153,15 @@ export default function PatientsPage() {
         accountBalance: accountBalanceDraft,
         groupNames: groupNamesDraft,
       });
-      toast.success('تم حفظ الملاحظات');
-      setPatientDetails((current) => (current ? { ...current, ...(response.data.patient || {}) } : current));
+
+      const updatedPatient = response.data.patient || {};
+      toast.success('تم حفظ بيانات المريض');
+      setPatientDetails((current) => (current ? { ...current, ...updatedPatient } : current));
       setPatients((current) =>
-        current.map((patient) => (patient.id === activePatient.id ? { ...patient, ...(response.data.patient || {}) } : patient))
+        current.map((patient) => (patient.id === activePatient.id ? { ...patient, ...updatedPatient } : patient))
       );
     } catch (error) {
-      toast.error('فشل في حفظ الملاحظات');
+      toast.error(error.message || 'فشل في حفظ بيانات المريض');
     } finally {
       setSavingNotes(false);
     }
@@ -161,14 +169,11 @@ export default function PatientsPage() {
 
   const handleCreatePrescription = async (event) => {
     event.preventDefault();
+    const activePatient = patientDetails || selectedPatient;
+    if (!activePatient) return;
 
     if (!rxDiagnosis.trim() || !rxMedicines.trim()) {
       toast.error('التشخيص والأدوية مطلوبان');
-      return;
-    }
-
-    const activePatient = patientDetails || selectedPatient;
-    if (!activePatient) {
       return;
     }
 
@@ -183,22 +188,18 @@ export default function PatientsPage() {
 
       const prescriptionId = res.data.prescription.id;
       await api.post(`/prescriptions/${prescriptionId}/send`);
+      toast.success('تم حفظ الروشتة وإرسالها للمريض');
 
-      toast.success('تم حفظ الروشتة وإرسالها للمريض بنجاح');
-
-      // Add to local history so it appears instantly
-      if (res.data.prescription) {
-        setPatientDetails((prev) => prev ? {
-          ...prev,
-          prescriptions: [res.data.prescription, ...(prev.prescriptions || [])],
-        } : prev);
-      }
-
+      setPatientDetails((current) =>
+        current
+          ? { ...current, prescriptions: [res.data.prescription, ...(current.prescriptions || [])] }
+          : current
+      );
       setRxDiagnosis('');
       setRxMedicines('');
       setRxNotes('');
     } catch (error) {
-      toast.error(error.response?.data?.error || 'فشل في إنشاء أو إرسال الروشتة');
+      toast.error(error.message || 'فشل في إنشاء أو إرسال الروشتة');
     } finally {
       setRxSending(false);
     }
@@ -223,6 +224,7 @@ export default function PatientsPage() {
   const patientAppointments = patientDetails?.appointments || [];
   const patientMessages = patientDetails?.messages || [];
   const patientPrescriptions = patientDetails?.prescriptions || [];
+  const displayPatientName = activePatient?.displayName || activePatient?.name || 'مريض بدون اسم';
 
   return (
     <AppLayout>
@@ -233,16 +235,12 @@ export default function PatientsPage() {
               {isDoctor ? 'سجل المرضى والمتابعة' : 'سجل المرضى'}
             </h1>
             <p className="mt-1 text-sm text-dark-muted">
-              {isDoctor
-                ? 'واجهة أسرع لمراجعة المرضى، الملاحظات الطبية، وآخر المواعيد والرسائل لكل حالة.'
-                : 'إدارة بيانات المرضى ومراجعة نشاطهم داخل النظام من مكان واحد.'}
+              عرض ملفات المرضى، الملاحظات الطبية، الحسابات، المجموعات، والروشتات من مكان واحد.
             </p>
           </div>
 
           <div className="relative w-full md:w-96">
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-              <Search className="h-5 w-5 text-dark-muted" />
-            </div>
+            <Search className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-dark-muted" />
             <input
               type="text"
               placeholder="ابحث بالاسم أو رقم الهاتف..."
@@ -257,40 +255,16 @@ export default function PatientsPage() {
         </div>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard
-            title={isDoctor ? 'المرضى الظاهرون حاليًا' : 'إجمالي المرضى'}
-            value={totalPatients}
-            hint="حسب الفلتر الحالي ونتائج البحث"
-            icon={Users}
-            accentClass="border-primary-500/20"
-          />
-          <SummaryCard
-            title="إجمالي المواعيد"
-            value={visiblePatientsAppointments}
-            hint="في الصفحة الحالية فقط"
-            icon={Calendar}
-            accentClass="border-emerald-500/20"
-          />
-          <SummaryCard
-            title="إجمالي الرسائل"
-            value={visiblePatientsMessages}
-            hint="في الصفحة الحالية فقط"
-            icon={MessageSquare}
-            accentClass="border-sky-500/20"
-          />
-          <SummaryCard
-            title="مرضى واتساب"
-            value={whatsappPatients}
-            hint={`صفحة ${page} من ${totalPages}`}
-            icon={Phone}
-            accentClass="border-amber-500/20"
-          />
+          <SummaryCard title="إجمالي المرضى" value={totalPatients} hint="حسب البحث الحالي" icon={Users} accentClass="border-primary-500/20" />
+          <SummaryCard title="مواعيد الصفحة" value={visiblePatientsAppointments} hint="إجمالي النشاط المعروض" icon={Calendar} accentClass="border-emerald-500/20" />
+          <SummaryCard title="رسائل الصفحة" value={visiblePatientsMessages} hint="إجمالي الرسائل المعروضة" icon={MessageSquare} accentClass="border-sky-500/20" />
+          <SummaryCard title="مرضى واتساب" value={whatsappPatients} hint={`صفحة ${page} من ${totalPages}`} icon={Phone} accentClass="border-amber-500/20" />
         </section>
 
         <div className="flex-1">
           {loading && patients.length === 0 ? (
             <div className="flex h-64 items-center justify-center">
-              <span className="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></span>
+              <span className="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
             </div>
           ) : patients.length === 0 ? (
             <div className="glass-card flex flex-col items-center justify-center p-16 text-dark-muted">
@@ -303,65 +277,26 @@ export default function PatientsPage() {
                 <button
                   key={patient.id}
                   onClick={() => openPatientModal(patient)}
-                  className="glass-card group flex flex-col overflow-hidden text-right transition-colors hover:border-primary-500/40"
+                  className="glass-card group flex min-h-[260px] flex-col overflow-hidden text-right transition-colors hover:border-primary-500/40"
                 >
                   <div className="flex items-start gap-4 border-b border-dark-border/50 bg-gradient-to-b from-dark-card to-dark-bg/30 p-5">
-                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-600/50 bg-slate-700/50 shadow-inner transition-all group-hover:border-primary-500/30 group-hover:bg-primary-500/15">
-                      <UserRound className="h-6 w-6 text-slate-300 transition-colors group-hover:text-primary-300" />
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-600/50 bg-slate-700/50">
+                      <UserRound className="h-6 w-6 text-slate-300" />
                     </div>
-
                     <div className="min-w-0 flex-1">
                       <div className="mb-2 flex items-start justify-between gap-3">
                         <h3 className="truncate text-base font-bold leading-tight text-white">
-                          {patient.name || 'مريض بدون اسم واضح'}
+                          {patient.displayName || patient.name || 'مريض بدون اسم'}
                         </h3>
                         <PlatformBadge platform={patient.platform} />
                       </div>
-
-                      <p className="flex items-center justify-end gap-1.5 text-xs font-medium tracking-wide text-dark-muted" dir="ltr">
+                      {patient.displayName && patient.name ? (
+                        <p className="truncate text-xs text-slate-500">{patient.name}</p>
+                      ) : null}
+                      <p className="mt-1 flex items-center justify-end gap-1.5 text-xs font-medium tracking-wide text-dark-muted" dir="ltr">
                         {patient.phone || 'No phone'}
                         <Phone className="h-3 w-3" />
                       </p>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold text-slate-300">اسم العرض داخل النظام</label>
-                        <input
-                          value={displayNameDraft}
-                          onChange={(event) => setDisplayNameDraft(event.target.value)}
-                          className="input-field"
-                          placeholder={activePatient?.name || 'اسم مختصر للمحادثات'}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold text-slate-300">مجموعات التسويق</label>
-                        <input
-                          value={groupNamesDraft}
-                          onChange={(event) => setGroupNamesDraft(event.target.value)}
-                          className="input-field"
-                          placeholder="VIP, تقويم, تنظيف"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold text-slate-300">الرصيد / المتبقي</label>
-                        <input
-                          type="number"
-                          value={accountBalanceDraft}
-                          onChange={(event) => setAccountBalanceDraft(event.target.value)}
-                          className="input-field"
-                          placeholder="0"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-bold text-slate-300">ملاحظات الحسابات</label>
-                        <input
-                          value={accountNotesDraft}
-                          onChange={(event) => setAccountNotesDraft(event.target.value)}
-                          className="input-field"
-                          placeholder="خصم خاص، تقسيط، دفعة مقدمة..."
-                        />
-                      </div>
                     </div>
                   </div>
 
@@ -374,7 +309,6 @@ export default function PatientsPage() {
                           {patient._count?.appointments || 0}
                         </div>
                       </div>
-
                       <div className="rounded-xl border border-dark-border/40 bg-dark-bg/60 p-3">
                         <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-dark-muted">الرسائل</span>
                         <div className="flex items-center gap-1.5 text-lg font-bold text-white">
@@ -384,12 +318,22 @@ export default function PatientsPage() {
                       </div>
                     </div>
 
-                    {patient.notes ? (
-                      <div className="min-h-[78px] rounded-xl border border-primary-500/15 bg-primary-500/5 p-3 text-xs leading-6 text-slate-300">
-                        {patient.notes}
+                    {patient.groups?.length ? (
+                      <div className="mb-3 flex flex-wrap gap-2">
+                        {patient.groups.slice(0, 3).map((item) => (
+                          <span key={item.id} className="rounded-full bg-primary-500/10 px-2 py-1 text-[10px] font-bold text-primary-300">
+                            {item.group?.name}
+                          </span>
+                        ))}
                       </div>
+                    ) : null}
+
+                    {patient.notes ? (
+                      <p className="line-clamp-3 rounded-xl border border-primary-500/15 bg-primary-500/5 p-3 text-xs leading-6 text-slate-300">
+                        {patient.notes}
+                      </p>
                     ) : (
-                      <div className="flex min-h-[78px] items-center justify-center rounded-xl border border-dark-border/40 bg-dark-bg/30 px-3 text-xs italic text-dark-muted">
+                      <div className="flex min-h-[72px] items-center justify-center rounded-xl border border-dark-border/40 bg-dark-bg/30 px-3 text-xs italic text-dark-muted">
                         لا توجد ملاحظات مسجلة
                       </div>
                     )}
@@ -397,7 +341,7 @@ export default function PatientsPage() {
 
                   <div className="flex items-center justify-between border-t border-dark-border/50 bg-dark-bg/30 px-5 py-3 text-[11px] font-bold text-slate-400">
                     <span>فتح الملف</span>
-                    <span>{patient._count?.appointments ? 'له نشاط سابق' : 'بدون مواعيد'}</span>
+                    <span>{patient.accountBalance ? `${Number(patient.accountBalance).toLocaleString('ar-IQ')} متبقي` : 'بدون رصيد'}</span>
                   </div>
                 </button>
               ))}
@@ -405,7 +349,7 @@ export default function PatientsPage() {
           )}
         </div>
 
-        {totalPages > 1 && (
+        {totalPages > 1 ? (
           <div className="mt-8 flex justify-center">
             <div className="flex items-center gap-2 rounded-xl border border-dark-border bg-dark-card p-1.5 shadow-lg">
               <button
@@ -415,15 +359,9 @@ export default function PatientsPage() {
               >
                 السابق
               </button>
-
-              <div className="flex items-center gap-1 px-4">
-                <span className="flex h-8 w-8 items-center justify-center rounded-lg border border-primary-500/30 bg-primary-500/20 font-bold text-primary-400">
-                  {page}
-                </span>
-                <span className="mx-1 text-sm text-dark-muted">من</span>
-                <span className="text-sm font-medium text-slate-300">{totalPages}</span>
-              </div>
-
+              <span className="px-4 text-sm text-slate-300">
+                {page} من {totalPages}
+              </span>
               <button
                 onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                 disabled={page === totalPages}
@@ -433,28 +371,24 @@ export default function PatientsPage() {
               </button>
             </div>
           </div>
-        )}
+        ) : null}
 
-        {selectedPatient && (
+        {selectedPatient ? (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-dark-bg/80 p-4 backdrop-blur-sm">
             <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-dark-border bg-dark-card shadow-2xl">
               <div className="flex shrink-0 items-start justify-between gap-4 border-b border-dark-border bg-dark-bg/30 p-6">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500 shadow-lg shadow-primary-500/20">
+                <div className="flex min-w-0 items-start gap-4">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary-500 shadow-lg shadow-primary-500/20">
                     <Users className="h-6 w-6 text-white" />
                   </div>
-
-                  <div>
+                  <div className="min-w-0">
                     <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <h2 className="text-xl font-bold text-white">{activePatient?.name || selectedPatient.name}</h2>
+                      <h2 className="truncate text-xl font-bold text-white">{displayPatientName}</h2>
                       <PlatformBadge platform={activePatient?.platform || selectedPatient.platform} />
                     </div>
-                    <p className="text-xs text-primary-300" dir="ltr">
-                      {activePatient?.phone || selectedPatient.phone}
-                    </p>
+                    <p className="text-xs text-primary-300" dir="ltr">{activePatient?.phone || selectedPatient.phone}</p>
                   </div>
                 </div>
-
                 <button
                   onClick={closePatientModal}
                   className="rounded-lg border border-dark-border bg-dark-bg/50 p-2 text-dark-muted transition-colors hover:text-white"
@@ -465,11 +399,7 @@ export default function PatientsPage() {
 
               <div className="shrink-0 border-b border-dark-border bg-dark-bg/10 px-6">
                 <div className="flex flex-wrap gap-1">
-                  {[
-                    { id: 'OVERVIEW', label: 'الملف والملاحظات' },
-                    { id: 'ACTIVITY', label: 'النشاط الأخير' },
-                    { id: 'PRESCRIPTION', label: 'صرف روشتة' },
-                  ].map((tab) => (
+                  {tabItems.map((tab) => (
                     <button
                       key={tab.id}
                       onClick={() => setModalTab(tab.id)}
@@ -488,35 +418,33 @@ export default function PatientsPage() {
               <div className="flex-1 overflow-y-auto p-6">
                 {patientDetailsLoading && !patientDetails ? (
                   <div className="flex h-64 items-center justify-center">
-                    <span className="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></span>
+                    <span className="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
                   </div>
                 ) : modalTab === 'OVERVIEW' ? (
-                  <div className="space-y-6 fade-in">
-                    <div className="grid gap-4 md:grid-cols-3">
-                      <div className="rounded-xl border border-dark-border bg-dark-bg/50 p-4">
-                        <span className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-dark-muted">
-                          <Calendar className="h-3.5 w-3.5" />
-                          المواعيد
-                        </span>
-                        <span className="text-2xl font-bold text-white">{patientAppointments.length || selectedPatient._count?.appointments || 0}</span>
-                      </div>
+                  <div className="space-y-6">
+                    <div className="grid gap-4 md:grid-cols-4">
+                      <SummaryCard title="المواعيد" value={patientAppointments.length || selectedPatient._count?.appointments || 0} hint="كل الحجوزات" icon={Calendar} accentClass="border-emerald-500/20" />
+                      <SummaryCard title="الرسائل" value={patientMessages.length || selectedPatient._count?.messages || 0} hint="آخر 50 رسالة" icon={MessageSquare} accentClass="border-sky-500/20" />
+                      <SummaryCard title="الروشتات" value={patientPrescriptions.length} hint="سجل العلاج" icon={Pill} accentClass="border-primary-500/20" />
+                      <SummaryCard title="الرصيد" value={Number(accountBalanceDraft || 0).toLocaleString('ar-IQ')} hint="متبقي أو ملاحظة حسابية" icon={FileText} accentClass="border-amber-500/20" />
+                    </div>
 
-                      <div className="rounded-xl border border-dark-border bg-dark-bg/50 p-4">
-                        <span className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-dark-muted">
-                          <MessageSquare className="h-3.5 w-3.5" />
-                          الرسائل
-                        </span>
-                        <span className="text-2xl font-bold text-white">{patientMessages.length || selectedPatient._count?.messages || 0}</span>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-300">اسم العرض داخل النظام</label>
+                        <input value={displayNameDraft} onChange={(event) => setDisplayNameDraft(event.target.value)} className="input-field" placeholder={activePatient?.name || 'اسم مختصر'} />
                       </div>
-
-                      <div className="rounded-xl border border-dark-border bg-dark-bg/50 p-4">
-                        <span className="mb-1 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-dark-muted">
-                          <Phone className="h-3.5 w-3.5" />
-                          التواصل
-                        </span>
-                        <span className="text-sm font-bold text-white" dir="ltr">
-                          {activePatient?.phone || selectedPatient.phone}
-                        </span>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-300">مجموعات التسويق</label>
+                        <input value={groupNamesDraft} onChange={(event) => setGroupNamesDraft(event.target.value)} className="input-field" placeholder="VIP, تقويم, تنظيف" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-300">الرصيد / المتبقي</label>
+                        <input type="number" value={accountBalanceDraft} onChange={(event) => setAccountBalanceDraft(event.target.value)} className="input-field" placeholder="0" />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-300">ملاحظات الحسابات</label>
+                        <input value={accountNotesDraft} onChange={(event) => setAccountNotesDraft(event.target.value)} className="input-field" placeholder="خصم خاص، تقسيط، دفعة مقدمة..." />
                       </div>
                     </div>
 
@@ -526,215 +454,110 @@ export default function PatientsPage() {
                           <FileText className="h-4 w-4 text-primary-400" />
                           ملاحظات طبية وإدارية
                         </label>
-                        <button
-                          onClick={handleSaveNotes}
-                          disabled={savingNotes}
-                          className="btn-secondary h-10 px-4 text-sm"
-                        >
-                          {savingNotes ? (
-                            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent"></span>
-                          ) : (
-                            <Save className="h-4 w-4" />
-                          )}
+                        <button onClick={handleSaveNotes} disabled={savingNotes} className="btn-secondary h-10 px-4 text-sm">
+                          {savingNotes ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Save className="h-4 w-4" />}
                           حفظ
                         </button>
                       </div>
-
                       <textarea
                         value={notesDraft}
                         onChange={(event) => setNotesDraft(event.target.value)}
-                        className="h-40 w-full resize-none rounded-xl border border-dark-border bg-dark-bg/80 p-4 text-sm leading-7 text-white shadow-inner transition-all focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
-                        placeholder="أضف ملاحظات حول الحالة، التاريخ الطبي، أو أي تعليمات داخلية مهمة."
+                        className="h-44 w-full resize-none rounded-xl border border-dark-border bg-dark-bg/80 p-4 text-sm leading-7 text-white shadow-inner focus:border-primary-500/50 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
+                        placeholder="أضف ملاحظات الحالة أو تعليمات داخلية مهمة."
                       />
                     </div>
                   </div>
                 ) : modalTab === 'ACTIVITY' ? (
-                  <div className="grid gap-6 lg:grid-cols-2 fade-in">
+                  <div className="grid gap-6 lg:grid-cols-2">
                     <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-emerald-400" />
-                        <h3 className="font-bold text-white">آخر المواعيد</h3>
-                      </div>
-
+                      <h3 className="flex items-center gap-2 font-bold text-white"><Calendar className="h-4 w-4 text-emerald-400" /> آخر المواعيد</h3>
                       {patientAppointments.length > 0 ? (
                         <div className="space-y-3">
-                          {patientAppointments.slice(0, 8).map((appointment) => (
+                          {patientAppointments.slice(0, 10).map((appointment) => (
                             <div key={appointment.id} className="rounded-xl border border-dark-border bg-dark-bg/50 p-4">
                               <div className="mb-2 flex items-start justify-between gap-3">
                                 <div>
                                   <p className="font-bold text-white">{appointment.service?.nameAr || 'خدمة غير معروفة'}</p>
-                                  <p className="mt-1 text-xs text-slate-400">
-                                    {appointment.doctor?.name ? `د. ${appointment.doctor.name}` : 'بدون طبيب'}
-                                  </p>
+                                  <p className="mt-1 text-xs text-slate-400">{appointment.doctor?.name ? `د. ${appointment.doctor.name}` : 'بدون طبيب'}</p>
                                 </div>
-                                <span className="rounded-full bg-dark-bg px-2.5 py-1 text-[10px] font-bold text-slate-300">
-                                  {appointment.status}
-                                </span>
+                                <span className="rounded-full bg-dark-bg px-2.5 py-1 text-[10px] font-bold text-slate-300">{appointment.status}</span>
                               </div>
-                              <p className="text-xs text-slate-300" dir="ltr">
-                                {formatDateTime(appointment.scheduledTime)}
-                              </p>
+                              <p className="text-xs text-slate-300" dir="ltr">{formatDateTime(appointment.scheduledTime)}</p>
                             </div>
                           ))}
                         </div>
-                      ) : (
-                        <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-6 text-center text-sm text-dark-muted">
-                          لا توجد مواعيد مسجلة لهذا المريض.
-                        </div>
-                      )}
+                      ) : <EmptyState text="لا توجد مواعيد مسجلة لهذا المريض." />}
                     </div>
 
                     <div className="space-y-4">
-                      <div className="flex items-center gap-2">
-                        <MessageSquare className="h-4 w-4 text-sky-400" />
-                        <h3 className="font-bold text-white">آخر الرسائل</h3>
-                      </div>
-
+                      <h3 className="flex items-center gap-2 font-bold text-white"><MessageSquare className="h-4 w-4 text-sky-400" /> آخر الرسائل</h3>
                       {patientMessages.length > 0 ? (
                         <div className="space-y-3">
-                          {patientMessages.slice(0, 8).map((message) => (
+                          {patientMessages.slice(0, 10).map((message) => (
                             <div key={message.id} className="rounded-xl border border-dark-border bg-dark-bg/50 p-4">
                               <div className="mb-2 flex items-center justify-between gap-3">
-                                <span
-                                  className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${
-                                    message.type === 'OUTBOUND'
-                                      ? 'bg-primary-500/10 text-primary-300'
-                                      : 'bg-slate-700/70 text-slate-300'
-                                  }`}
-                                >
+                                <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${message.type === 'OUTBOUND' ? 'bg-primary-500/10 text-primary-300' : 'bg-slate-700/70 text-slate-300'}`}>
                                   {message.type === 'OUTBOUND' ? 'صادر' : 'وارد'}
                                 </span>
-                                <span className="text-[10px] text-slate-500" dir="ltr">
-                                  {formatDateTime(message.createdAt)}
-                                </span>
+                                <span className="text-[10px] text-slate-500" dir="ltr">{formatDateTime(message.createdAt)}</span>
                               </div>
-                              <p className="text-sm leading-6 text-slate-300">{message.content}</p>
+                              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-300">{message.content}</p>
                             </div>
                           ))}
                         </div>
-                      ) : (
-                        <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-6 text-center text-sm text-dark-muted">
-                          لا توجد رسائل محفوظة لهذا المريض.
-                        </div>
-                      )}
+                      ) : <EmptyState text="لا توجد رسائل محفوظة لهذا المريض." />}
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-6 fade-in">
-                    {/* ── New prescription form ── */}
-                    <div className="rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-emerald-950/20 to-dark-card p-5">
+                  <div className="space-y-6">
+                    <form onSubmit={handleCreatePrescription} className="rounded-2xl border border-emerald-500/20 bg-gradient-to-b from-emerald-950/20 to-dark-card p-5">
                       <div className="mb-5 flex items-center gap-3">
                         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/15">
                           <Pill className="h-5 w-5 text-emerald-400" />
                         </div>
                         <div>
                           <h3 className="text-sm font-bold text-white">إصدار روشتة جديدة</h3>
-                          <p className="text-xs text-slate-400">
-                            سيتم إرسالها فوراً لرقم{' '}
-                            <span dir="ltr" className="font-medium text-emerald-300">{activePatient?.phone || selectedPatient.phone}</span>
-                          </p>
+                          <p className="text-xs text-slate-400">سيتم إرسالها لرقم <span dir="ltr" className="font-medium text-emerald-300">{activePatient?.phone || selectedPatient.phone}</span></p>
                         </div>
                       </div>
 
-                      <form onSubmit={handleCreatePrescription} className="space-y-4">
-                        <div>
-                          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">التشخيص الطبي *</label>
-                          <input
-                            type="text"
-                            value={rxDiagnosis}
-                            onChange={(event) => setRxDiagnosis(event.target.value)}
-                            className="w-full rounded-xl border border-dark-border bg-dark-bg/80 px-4 py-3 text-sm text-white shadow-inner transition-colors focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                            placeholder="مثال: التهاب لثة حاد"
-                            required
-                          />
-                        </div>
+                      <div className="space-y-4">
+                        <Field label="التشخيص الطبي *">
+                          <input value={rxDiagnosis} onChange={(event) => setRxDiagnosis(event.target.value)} className="input-field" placeholder="مثال: التهاب لثة حاد" required />
+                        </Field>
+                        <Field label="الأدوية والجرعات *">
+                          <textarea value={rxMedicines} onChange={(event) => setRxMedicines(event.target.value)} className="h-32 w-full resize-none rounded-xl border border-dark-border bg-dark-bg/80 px-4 py-3 text-sm leading-relaxed text-white" dir="auto" placeholder={'Panadol 500mg - كل 8 ساعات\nAmoxil 500mg - كل 12 ساعة'} required />
+                        </Field>
+                        <Field label="ملاحظات إضافية">
+                          <textarea value={rxNotes} onChange={(event) => setRxNotes(event.target.value)} className="h-20 w-full resize-none rounded-xl border border-dark-border bg-dark-bg/80 px-4 py-3 text-sm text-white" placeholder="تعليمات ما بعد الكشف أو تنبيهات للمريض" />
+                        </Field>
+                      </div>
 
-                        <div>
-                          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">الأدوية والجرعات *</label>
-                          <textarea
-                            value={rxMedicines}
-                            onChange={(event) => setRxMedicines(event.target.value)}
-                            className="h-32 w-full resize-none rounded-xl border border-dark-border bg-dark-bg/80 px-4 py-3 text-sm leading-relaxed text-white shadow-inner transition-colors focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                            dir="auto"
-                            placeholder={`Panadol Advance 500mg - 1 tablet every 8 hours\nAmoxil 500mg - 1 capsule every 12 hours`}
-                            required
-                          />
-                        </div>
+                      <div className="mt-5 flex justify-end border-t border-dark-border/50 pt-4">
+                        <button type="submit" disabled={rxSending} className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white disabled:opacity-60">
+                          {rxSending ? <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Send className="h-4 w-4 rtl:-scale-x-100" />}
+                          {rxSending ? 'جاري الإرسال...' : 'حفظ وإرسال للمريض'}
+                        </button>
+                      </div>
+                    </form>
 
-                        <div>
-                          <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">ملاحظات إضافية</label>
-                          <textarea
-                            value={rxNotes}
-                            onChange={(event) => setRxNotes(event.target.value)}
-                            className="h-20 w-full resize-none rounded-xl border border-dark-border bg-dark-bg/80 px-4 py-3 text-sm text-white shadow-inner transition-colors focus:border-emerald-500/50 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-                            placeholder="تعليمات ما بعد الكشف أو تنبيهات للمريض"
-                          />
-                        </div>
-
-                        <div className="flex justify-end border-t border-dark-border/50 pt-4">
-                          <button
-                            type="submit"
-                            disabled={rxSending}
-                            className="flex items-center gap-2 rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-500 hover:shadow-emerald-500/30 disabled:cursor-not-allowed disabled:opacity-60"
-                          >
-                            {rxSending ? (
-                              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                            ) : (
-                              <Send className="h-4 w-4 rtl:-scale-x-100" />
-                            )}
-                            {rxSending ? 'جاري الإرسال...' : 'حفظ وإرسال للمريض'}
-                          </button>
-                        </div>
-                      </form>
-                    </div>
-
-                    {/* ── Prescription history ── */}
                     <div>
-                      <div className="mb-3 flex items-center gap-2">
+                      <h3 className="mb-3 flex items-center gap-2 font-bold text-white">
                         <ClipboardList className="h-4 w-4 text-emerald-400" />
-                        <h3 className="font-bold text-white">سجل الروشتات السابقة</h3>
+                        سجل الروشتات السابقة
                         <span className="rounded-full bg-dark-bg px-2 py-0.5 text-[10px] font-bold text-slate-400">{patientPrescriptions.length}</span>
-                      </div>
-
+                      </h3>
                       {patientPrescriptions.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-dark-border bg-dark-bg/30 p-8 text-center">
-                          <Pill className="mx-auto mb-3 h-8 w-8 text-dark-muted opacity-30" />
-                          <p className="text-sm text-dark-muted">لم يتم صرف روشتات لهذا المريض بعد.</p>
-                        </div>
+                        <EmptyState text="لم يتم صرف روشتات لهذا المريض بعد." />
                       ) : (
                         <div className="space-y-3">
                           {patientPrescriptions.map((rx) => {
-                            const meds = Array.isArray(rx.medications)
-                              ? rx.medications.filter(Boolean).join(' • ')
-                              : typeof rx.medications === 'string'
-                                ? rx.medications
-                                : '';
-
+                            const meds = Array.isArray(rx.medications) ? rx.medications.filter(Boolean).join(' - ') : '';
                             return (
-                              <div key={rx.id} className="rounded-xl border border-dark-border bg-dark-bg/40 p-4 transition-colors hover:border-emerald-500/20">
-                                <div className="mb-2 flex items-start justify-between gap-3">
-                                  <div className="flex items-center gap-2">
-                                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10">
-                                      <FileText className="h-3.5 w-3.5 text-emerald-400" />
-                                    </div>
-                                    <div>
-                                      <p className="text-sm font-bold text-white">{rx.diagnosis || 'بدون تشخيص'}</p>
-                                      <p className="text-[10px] text-slate-500">
-                                        {rx.doctor?.name ? `د. ${rx.doctor.name}` : ''}
-                                        {rx.doctor?.name && rx.createdAt ? ' • ' : ''}
-                                        {rx.createdAt ? format(parseISO(rx.createdAt), 'dd MMM yyyy - hh:mm a', { locale: ar }) : ''}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {meds ? (
-                                  <p className="mt-2 line-clamp-2 rounded-lg bg-dark-bg/60 px-3 py-2 text-xs leading-6 text-slate-300">{meds}</p>
-                                ) : null}
-
-                                {rx.notes ? (
-                                  <p className="mt-2 text-xs italic text-slate-500">ملاحظات: {rx.notes}</p>
-                                ) : null}
+                              <div key={rx.id} className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
+                                <p className="text-sm font-bold text-white">{rx.diagnosis || 'بدون تشخيص'}</p>
+                                <p className="mt-1 text-[10px] text-slate-500">{rx.createdAt ? formatDateTime(rx.createdAt) : ''}</p>
+                                {meds ? <p className="mt-2 line-clamp-2 rounded-lg bg-dark-bg/60 px-3 py-2 text-xs leading-6 text-slate-300">{meds}</p> : null}
                               </div>
                             );
                           })}
@@ -746,8 +569,25 @@ export default function PatientsPage() {
               </div>
             </div>
           </div>
-        )}
+        ) : null}
       </div>
     </AppLayout>
+  );
+}
+
+function Field({ label, children }) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function EmptyState({ text }) {
+  return (
+    <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-6 text-center text-sm text-dark-muted">
+      {text}
+    </div>
   );
 }
