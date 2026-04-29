@@ -24,44 +24,59 @@ const formatTimeAr = (date) => {
 /**
  * Generate available time slots for a given date & doctor's working hours
  */
+const normalizeWorkingPeriods = (hours) => {
+  if (!hours) return [];
+  if (Array.isArray(hours)) {
+    return hours.filter((period) => period && period.start && period.end);
+  }
+  if (hours.start && hours.end) return [hours];
+  if (Array.isArray(hours.periods)) {
+    return hours.periods.filter((period) => period && period.start && period.end);
+  }
+  return [];
+};
+
 const generateTimeSlots = (date, workingHours, duration = 30, bookedSlots = []) => {
   const dayOfWeek = new Date(date).getDay();
   const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
   const dayKey = dayNames[dayOfWeek];
 
-  const hours = workingHours[dayKey];
-  if (!hours || !hours.start || !hours.end) return [];
+  const periods = normalizeWorkingPeriods(workingHours?.[dayKey]);
+  if (periods.length === 0) return [];
 
   const slots = [];
-  const [startH, startM] = hours.start.split(':').map(Number);
-  const [endH, endM] = hours.end.split(':').map(Number);
 
-  let current = new Date(date);
-  current.setHours(startH, startM, 0, 0);
+  periods.forEach((hours) => {
+    const [startH, startM] = hours.start.split(':').map(Number);
+    const [endH, endM] = hours.end.split(':').map(Number);
 
-  const end = new Date(date);
-  end.setHours(endH, endM, 0, 0);
+    let current = new Date(date);
+    current.setHours(startH, startM, 0, 0);
 
-  while (current < end) {
-    const slotTime = new Date(current);
-    const slotEnd = new Date(slotTime.getTime() + duration * 60 * 1000);
-    const isBooked = bookedSlots.some((booked) => {
-      const bookedStart = new Date(booked.start || booked).getTime();
-      const bookedEnd = new Date(
-        booked.end || bookedStart + (booked.duration || duration) * 60 * 1000
-      ).getTime();
-      return slotTime.getTime() < bookedEnd && slotEnd.getTime() > bookedStart;
-    });
+    const end = new Date(date);
+    end.setHours(endH, endM, 0, 0);
 
-    if (!isBooked && slotTime > new Date() && slotEnd <= end) {
-      slots.push({
-        time: slotTime.toISOString(),
-        label: `${formatDateAr(slotTime)} ${formatTimeAr(slotTime)}`,
+    while (current < end) {
+      const slotTime = new Date(current);
+      const slotEnd = new Date(slotTime.getTime() + duration * 60 * 1000);
+      const isBooked = bookedSlots.some((booked) => {
+        const bookedStart = new Date(booked.start || booked).getTime();
+        const bookedEnd = new Date(
+          booked.end || bookedStart + (booked.duration || duration) * 60 * 1000
+        ).getTime();
+        return slotTime.getTime() < bookedEnd && slotEnd.getTime() > bookedStart;
       });
-    }
 
-    current.setMinutes(current.getMinutes() + duration);
-  }
+      if (!isBooked && slotTime > new Date() && slotEnd <= end) {
+        slots.push({
+          time: slotTime.toISOString(),
+          label: `${formatDateAr(slotTime)} ${formatTimeAr(slotTime)}`,
+        });
+      }
+
+      current.setMinutes(current.getMinutes() + duration);
+    }
+  });
 
   return slots;
 };
@@ -99,6 +114,7 @@ const paginate = (page = 1, limit = 20) => {
 module.exports = {
   formatDateAr,
   formatTimeAr,
+  normalizeWorkingPeriods,
   generateTimeSlots,
   hasConflict,
   formatCurrency,

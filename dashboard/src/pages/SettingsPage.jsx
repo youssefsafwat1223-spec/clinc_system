@@ -219,6 +219,54 @@ export default function SettingsPage() {
           </section>
 
           <section>
+            <h2 className="mb-4 border-b border-dark-border pb-2 text-lg font-bold text-white">براند الروشتة والرسائل</h2>
+
+            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-dark-muted">رابط لوجو العيادة</label>
+                <input
+                  type="text"
+                  dir="ltr"
+                  placeholder="/uploads/logo.png أو https://..."
+                  value={settings?.brandLogoUrl || ''}
+                  onChange={(event) => updateField('brandLogoUrl', event.target.value)}
+                  className="input-field"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-dark-muted">ملاحظة أسفل الروشتة</label>
+                <input
+                  type="text"
+                  value={settings?.prescriptionFooter || ''}
+                  onChange={(event) => updateField('prescriptionFooter', event.target.value)}
+                  className="input-field"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-dark-muted">اللون الأساسي</label>
+                <input
+                  type="color"
+                  value={settings?.brandPrimaryColor || '#0B1929'}
+                  onChange={(event) => updateField('brandPrimaryColor', event.target.value)}
+                  className="h-12 w-full rounded-xl border border-dark-border bg-dark-bg p-1"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium text-dark-muted">لون التمييز</label>
+                <input
+                  type="color"
+                  value={settings?.brandSecondaryColor || '#C9A84C'}
+                  onChange={(event) => updateField('brandSecondaryColor', event.target.value)}
+                  className="h-12 w-full rounded-xl border border-dark-border bg-dark-bg p-1"
+                />
+              </div>
+            </div>
+          </section>
+
+          <section>
             <h2 className="mb-4 border-b border-dark-border pb-2 text-lg font-bold text-white">ساعات العمل الموحدة</h2>
 
             <div className="mb-6 flex gap-3 rounded-xl border border-primary-500/20 bg-primary-500/10 p-4">

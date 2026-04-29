@@ -103,7 +103,7 @@ const createOutboundMessage = async ({ patientId, platform, content, metadata = 
 
 const getAll = async (req, res, next) => {
   try {
-    const { page = 1, limit = 50, platform, patientId } = req.query;
+    const { page = 1, limit = 50, platform, patientId, unread, humanOnly } = req.query;
     const { skip, take } = paginate(Number(page), Number(limit));
     const scopedPatientIds = await getScopedPatientIds(req);
 
@@ -119,6 +119,11 @@ const getAll = async (req, res, next) => {
       where.platform = platform;
     }
 
+    if (unread === 'true') {
+      where.type = 'INBOUND';
+      where.readAt = null;
+    }
+
     if (scopedPatientIds) {
       where.patientId = patientId
         ? { in: scopedPatientIds.filter((id) => id === patientId) }
@@ -127,9 +132,10 @@ const getAll = async (req, res, next) => {
       where.patientId = patientId;
     }
 
+    const patientWhere = humanOnly === 'true' ? { chatState: 'HUMAN' } : undefined;
     const [messages, total] = await Promise.all([
       prisma.message.findMany({
-        where,
+        where: patientWhere ? { ...where, patient: patientWhere } : where,
         skip,
         take,
         orderBy: { createdAt: 'desc' },
@@ -141,11 +147,12 @@ const getAll = async (req, res, next) => {
               phone: true,
               platform: true,
               chatState: true,
+              displayName: true,
             },
           },
         },
       }),
-      prisma.message.count({ where }),
+      prisma.message.count({ where: patientWhere ? { ...where, patient: patientWhere } : where }),
     ]);
 
     res.json({
@@ -177,15 +184,20 @@ const getConversation = async (req, res, next) => {
         orderBy: { createdAt: 'asc' },
         include: {
           patient: {
-            select: { name: true, phone: true, platform: true },
+            select: { name: true, displayName: true, phone: true, platform: true },
           },
         },
       }),
       prisma.patient.findUnique({
         where: { id: patientId },
-        select: { id: true, name: true, phone: true, platform: true, chatState: true },
+        select: { id: true, name: true, displayName: true, phone: true, platform: true, chatState: true },
       }),
     ]);
+
+    await prisma.message.updateMany({
+      where: { patientId, type: 'INBOUND', readAt: null },
+      data: { readAt: new Date() },
+    });
 
     res.json({ messages, patient });
   } catch (error) {
@@ -274,6 +286,11 @@ const sendManual = async (req, res, next) => {
       }
     }
 
+    await prisma.patient.update({
+      where: { id: patientId },
+      data: { chatState: 'HUMAN' },
+    });
+
     res.status(201).json({ success: true, message });
   } catch (error) {
     next(error);
@@ -355,4 +372,21 @@ const endConversation = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, getConversation, sendManual, endConversation, pauseBot };
+const markRead = async (req, res, next) => {
+  try {
+    const { patientId } = req.params;
+    const existingPatient = await getScopedPatient(req, patientId);
+    if (!existingPatient) return res.status(404).json({ error: 'المريض غير موجود' });
+
+    await prisma.message.updateMany({
+      where: { patientId, type: 'INBOUND', readAt: null },
+      data: { readAt: new Date() },
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { getAll, getConversation, sendManual, endConversation, pauseBot, markRead };

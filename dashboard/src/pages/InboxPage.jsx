@@ -6,10 +6,12 @@ import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 
-const platformTabs = ['ALL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
+const platformTabs = ['ALL', 'HUMAN', 'UNREAD', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
 
 const platformLabels = {
   ALL: 'الكل',
+  HUMAN: 'متابعة بشرية',
+  UNREAD: 'غير مقروء',
   WHATSAPP: 'واتساب',
   FACEBOOK: 'فيسبوك',
   INSTAGRAM: 'انستجرام',
@@ -140,11 +142,15 @@ export default function InboxPage() {
             lastMessageSource: getMessageSourceLabel(msg.metadata),
             chatState: msg.patient?.chatState || 'BOT',
             messageCount: 1,
+            unreadCount: msg.type === 'INBOUND' && !msg.readAt ? 1 : 0,
           });
           return;
         }
 
         existing.messageCount += 1;
+        if (msg.type === 'INBOUND' && !msg.readAt) {
+          existing.unreadCount = (existing.unreadCount || 0) + 1;
+        }
       });
 
       const nextPatients = Array.from(uniquePatientsMap.values()).sort(
@@ -299,12 +305,14 @@ export default function InboxPage() {
       patients.reduce(
         (accumulator, patient) => {
           accumulator.ALL += 1;
+          if (patient.chatState === 'HUMAN') accumulator.HUMAN = (accumulator.HUMAN || 0) + 1;
+          if ((patient.unreadCount || 0) > 0) accumulator.UNREAD = (accumulator.UNREAD || 0) + 1;
           if (patient.platform) {
             accumulator[patient.platform] = (accumulator[patient.platform] || 0) + 1;
           }
           return accumulator;
         },
-        { ALL: 0, WHATSAPP: 0, FACEBOOK: 0, INSTAGRAM: 0 }
+        { ALL: 0, HUMAN: 0, UNREAD: 0, WHATSAPP: 0, FACEBOOK: 0, INSTAGRAM: 0 }
       ),
     [patients]
   );
@@ -313,10 +321,17 @@ export default function InboxPage() {
     const query = searchTerm.trim().toLowerCase();
 
     return patients.filter((patient) => {
-      const matchesPlatform = activeTab === 'ALL' || patient.platform === activeTab;
+      const isStateTab = activeTab === 'HUMAN' || activeTab === 'UNREAD';
+      const matchesPlatform = activeTab === 'ALL' || isStateTab || patient.platform === activeTab;
+      const matchesState =
+        activeTab === 'HUMAN'
+          ? patient.chatState === 'HUMAN'
+          : activeTab === 'UNREAD'
+            ? (patient.unreadCount || 0) > 0
+            : true;
       const haystack = [patient.name, patient.phone, patient.lastMessage].filter(Boolean).join(' ').toLowerCase();
       const matchesSearch = !query || haystack.includes(query);
-      return matchesPlatform && matchesSearch;
+      return matchesPlatform && matchesState && matchesSearch;
     });
   }, [activeTab, patients, searchTerm]);
 
@@ -469,7 +484,7 @@ export default function InboxPage() {
                           <div className="mb-1 flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <h4 className={`truncate text-sm font-bold ${isSelected ? 'text-primary-100' : 'text-slate-100'}`}>
-                                {patient.name || 'بدون اسم'}
+                                {patient.displayName || patient.name || 'بدون اسم'}
                               </h4>
                               <p className="mt-1 text-[11px] text-slate-500" dir="ltr">
                                 {patient.phone || 'No phone'}
@@ -489,6 +504,11 @@ export default function InboxPage() {
                             <span className="rounded-full bg-dark-bg/70 px-2.5 py-1 text-[10px] font-bold text-slate-500 ring-1 ring-dark-border/60">
                               {patient.messageCount || 0} رسالة
                             </span>
+                            {(patient.unreadCount || 0) > 0 ? (
+                              <span className="rounded-full bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white">
+                                {patient.unreadCount} غير مقروء
+                              </span>
+                            ) : null}
                           </div>
 
                           <div className={`flex items-center gap-2 text-xs ${isSelected ? 'text-primary-200/90' : 'text-slate-400'}`}>
@@ -528,7 +548,7 @@ export default function InboxPage() {
 
                     <div className="min-w-0">
                       <h3 className="truncate text-base font-extrabold leading-tight text-white">
-                        {selectedPatientData.name || 'بدون اسم'}
+                        {selectedPatientData.displayName || selectedPatientData.name || 'بدون اسم'}
                       </h3>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
                         <p className="text-xs font-medium tracking-wide text-primary-300 opacity-90" dir="ltr">

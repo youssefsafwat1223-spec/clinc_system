@@ -8,6 +8,7 @@ router.use(auth);
 router.get('/', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageController.getAll);
 router.get('/conversation/:patientId', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageController.getConversation);
 router.post('/send', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageController.sendManual);
+router.post('/:patientId/read', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageController.markRead);
 router.post('/:patientId/end', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageController.endConversation);
 router.post('/:patientId/pause', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), messageController.pauseBot);
 

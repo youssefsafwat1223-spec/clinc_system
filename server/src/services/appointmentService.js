@@ -39,6 +39,51 @@ const getAppointmentConflict = async ({ doctorId, scheduledTime, duration, exclu
   });
 };
 
+const isDoctorAvailableAt = async ({ doctorId, scheduledTime, duration, excludeAppointmentId = null }) => {
+  const doctor = await prisma.doctor.findFirst({ where: { id: doctorId, active: true } });
+  if (!doctor) return false;
+
+  const requested = new Date(scheduledTime);
+  const daySlots = generateTimeSlots(requested, doctor.workingHours || {}, duration, []);
+  const inWorkingHours = daySlots.some((slot) => new Date(slot.time).getTime() === requested.getTime());
+  if (!inWorkingHours) return false;
+
+  const conflict = await getAppointmentConflict({ doctorId, scheduledTime: requested, duration, excludeAppointmentId });
+  return !conflict;
+};
+
+const getAvailableDoctorsAt = async ({ serviceId, scheduledTime, doctorIds = null }) => {
+  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  if (!service) throw new Error('الخدمة غير موجودة');
+
+  const doctors = await prisma.doctor.findMany({
+    where: {
+      active: true,
+      ...(Array.isArray(doctorIds) && doctorIds.length > 0 ? { id: { in: doctorIds } } : {}),
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+
+  const available = [];
+  for (const doctor of doctors) {
+    const ok = await isDoctorAvailableAt({
+      doctorId: doctor.id,
+      scheduledTime,
+      duration: service.duration,
+    });
+    if (ok) {
+      available.push({
+        id: doctor.id,
+        name: doctor.name,
+        specialization: doctor.specialization,
+        image: doctor.image,
+      });
+    }
+  }
+
+  return { service, doctors: available };
+};
+
 const generateBookingRef = async () => {
   for (let attempt = 0; attempt < 5; attempt++) {
     const bookingRef = `B-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
@@ -58,6 +103,19 @@ const createAppointment = async ({ patientId, doctorId, serviceId, scheduledTime
   // Get the service for duration
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
   if (!service) throw new Error('الخدمة غير موجودة');
+
+  const doctorAvailable = await isDoctorAvailableAt({
+    doctorId,
+    scheduledTime,
+    duration: service.duration,
+    excludeAppointmentId: rescheduleAptId,
+  });
+
+  if (!doctorAvailable) {
+    const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
+    const alternatives = await getAlternativeSlots(doctorId, scheduledTime, doctor?.workingHours || {}, service.duration);
+    return { conflict: true, alternatives };
+  }
 
   const hasOverlap = await getAppointmentConflict({
     doctorId,
@@ -255,5 +313,7 @@ module.exports = {
   rejectAppointment,
   getAlternativeSlots,
   getAppointmentConflict,
+  getAvailableDoctorsAt,
+  isDoctorAvailableAt,
   expirePendingAppointments,
 };

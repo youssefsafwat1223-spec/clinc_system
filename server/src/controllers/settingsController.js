@@ -37,6 +37,10 @@ const createDefaultSettings = () => ({
     faqs: DEFAULT_FAQS,
     knowledgeCases: DEFAULT_KNOWLEDGE_CASES,
   }),
+  brandLogoUrl: null,
+  brandPrimaryColor: '#0B1929',
+  brandSecondaryColor: '#C9A84C',
+  prescriptionFooter: '',
 });
 
 const buildKnowledgeImportPreview = ({ currentAiConfig, importData, mode }) => {
@@ -242,6 +246,10 @@ const update = async (req, res, next) => {
       knowledgeCases,
       faqData,
       aiEnabled,
+      brandLogoUrl,
+      brandPrimaryColor,
+      brandSecondaryColor,
+      prescriptionFooter,
     } = req.body;
 
     const currentAiConfig = getAiConfigFromSettings(existing);
@@ -285,6 +293,10 @@ const update = async (req, res, next) => {
           }),
         }),
         ...(aiEnabled !== undefined && { aiEnabled }),
+        ...(brandLogoUrl !== undefined && { brandLogoUrl }),
+        ...(brandPrimaryColor !== undefined && { brandPrimaryColor }),
+        ...(brandSecondaryColor !== undefined && { brandSecondaryColor }),
+        ...(prescriptionFooter !== undefined && { prescriptionFooter }),
       },
     });
 

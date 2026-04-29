@@ -97,7 +97,7 @@ const buildAudienceWhere = async ({ audience, patientIds, filters }) => {
   }
 
   if (audience === 'FILTERED') {
-    const { doctorId, serviceId, lastVisitFrom, lastVisitTo, chatState } = filters || {};
+    const { doctorId, serviceId, lastVisitFrom, lastVisitTo, chatState, groupId } = filters || {};
 
     const appointmentWhere = {};
     if (doctorId) appointmentWhere.doctorId = doctorId;
@@ -131,6 +131,10 @@ const buildAudienceWhere = async ({ audience, patientIds, filters }) => {
 
     if (chatState) {
       where.chatState = chatState;
+    }
+
+    if (groupId) {
+      where.groups = { some: { groupId } };
     }
 
     return where;

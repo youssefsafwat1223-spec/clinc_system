@@ -85,6 +85,7 @@ model Doctor {
 model Patient {
   id           String        @id @default(uuid())
   name         String
+  displayName  String?       @map("display_name")
   phone         String         @unique
   platform      Platform       @default(WHATSAPP)
   whatsappId    String?        @unique @map("whatsapp_id")
@@ -92,11 +93,14 @@ model Patient {
   instagramId   String?        @unique @map("instagram_id")
   chatState     ChatState      @default(BOT) @map("chat_state")
   notes         String?
+  accountNotes  String?        @map("account_notes")
+  accountBalance Float         @default(0) @map("account_balance")
   appointments  Appointment[]
   messages      Message[]
   consultations Consultation[]
   prescriptions Prescription[]
   reviews       Review[]
+  groups        PatientGroupMember[]
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
 
@@ -148,6 +152,7 @@ model Message {
   content   String
   type      MessageType
   metadata  Json?
+  readAt    DateTime?   @map("read_at")
   createdAt DateTime    @default(now()) @map("created_at")
 
   @@map("messages")
@@ -165,6 +170,10 @@ model ClinicSettings {
   systemPrompt String  @default("") @map("system_prompt")
   faqData      Json    @default("[]") @map("faq_data")
   aiEnabled    Boolean @default(true) @map("ai_enabled")
+  brandLogoUrl String? @map("brand_logo_url")
+  brandPrimaryColor String? @map("brand_primary_color")
+  brandSecondaryColor String? @map("brand_secondary_color")
+  prescriptionFooter String? @map("prescription_footer")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -186,6 +195,48 @@ model CampaignTemplate {
   updatedAt    DateTime @updatedAt @map("updated_at")
 
   @@map("campaign_templates")
+}
+
+model PatientGroup {
+  id          String               @id @default(uuid())
+  name        String               @unique
+  description String?
+  members     PatientGroupMember[]
+  discounts   DiscountRule[]
+  createdAt   DateTime             @default(now()) @map("created_at")
+  updatedAt   DateTime             @updatedAt @map("updated_at")
+
+  @@map("patient_groups")
+}
+
+model PatientGroupMember {
+  id        String       @id @default(uuid())
+  patientId String       @map("patient_id")
+  patient   Patient      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  groupId   String       @map("group_id")
+  group     PatientGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  @@unique([patientId, groupId])
+  @@map("patient_group_members")
+}
+
+model DiscountRule {
+  id          String        @id @default(uuid())
+  name        String
+  type        String        @default("PERCENT")
+  value       Float
+  active      Boolean       @default(true)
+  groupId     String?       @map("group_id")
+  group       PatientGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  serviceId   String?       @map("service_id")
+  serviceName String?       @map("service_name")
+  startsAt    DateTime?     @map("starts_at")
+  endsAt      DateTime?     @map("ends_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  @@map("discount_rules")
 }
 
 model Notification {

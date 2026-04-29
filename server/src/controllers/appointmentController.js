@@ -171,6 +171,24 @@ const create = async (req, res, next) => {
   }
 };
 
+const availability = async (req, res, next) => {
+  try {
+    const { serviceId, scheduledTime } = req.query;
+    if (!serviceId || !scheduledTime) {
+      return res.status(400).json({ error: 'الخدمة والوقت مطلوبان' });
+    }
+
+    const result = await appointmentService.getAvailableDoctorsAt({
+      serviceId,
+      scheduledTime,
+    });
+
+    res.json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
 const confirm = async (req, res, next) => {
   try {
     const { appointment } = await getAccessibleAppointment(req, req.params.id);
@@ -413,4 +431,5 @@ module.exports = {
   complete,
   cancel,
   getStats,
+  availability,
 };

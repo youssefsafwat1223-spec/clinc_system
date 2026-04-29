@@ -95,7 +95,7 @@ const useRegular = (doc) => { doc.font('Regular'); };
 /* ─────────────────────────────────────────────
    HEADER  (navy two-band)
 ───────────────────────────────────────────── */
-const addHeader = (doc, clinicName, prescription) => {
+const addHeader = (doc, clinicName, prescription, brand = {}) => {
   const x = leftX(doc);
   const w = pageW(doc);
   const mt = doc.page.margins.top;
@@ -110,6 +110,14 @@ const addHeader = (doc, clinicName, prescription) => {
   doc.restore();
 
   /* clinic name – right aligned */
+  if (brand.logoPath && fs.existsSync(brand.logoPath)) {
+    try {
+      doc.image(brand.logoPath, x + w - 86, mt + 12, { fit: [56, 56] });
+    } catch (error) {
+      // Keep the PDF printable even if the uploaded logo format is unsupported.
+    }
+  }
+
   useBold(doc);
   doc
     .fillColor(C.white)
@@ -435,8 +443,20 @@ const addFooter = (doc, prescription) => {
 /* ═══════════════════════════════════════════════════════════════════
    Main export
 ═══════════════════════════════════════════════════════════════════ */
-const createPrescriptionPdf = async ({ prescription, clinicName }) => {
+const createPrescriptionPdf = async ({ prescription, clinicName, brand = {} }) => {
   await ensureDir(DOCUMENTS_DIR);
+
+  if (brand.primaryColor) C.navy = brand.primaryColor;
+  if (brand.secondaryColor) {
+    C.gold = brand.secondaryColor;
+    C.goldLight = brand.secondaryColor;
+  }
+  if (brand.logoUrl && !brand.logoPath) {
+    const match = String(brand.logoUrl).match(/\/api\/images\/([^/?#]+)/);
+    if (match) {
+      brand.logoPath = path.join(__dirname, '../../public/images', match[1]);
+    }
+  }
 
   const timestamp = Date.now();
   const suffix = toSafeFilenamePart((prescription?.id || '').slice(-8) || timestamp);
@@ -476,7 +496,7 @@ const createPrescriptionPdf = async ({ prescription, clinicName }) => {
   doc.pipe(stream);
 
   /* ══ layout ══ */
-  addHeader(doc, clinicName, prescription);
+  addHeader(doc, clinicName, prescription, brand);
 
   drawInfoCards(doc, prescription);
 

@@ -77,9 +77,11 @@ export default function CampaignsPage() {
 
   const [doctors, setDoctors] = useState([]);
   const [services, setServices] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [filters, setFilters] = useState({
     doctorId: '',
     serviceId: '',
+    groupId: '',
     lastVisitFrom: '',
     lastVisitTo: '',
   });
@@ -130,8 +132,10 @@ export default function CampaignsPage() {
         api.get('/doctors').catch(() => ({ data: { doctors: [] } })),
         api.get('/services').catch(() => ({ data: { services: [] } })),
       ]);
+      const groupsRes = await api.get('/patients/groups/list').catch(() => ({ data: { groups: [] } }));
       setDoctors(doctorsRes.data.doctors || doctorsRes.data || []);
       setServices(servicesRes.data.services || servicesRes.data || []);
+      setGroups(groupsRes.data.groups || []);
     } catch (error) {
       console.error(error);
     }
@@ -232,7 +236,7 @@ export default function CampaignsPage() {
       return;
     }
 
-    if (audience === 'FILTERED' && !filters.doctorId && !filters.serviceId && !filters.lastVisitFrom && !filters.lastVisitTo) {
+    if (audience === 'FILTERED' && !filters.doctorId && !filters.serviceId && !filters.groupId && !filters.lastVisitFrom && !filters.lastVisitTo) {
       toast.error('حدد فلترًا واحدًا على الأقل للجمهور');
       return;
     }

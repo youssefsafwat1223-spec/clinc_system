@@ -307,9 +307,17 @@ const sendToWhatsApp = async (req, res, next) => {
       formattedMedications: formatMedications(prescription.medications),
     };
 
+    const settings = await prisma.clinicSettings.findFirst();
+
     const { relativeUrl, filename } = await createPrescriptionPdf({
       prescription: pdfPayload,
-      clinicName: 'عيادة د. إبراهيم',
+      clinicName: settings?.clinicNameAr || settings?.clinicName || 'العيادة',
+      brand: {
+        logoUrl: settings?.brandLogoUrl ? toAbsoluteUrl(req, settings.brandLogoUrl) : null,
+        primaryColor: settings?.brandPrimaryColor,
+        secondaryColor: settings?.brandSecondaryColor,
+        footer: settings?.prescriptionFooter,
+      },
     });
     const documentUrl = toAbsoluteUrl(req, relativeUrl);
 

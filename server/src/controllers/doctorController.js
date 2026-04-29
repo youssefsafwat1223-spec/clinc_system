@@ -203,7 +203,7 @@ const updateMySchedule = async (req, res, next) => {
   }
 };
 
-const remove = async (req, res, next) => {
+const removeLegacy = async (req, res, next) => {
   try {
     const existingDoctor = await prisma.doctor.findUnique({
       where: { id: req.params.id },
@@ -223,6 +223,89 @@ const remove = async (req, res, next) => {
     });
 
     res.json({ message: 'تم حذف الطبيب بنجاح' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const remove = async (req, res, next) => {
+  try {
+    const replacementDoctorId = req.body?.replacementDoctorId || req.query?.replacementDoctorId;
+    const existingDoctor = await prisma.doctor.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, userId: true, name: true },
+    });
+
+    if (!existingDoctor) {
+      return res.status(404).json({ error: 'الطبيب غير موجود' });
+    }
+
+    const futureAppointments = await prisma.appointment.findMany({
+      where: {
+        doctorId: req.params.id,
+        status: { in: ['PENDING', 'CONFIRMED'] },
+        scheduledTime: { gte: new Date() },
+      },
+      include: { patient: true, service: true },
+    });
+
+    if (futureAppointments.length > 0 && !replacementDoctorId) {
+      return res.status(400).json({
+        error: 'هذا الطبيب لديه مواعيد مستقبلية. اختر طبيبًا بديلًا لنقل المواعيد قبل التعطيل.',
+        requiresReplacement: true,
+        appointmentsCount: futureAppointments.length,
+      });
+    }
+
+    let replacementDoctor = null;
+    if (replacementDoctorId) {
+      replacementDoctor = await prisma.doctor.findFirst({ where: { id: replacementDoctorId, active: true } });
+      if (!replacementDoctor || replacementDoctor.id === existingDoctor.id) {
+        return res.status(400).json({ error: 'الطبيب البديل غير صالح' });
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (replacementDoctor) {
+        await tx.appointment.updateMany({
+          where: {
+            doctorId: req.params.id,
+            status: { in: ['PENDING', 'CONFIRMED'] },
+            scheduledTime: { gte: new Date() },
+          },
+          data: {
+            doctorId: replacementDoctor.id,
+            notes: `تم نقل الموعد من ${existingDoctor.name} إلى ${replacementDoctor.name}`,
+          },
+        });
+      }
+
+      await tx.doctor.update({ where: { id: req.params.id }, data: { active: false } });
+
+      if (existingDoctor.userId) {
+        await tx.user.update({ where: { id: existingDoctor.userId }, data: { active: false } });
+      }
+    });
+
+    if (replacementDoctor && futureAppointments.length > 0) {
+      const whatsappService = require('../services/whatsappService');
+      for (const appointment of futureAppointments) {
+        try {
+          await whatsappService.sendTextMessage(
+            appointment.patient.phone,
+            `تم تحديث طبيب موعدك القادم إلى ${replacementDoctor.name}. موعدك وخدمتك كما هي بدون تغيير.`
+          );
+        } catch (error) {
+          console.error('[Doctor replacement] notify failed:', error.message);
+        }
+      }
+    }
+
+    res.json({
+      message: replacementDoctor
+        ? 'تم تعطيل الطبيب ونقل المواعيد المستقبلية للطبيب البديل'
+        : 'تم تعطيل الطبيب بنجاح',
+    });
   } catch (error) {
     next(error);
   }

@@ -63,6 +63,10 @@ export default function PatientsPage() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [modalTab, setModalTab] = useState('OVERVIEW');
   const [notesDraft, setNotesDraft] = useState('');
+  const [displayNameDraft, setDisplayNameDraft] = useState('');
+  const [accountNotesDraft, setAccountNotesDraft] = useState('');
+  const [accountBalanceDraft, setAccountBalanceDraft] = useState('0');
+  const [groupNamesDraft, setGroupNamesDraft] = useState('');
 
   const [rxDiagnosis, setRxDiagnosis] = useState('');
   const [rxMedicines, setRxMedicines] = useState('');
@@ -92,6 +96,10 @@ export default function PatientsPage() {
       const res = await api.get(`/patients/${patientId}`);
       setPatientDetails(res.data.patient || null);
       setNotesDraft(res.data.patient?.notes || '');
+      setDisplayNameDraft(res.data.patient?.displayName || '');
+      setAccountNotesDraft(res.data.patient?.accountNotes || '');
+      setAccountBalanceDraft(String(res.data.patient?.accountBalance || 0));
+      setGroupNamesDraft((res.data.patient?.groups || []).map((item) => item.group?.name).filter(Boolean).join(', '));
     } catch (error) {
       toast.error('فشل في تحميل تفاصيل المريض');
     } finally {
@@ -118,6 +126,10 @@ export default function PatientsPage() {
     setPatientDetails(null);
     setModalTab('OVERVIEW');
     setNotesDraft('');
+    setDisplayNameDraft('');
+    setAccountNotesDraft('');
+    setAccountBalanceDraft('0');
+    setGroupNamesDraft('');
   };
 
   const handleSaveNotes = async () => {
@@ -128,10 +140,18 @@ export default function PatientsPage() {
 
     try {
       setSavingNotes(true);
-      await api.put(`/patients/${activePatient.id}`, { notes: notesDraft });
+      const response = await api.put(`/patients/${activePatient.id}`, {
+        displayName: displayNameDraft,
+        notes: notesDraft,
+        accountNotes: accountNotesDraft,
+        accountBalance: accountBalanceDraft,
+        groupNames: groupNamesDraft,
+      });
       toast.success('تم حفظ الملاحظات');
-      setPatientDetails((current) => (current ? { ...current, notes: notesDraft } : current));
-      setPatients((current) => current.map((patient) => (patient.id === activePatient.id ? { ...patient, notes: notesDraft } : patient)));
+      setPatientDetails((current) => (current ? { ...current, ...(response.data.patient || {}) } : current));
+      setPatients((current) =>
+        current.map((patient) => (patient.id === activePatient.id ? { ...patient, ...(response.data.patient || {}) } : patient))
+      );
     } catch (error) {
       toast.error('فشل في حفظ الملاحظات');
     } finally {
@@ -303,6 +323,46 @@ export default function PatientsPage() {
                         <Phone className="h-3 w-3" />
                       </p>
                     </div>
+
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-300">اسم العرض داخل النظام</label>
+                        <input
+                          value={displayNameDraft}
+                          onChange={(event) => setDisplayNameDraft(event.target.value)}
+                          className="input-field"
+                          placeholder={activePatient?.name || 'اسم مختصر للمحادثات'}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-300">مجموعات التسويق</label>
+                        <input
+                          value={groupNamesDraft}
+                          onChange={(event) => setGroupNamesDraft(event.target.value)}
+                          className="input-field"
+                          placeholder="VIP, تقويم, تنظيف"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-300">الرصيد / المتبقي</label>
+                        <input
+                          type="number"
+                          value={accountBalanceDraft}
+                          onChange={(event) => setAccountBalanceDraft(event.target.value)}
+                          className="input-field"
+                          placeholder="0"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-slate-300">ملاحظات الحسابات</label>
+                        <input
+                          value={accountNotesDraft}
+                          onChange={(event) => setAccountNotesDraft(event.target.value)}
+                          className="input-field"
+                          placeholder="خصم خاص، تقسيط، دفعة مقدمة..."
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex-1 p-5">
@@ -377,7 +437,7 @@ export default function PatientsPage() {
 
         {selectedPatient && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-dark-bg/80 p-4 backdrop-blur-sm">
-            <div className="flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-dark-border bg-dark-card shadow-2xl">
+            <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-dark-border bg-dark-card shadow-2xl">
               <div className="flex shrink-0 items-start justify-between gap-4 border-b border-dark-border bg-dark-bg/30 p-6">
                 <div className="flex items-start gap-4">
                   <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500 shadow-lg shadow-primary-500/20">
