@@ -374,8 +374,8 @@ export default function PatientsPage() {
         ) : null}
 
         {selectedPatient ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-dark-bg/80 p-4 backdrop-blur-sm">
-            <div className="flex max-h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-dark-border bg-dark-card shadow-2xl">
+          <div className="fixed inset-y-0 left-0 right-0 z-50 flex items-center justify-center bg-dark-bg/80 p-3 backdrop-blur-sm md:right-64 lg:p-6">
+            <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-dark-border bg-dark-card shadow-2xl xl:max-w-6xl">
               <div className="flex shrink-0 items-start justify-between gap-4 border-b border-dark-border bg-dark-bg/30 p-6">
                 <div className="flex min-w-0 items-start gap-4">
                   <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary-500 shadow-lg shadow-primary-500/20">
