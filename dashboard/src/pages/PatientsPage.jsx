@@ -332,19 +332,33 @@ export default function PatientsPage() {
                     ) : null}
 
                     {patient.notes ? (
-                      <p className="line-clamp-3 rounded-xl border border-primary-500/15 bg-primary-500/5 p-3 text-xs leading-6 text-slate-300">
+                      <p className="line-clamp-2 rounded-xl border border-primary-500/15 bg-primary-500/5 p-3 text-xs leading-5 text-slate-300">
                         {patient.notes}
                       </p>
                     ) : (
-                      <div className="flex min-h-[72px] items-center justify-center rounded-xl border border-dark-border/40 bg-dark-bg/30 px-3 text-xs italic text-dark-muted">
-                        لا توجد ملاحظات مسجلة
+                      <div className="flex min-h-[48px] items-center justify-center rounded-xl border border-dark-border/40 bg-dark-bg/30 px-3 text-xs italic text-dark-muted">
+                        لا توجد ملاحظات
+                      </div>
+                    )}
+
+                    {patient.lastAppointment && (
+                      <div className="mt-3 rounded-lg border border-dark-border/40 bg-dark-bg/40 px-3 py-2 text-[11px] text-dark-muted">
+                        آخر زيارة: <span className="text-slate-300 font-medium">{format(parseISO(patient.lastAppointment), 'dd MMM', { locale: ar })}</span>
                       </div>
                     )}
                   </div>
 
                   <div className="flex items-center justify-between border-t border-dark-border/50 bg-dark-bg/30 px-5 py-3 text-[11px] font-bold text-slate-400">
                     <span>فتح الملف</span>
-                    <span>{patient.accountBalance ? `${Number(patient.accountBalance).toLocaleString('ar-IQ')} متبقي` : 'بدون رصيد'}</span>
+                    <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ring-1 ring-inset ${
+                      patient.accountBalance && patient.accountBalance > 0
+                        ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/30'
+                        : patient.accountBalance && patient.accountBalance < 0
+                          ? 'bg-red-500/10 text-red-300 ring-red-500/30'
+                          : 'bg-slate-500/10 text-slate-300 ring-slate-500/30'
+                    }`}>
+                      {patient.accountBalance ? `${Number(patient.accountBalance).toLocaleString('ar-IQ')}` : 'بدون رصيد'}
+                    </span>
                   </div>
                 </button>
               ))}

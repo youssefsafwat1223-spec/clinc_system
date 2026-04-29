@@ -3,6 +3,7 @@ import { AlertCircle, Clock3, MapPin, Phone, Save, Settings, ShieldCheck } from 
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
+import Tabs from '../components/Tabs';
 
 const daysAr = {
   sunday: 'الأحد',
@@ -170,12 +171,13 @@ export default function SettingsPage() {
           <SummaryCard title="العنوان" value={settings?.address ? 'موجود' : 'غير مضبوط'} hint={settings?.address || 'أضف عنوان العيادة'} icon={MapPin} accentClass="border-amber-500/20" />
         </section>
 
-        <div className="glass-card space-y-8 p-6 md:p-8">
-          <section>
-            <h2 className="mb-4 flex items-center gap-2 border-b border-dark-border pb-2 text-lg font-bold text-white">
-              <Settings className="h-5 w-5 text-primary-400" />
-              المعلومات الأساسية
-            </h2>
+        <div className="glass-card p-6 md:p-8">
+          <Tabs
+            tabs={[
+              {
+                label: '⚙️ المعلومات الأساسية',
+                content: (
+                  <section className="space-y-6">
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div className="space-y-1">
@@ -256,10 +258,13 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
-          </section>
-
-          <section>
-            <h2 className="mb-4 border-b border-dark-border pb-2 text-lg font-bold text-white">براند الروشتة والرسائل</h2>
+                  </section>
+                ),
+              },
+              {
+                label: '🎨 براند الروشتة والرسائل',
+                content: (
+                  <section className="space-y-6">
 
             <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
               <div className="space-y-1">
@@ -307,10 +312,13 @@ export default function SettingsPage() {
                 />
               </div>
             </div>
-          </section>
-
-          <section>
-            <h2 className="mb-4 border-b border-dark-border pb-2 text-lg font-bold text-white">أرقام التواصل المباشر</h2>
+                  </section>
+                ),
+              },
+              {
+                label: '📞 أرقام التواصل المباشر',
+                content: (
+                  <section className="space-y-6">
 
             <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
               <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
@@ -366,10 +374,13 @@ export default function SettingsPage() {
                 )}
               </div>
             </div>
-          </section>
-
-          <section>
-            <h2 className="mb-4 border-b border-dark-border pb-2 text-lg font-bold text-white">ساعات العمل الموحدة</h2>
+                  </section>
+                ),
+              },
+              {
+                label: '⏰ ساعات العمل الموحدة',
+                content: (
+                  <section className="space-y-6">
 
             <div className="mb-6 flex gap-3 rounded-xl border border-primary-500/20 bg-primary-500/10 p-4">
               <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-primary-400" />
@@ -421,7 +432,11 @@ export default function SettingsPage() {
                 );
               })}
             </div>
-          </section>
+                  </section>
+                ),
+              },
+            ]}
+          />
         </div>
       </div>
     </AppLayout>

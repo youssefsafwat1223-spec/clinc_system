@@ -307,18 +307,20 @@ export default function StaffPage() {
                         </span>
                       </div>
 
-                      <div className="mt-4 grid grid-cols-3 gap-3 border-t border-dark-border/50 pt-4">
-                        <div>
-                          <span className="mb-1 block text-[10px] uppercase tracking-wider text-dark-muted">الحجوزات</span>
-                          <span className="text-lg font-bold text-white">{doctor._count?.appointments || 0}</span>
-                        </div>
-                        <div>
-                          <span className="mb-1 block text-[10px] uppercase tracking-wider text-dark-muted">أيام العمل</span>
-                          <span className="text-lg font-bold text-white">{activeWorkingDays}</span>
-                        </div>
-                        <div>
-                          <span className="mb-1 block text-[10px] uppercase tracking-wider text-dark-muted">الدخول</span>
-                          <span className="text-sm font-bold text-slate-300">{doctor.user?.email ? 'مفعل' : 'بدون حساب'}</span>
+                      <div className="mt-4 space-y-3 border-t border-dark-border/50 pt-4">
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-center">
+                            <span className="mb-1 block text-[10px] uppercase tracking-wider text-emerald-300">الحجوزات</span>
+                            <span className="text-lg font-bold text-white">{doctor._count?.appointments || 0}</span>
+                          </div>
+                          <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-center">
+                            <span className="mb-1 block text-[10px] uppercase tracking-wider text-sky-300">أيام عمل</span>
+                            <span className="text-lg font-bold text-white">{activeWorkingDays}</span>
+                          </div>
+                          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-center">
+                            <span className="mb-1 block text-[10px] uppercase tracking-wider text-amber-300">الدخول</span>
+                            <span className="text-sm font-bold text-white">{doctor.user?.email ? '✓' : '✗'}</span>
+                          </div>
                         </div>
                       </div>
                     </div>

@@ -473,12 +473,21 @@ export default function InboxPage() {
                       <button
                         key={patient.id}
                         onClick={() => setSelectedPatientId(patient.id)}
-                        className={`flex w-full gap-4 p-4 text-right transition-all duration-200 ${
+                        className={`relative flex w-full gap-4 p-4 text-right transition-all duration-200 group ${
                           isSelected
                             ? 'border-r-4 border-primary-500 bg-gradient-to-r from-primary-900/30 to-transparent'
                             : 'border-r-4 border-transparent hover:bg-[#111c33]/70'
                         }`}
                       >
+                        {/* Unread Badge - في الأعلى اليمين */}
+                        {patient.unreadCount > 0 && (
+                          <div className="absolute top-2 right-2">
+                            <span className="flex items-center justify-center h-6 w-6 rounded-full bg-red-500 text-white text-xs font-bold shadow-lg">
+                              {patient.unreadCount > 9 ? '9+' : patient.unreadCount}
+                            </span>
+                          </div>
+                        )}
+
                         <div className="relative h-12 w-12 shrink-0 rounded-full bg-slate-800/80 ring-2 ring-slate-700/50 shadow-inner">
                           <div className="flex h-full w-full items-center justify-center">
                             <User className="h-5 w-5 text-slate-300" />
@@ -490,15 +499,15 @@ export default function InboxPage() {
 
                         <div className="min-w-0 flex-1">
                           <div className="mb-1 flex items-start justify-between gap-3">
-                            <div className="min-w-0">
+                            <div className="min-w-0 flex-1">
                               <h4 className={`truncate text-sm font-bold ${isSelected ? 'text-primary-100' : 'text-slate-100'}`}>
                                 {patient.displayName || patient.name || 'بدون اسم'}
                               </h4>
-                              <p className="mt-1 text-[11px] text-slate-500" dir="ltr">
-                                {patient.phone || 'No phone'}
+                              <p className="mt-1 text-[11px] text-slate-400" dir="ltr">
+                                📱 {patient.phone || 'لا يوجد رقم'}
                               </p>
                             </div>
-                            <span className="shrink-0 text-[10px] font-medium tracking-wide text-slate-500" dir="ltr">
+                            <span className="shrink-0 text-[10px] font-medium tracking-wide text-slate-500 whitespace-nowrap" dir="ltr">
                               {patient.lastMessageTime ? formatTime(patient.lastMessageTime) : '--'}
                             </span>
                           </div>

@@ -37,6 +37,7 @@ export default function AppointmentsPage() {
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [filter, setFilter] = useState('ALL');
   const [doctorProfile, setDoctorProfile] = useState(null);
+  const [viewMode, setViewMode] = useState('list'); // 'list' أو 'calendar'
 
   const fetchAppointments = async () => {
     try {
@@ -218,6 +219,137 @@ export default function AppointmentsPage() {
     </div>
   );
 
+  const CalendarView = ({ appointments }) => {
+    const [currentDate, setCurrentDate] = useState(new Date());
+
+    const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+
+    const appointmentsByDate = appointments.reduce((acc, apt) => {
+      const dateStr = format(parseISO(apt.scheduledTime), 'yyyy-MM-dd');
+      if (!acc[dateStr]) acc[dateStr] = [];
+      acc[dateStr].push(apt);
+      return acc;
+    }, {});
+
+    const daysInMonth = getDaysInMonth(currentDate);
+    const firstDay = getFirstDayOfMonth(currentDate);
+    const prevDaysInMonth = getDaysInMonth(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
+
+    const days = [];
+    for (let i = firstDay - 1; i >= 0; i--) {
+      days.push({ day: prevDaysInMonth - i, isCurrentMonth: false });
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push({ day: i, isCurrentMonth: true });
+    }
+    const remainingDays = 42 - days.length;
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push({ day: i, isCurrentMonth: false });
+    }
+
+    const getStatusColor = (statuses) => {
+      if (statuses.includes('PENDING')) return 'bg-amber-500/20 border-amber-500/30';
+      if (statuses.includes('CONFIRMED')) return 'bg-emerald-500/20 border-emerald-500/30';
+      if (statuses.includes('COMPLETED')) return 'bg-teal-500/20 border-teal-500/30';
+      if (statuses.includes('REJECTED') || statuses.includes('CANCELLED')) return 'bg-red-500/20 border-red-500/30';
+      return 'bg-slate-500/20 border-slate-500/30';
+    };
+
+    const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
+    const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
+
+    return (
+      <div className="glass-card p-6 space-y-6">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-lg font-bold text-white">تقويم المواعيد</h3>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={prevMonth}
+              className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-white hover:bg-dark-border transition-colors"
+            >
+              ←
+            </button>
+            <span className="text-base font-semibold text-white min-w-[150px] text-center">
+              {format(currentDate, 'MMMM yyyy', { locale: ar })}
+            </span>
+            <button
+              onClick={nextMonth}
+              className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-white hover:bg-dark-border transition-colors"
+            >
+              →
+            </button>
+          </div>
+        </div>
+
+        {/* Day headers */}
+        <div className="grid grid-cols-7 gap-2 mb-2">
+          {['ح', 'ن', 'ث', 'أ', 'خ', 'ج', 'س'].map((day) => (
+            <div key={day} className="text-center text-xs font-bold text-dark-muted py-2">
+              {day}
+            </div>
+          ))}
+        </div>
+
+        {/* Calendar grid */}
+        <div className="grid grid-cols-7 gap-2">
+          {days.map((dayObj, idx) => {
+            const day = dayObj.isCurrentMonth ? dayObj.day : null;
+            const dateStr = day
+              ? format(new Date(currentDate.getFullYear(), currentDate.getMonth(), day), 'yyyy-MM-dd')
+              : null;
+            const dayAppointments = dateStr ? appointmentsByDate[dateStr] || [] : [];
+            const isToday = day && dateStr === todayKey;
+
+            return (
+              <div
+                key={idx}
+                className={`relative aspect-square flex flex-col items-center justify-center rounded-lg border p-2 transition-all cursor-pointer hover:border-primary-500 ${
+                  !dayObj.isCurrentMonth
+                    ? 'bg-dark-bg/30 border-dark-border/30 text-dark-muted/30'
+                    : isToday
+                      ? 'bg-primary-500/20 border-primary-500/40'
+                      : dayAppointments.length > 0
+                        ? `border ${getStatusColor(dayAppointments.map((a) => a.status))}`
+                        : 'bg-dark-bg/50 border-dark-border'
+                }`}
+              >
+                <span className={`text-sm font-bold ${dayObj.isCurrentMonth ? 'text-white' : 'text-dark-muted/50'}`}>
+                  {dayObj.day}
+                </span>
+                {dayAppointments.length > 0 && (
+                  <span className="absolute bottom-1 text-xs font-bold bg-primary-500 text-white px-1.5 py-0.5 rounded-full">
+                    {dayAppointments.length}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Legend */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-dark-border">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-amber-500"></div>
+            <span className="text-xs text-dark-muted">قيد الانتظار</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+            <span className="text-xs text-dark-muted">مؤكد</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-teal-500"></div>
+            <span className="text-xs text-dark-muted">تم الكشف</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+            <span className="text-xs text-dark-muted">ملغي/مرفوض</span>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const groupedAppointments = appointments.reduce((acc, appointment) => {
     const dateStr = format(parseISO(appointment.scheduledTime), 'yyyy-MM-dd');
     if (!acc[dateStr]) acc[dateStr] = [];
@@ -310,20 +442,50 @@ export default function AppointmentsPage() {
           </div>
         </div>
 
+        {/* View Mode Toggle */}
+        <div className="flex gap-2">
+          <button
+            onClick={() => setViewMode('list')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              viewMode === 'list'
+                ? 'bg-primary-500 text-white'
+                : 'bg-dark-bg text-slate-400 hover:text-white border border-dark-border'
+            }`}
+          >
+            📋 قائمة
+          </button>
+          <button
+            onClick={() => setViewMode('calendar')}
+            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              viewMode === 'calendar'
+                ? 'bg-primary-500 text-white'
+                : 'bg-dark-bg text-slate-400 hover:text-white border border-dark-border'
+            }`}
+          >
+            📅 تقويم
+          </button>
+        </div>
+
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
           {/* Main Content Area */}
           <div className="flex-1 space-y-6">
-            <ManualBookingPanel
-              isDoctor={isDoctor}
-              doctorProfile={doctorProfile}
-              onCreated={() => {
-                fetchAppointments();
-                fetchDoctorProfile();
-              }}
-            />
+            {viewMode === 'calendar' && (
+              <CalendarView appointments={appointments} />
+            )}
 
-        {isDoctor && (
-          <section className="glass-card p-6 md:p-8 space-y-6">
+            {viewMode === 'list' && (
+              <>
+                <ManualBookingPanel
+                  isDoctor={isDoctor}
+                  doctorProfile={doctorProfile}
+                  onCreated={() => {
+                    fetchAppointments();
+                    fetchDoctorProfile();
+                  }}
+                />
+
+                {isDoctor && (
+                  <section className="glass-card p-6 md:p-8 space-y-6">
             <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
               <div>
                 <h2 className="text-lg font-bold text-white">جدول العمل الخاص بك</h2>
@@ -407,11 +569,11 @@ export default function AppointmentsPage() {
                   );
                 })}
               </div>
-            )}
-          </section>
-        )}
+                  )}
+                </section>
+                )}
 
-        {loading ? (
+                {loading ? (
           <div className="flex h-64 items-center justify-center">
             <div className="relative w-12 h-12">
               <div className="absolute inset-0 rounded-full border-t-2 border-primary-500 animate-spin"></div>
@@ -556,7 +718,9 @@ export default function AppointmentsPage() {
               ))
             )}
           </div>
-        )}
+                )}
+              </>
+            )}
           </div>
 
           {/* Right Sidebar: Stats */}

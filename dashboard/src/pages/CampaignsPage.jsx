@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
+import Stepper from '../components/Stepper';
 import { toast } from 'react-toastify';
 import {
   Activity,
@@ -62,6 +63,10 @@ export default function CampaignsPage() {
   const currentUser = getStoredUser();
   const canManageTemplates = currentUser?.role === 'ADMIN';
 
+  // Stepper state
+  const [campaignStep, setCampaignStep] = useState(0);
+  const stepLabels = ['نوع الحملة', 'اختيار الجمهور', 'الرسالة', 'المراجعة والإرسال'];
+
   const [broadcastType, setBroadcastType] = useState('TEXT');
   const [messageText, setMessageText] = useState('');
   const [templateId, setTemplateId] = useState('');
@@ -69,6 +74,7 @@ export default function CampaignsPage() {
   const [audience, setAudience] = useState('ALL');
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState(null);
+  const [campaignResults, setCampaignResults] = useState(null);
 
   const [allPatients, setAllPatients] = useState([]);
   const [patientsLoading, setPatientsLoading] = useState(false);
@@ -362,6 +368,49 @@ export default function CampaignsPage() {
     setMessageText((prev) => `${prev}${variable}`);
   };
 
+  // Show results page if campaign was sent successfully
+  if (campaignResults) {
+    return (
+      <AppLayout>
+        <div className="mx-auto max-w-2xl space-y-6 fade-in">
+          <div className="glass-card p-8 text-center space-y-6">
+            <div className="text-5xl">✅</div>
+            <h2 className="text-3xl font-bold text-emerald-400">تم الإرسال بنجاح!</h2>
+
+            <div className="grid gap-4 md:grid-cols-3">
+              <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-6">
+                <div className="text-3xl font-bold text-emerald-400">{campaignResults.successCount}</div>
+                <div className="text-sm text-slate-400 mt-2">تم إرسالها</div>
+              </div>
+              <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-6">
+                <div className="text-3xl font-bold text-red-400">{campaignResults.failCount}</div>
+                <div className="text-sm text-slate-400 mt-2">فشلت</div>
+              </div>
+              <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-6">
+                <div className="text-3xl font-bold text-blue-400">{campaignResults.successCount + campaignResults.failCount}</div>
+                <div className="text-sm text-slate-400 mt-2">المجموع</div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                setCampaignResults(null);
+                setCampaignStep(0);
+                setBroadcastType('TEXT');
+                setMessageText('');
+                setTemplateId('');
+                setAudience('ALL');
+              }}
+              className="btn-primary w-full py-3"
+            >
+              ➕ حملة جديدة
+            </button>
+          </div>
+        </div>
+      </AppLayout>
+    );
+  }
+
   return (
     <AppLayout>
       <div className="mx-auto max-w-6xl space-y-6 fade-in">
@@ -383,6 +432,9 @@ export default function CampaignsPage() {
             </button>
           ) : null}
         </div>
+
+        {/* Stepper Component */}
+        <Stepper activeStep={campaignStep} steps={stepLabels} />
 
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.6fr,1fr]">
           <div className="space-y-6">
