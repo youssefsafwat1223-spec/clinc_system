@@ -132,6 +132,15 @@ const getOne = async (req, res, next) => {
         include: { doctor: { select: { name: true, specialization: true } } },
         orderBy: { createdAt: 'desc' },
       },
+      payments: {
+        include: {
+          service: true,
+          appointment: {
+            include: { doctor: true, service: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      },
       groups: { include: { group: true } },
     });
 

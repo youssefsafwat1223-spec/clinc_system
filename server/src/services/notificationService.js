@@ -10,6 +10,7 @@ const WHATSAPP_TEMPLATES = {
   bookingRejectedWithAlternatives: 'booking_rejected_with_alternatives_ar_v2',
   bookingCancelled: 'booking_cancelled_ar_v2',
   appointmentReminder: 'appointment_reminder_ar_v2',
+  doctorRescheduled: 'doctor_reschedule_ar_v1',
 };
 
 const CARE_WINDOW_HOURS = 24;
@@ -423,9 +424,63 @@ const sendBookingRejected = async (appointment, alternatives = []) => {
   await createNotificationRecord(appointment.id, 'booking_rejected', channel);
 };
 
+const buildDoctorRescheduledText = (appointment, fromDoctor, toDoctor) => [
+  'تم تحديث طبيب موعدك.',
+  '',
+  appointment.bookingRef ? `رقم الحجز: *${appointment.bookingRef}*` : null,
+  `الخدمة: ${getServiceName(appointment)}`,
+  `الطبيب الجديد: د. ${toDoctor.name}`,
+  `بدلاً من: د. ${fromDoctor.name}`,
+  `الموعد: ${formatDateAr(appointment.scheduledTime)}`,
+  `الوقت: ${formatTimeAr(appointment.scheduledTime)}`,
+  '',
+  'وقت الموعد والخدمة كما هما بدون تغيير.',
+].filter(Boolean).join('\n');
+
+const sendDoctorRescheduled = async (appointment, fromDoctor, toDoctor) => {
+  const channel = resolveChannel(appointment.patient);
+  if (!channel) return;
+
+  const content = buildDoctorRescheduledText(appointment, fromDoctor, toDoctor);
+
+  if (channel === 'WHATSAPP') {
+    await sendWhatsAppTextOrTemplate({
+      patient: appointment.patient,
+      textContent: content,
+      templateName: WHATSAPP_TEMPLATES.doctorRescheduled,
+      bodyParams: [
+        appointment.patient?.name || 'عزيزنا المريض',
+        appointment.bookingRef || '-',
+        getServiceName(appointment),
+        toDoctor.name,
+        fromDoctor.name,
+        formatDateAr(appointment.scheduledTime),
+        formatTimeAr(appointment.scheduledTime),
+      ],
+    });
+  } else {
+    await sendTextByChannel({ channel, patient: appointment.patient, content });
+  }
+
+  await logOutboundMessageIfNeeded({
+    appointment,
+    channel,
+    content,
+    metadata: {
+      source: 'DOCTOR_RESCHEDULE',
+      appointmentId: appointment.id,
+      fromDoctorId: fromDoctor.id,
+      toDoctorId: toDoctor.id,
+    },
+  });
+
+  await createNotificationRecord(appointment.id, 'doctor_rescheduled', channel);
+};
+
 module.exports = {
   sendReminders,
   sendBookingConfirmed,
   sendBookingRejected,
   sendBookingCancelled,
+  sendDoctorRescheduled,
 };

@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Image, Megaphone, Plus, Save, Search, Send, Trash2, Upload } from 'lucide-react';
+import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
-import { toast } from 'react-toastify';
-import { Megaphone, Send, Search, Plus, Save, Trash2 } from 'lucide-react';
+import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
+
+const steps = [
+  { id: 1, label: 'نوع الرسالة' },
+  { id: 2, label: 'القالب والمحتوى' },
+  { id: 3, label: 'اختيار المرضى' },
+  { id: 4, label: 'المراجعة والإرسال' },
+];
 
 const emptyTemplateForm = {
   id: null,
@@ -21,8 +29,12 @@ export default function CampaignsPage() {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
   const canManageTemplates = currentUser?.role === 'ADMIN';
 
+  const [step, setStep] = useState(1);
   const [campaignType, setCampaignType] = useState('TEXT');
   const [messageText, setMessageText] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
+  const [campaignImageUrl, setCampaignImageUrl] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedPatientIds, setSelectedPatientIds] = useState([]);
   const [allPatients, setAllPatients] = useState([]);
   const [patientSearch, setPatientSearch] = useState('');
@@ -48,12 +60,7 @@ export default function CampaignsPage() {
   const fetchPatients = async () => {
     try {
       const res = await api.get('/patients', { params: { limit: 500 } });
-      const items = res.data.patients || [];
-      setAllPatients(
-        items
-          .filter((p) => p.platform === 'WHATSAPP' && p.phone)
-          .map((p) => ({ id: p.id, name: p.name, phone: p.phone }))
-      );
+      setAllPatients((res.data.patients || []).filter((patient) => patient.platform === 'WHATSAPP' && patient.phone));
     } catch (error) {
       toast.error('فشل تحميل المرضى');
     }
@@ -64,50 +71,86 @@ export default function CampaignsPage() {
     fetchPatients();
   }, []);
 
-  const handleSendCampaign = async () => {
-    if (!messageText.trim() || selectedPatientIds.length === 0) {
-      toast.error('أدخل رسالة واختر مرضى');
-      return;
+  const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+  const filteredPatients = allPatients.filter((patient) => {
+    const query = patientSearch.trim().toLowerCase();
+    if (!query) return true;
+    return `${patient.name || ''} ${patient.displayName || ''} ${patient.phone || ''}`.toLowerCase().includes(query);
+  });
+
+  const selectedPatients = useMemo(
+    () => allPatients.filter((patient) => selectedPatientIds.includes(patient.id)),
+    [allPatients, selectedPatientIds]
+  );
+
+  const needsImage = campaignType === 'TEMPLATE' && selectedTemplate?.headerType === 'IMAGE';
+  const canMoveNext =
+    step === 1 ||
+    (step === 2 && (campaignType === 'TEXT' ? messageText.trim() : selectedTemplateId) && (!needsImage || campaignImageUrl || selectedTemplate?.imageUrl)) ||
+    (step === 3 && selectedPatientIds.length > 0) ||
+    step === 4;
+
+  const handleImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      setUploadingImage(true);
+      const res = await api.post('/upload/campaign-image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setCampaignImageUrl(res.data.url);
+      toast.success('تم رفع الصورة');
+    } catch (error) {
+      toast.error(error.message || 'فشل رفع الصورة');
+    } finally {
+      setUploadingImage(false);
     }
+  };
+
+  const handleSendCampaign = async () => {
+    if (selectedPatientIds.length === 0) return toast.error('اختر مرضى أولاً');
+    if (campaignType === 'TEXT' && !messageText.trim()) return toast.error('أدخل نص الرسالة');
+    if (campaignType === 'TEMPLATE' && !selectedTemplateId) return toast.error('اختر قالباً');
 
     try {
       setSending(true);
-      await api.post('/campaigns/broadcast', {
-        broadcastType: 'TEXT',
-        messageText,
+      const res = await api.post('/campaigns/broadcast', {
+        broadcastType: campaignType,
+        messageText: campaignType === 'TEXT' ? messageText : undefined,
+        templateId: campaignType === 'TEMPLATE' ? selectedTemplateId : undefined,
+        imageUrl: campaignImageUrl || undefined,
         audience: 'SELECTED',
         patientIds: selectedPatientIds,
       });
-      toast.success('تم إرسال الحملة');
+      toast.success(res.data.summary || 'تم إرسال الحملة');
       setMessageText('');
+      setSelectedTemplateId('');
+      setCampaignImageUrl('');
       setSelectedPatientIds([]);
+      setStep(1);
     } catch (error) {
-      toast.error('فشل إرسال الحملة');
+      toast.error(error.message || 'فشل إرسال الحملة');
     } finally {
       setSending(false);
     }
   };
 
   const saveTemplate = async () => {
-    if (!templateForm.name.trim() || !templateForm.bodyText.trim()) {
-      toast.error('اسم القالب والرسالة مطلوبان');
-      return;
-    }
-
+    if (!templateForm.name.trim() || !templateForm.displayName.trim()) return toast.error('اسم القالب واسم العرض مطلوبان');
     try {
       setTemplateSaving(true);
-      if (templateForm.id) {
-        await api.put(`/campaigns/templates/${templateForm.id}`, templateForm);
-        toast.success('تم تحديث القالب');
-      } else {
-        await api.post('/campaigns/templates', templateForm);
-        toast.success('تم إنشاء القالب');
-      }
+      if (templateForm.id) await api.put(`/campaigns/templates/${templateForm.id}`, templateForm);
+      else await api.post('/campaigns/templates', templateForm);
+      toast.success('تم حفظ القالب');
       fetchTemplates();
       setShowTemplateForm(false);
       setTemplateForm(emptyTemplateForm);
     } catch (error) {
-      toast.error('فشل حفظ القالب');
+      toast.error(error.message || 'فشل حفظ القالب');
     } finally {
       setTemplateSaving(false);
     }
@@ -124,245 +167,272 @@ export default function CampaignsPage() {
     }
   };
 
-  const filteredPatients = allPatients.filter((p) =>
-    patientSearch ? p.name.toLowerCase().includes(patientSearch.toLowerCase()) : true
-  );
-
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">📢 الحملات</h1>
-            <p className="text-sm text-gray-500 mt-1">إرسال رسائل جماعية للمرضى</p>
-          </div>
-          {canManageTemplates && (
+      <PageHeader
+        title="الحملات"
+        description="إرسال رسائل جماعية بخطوات واضحة: نوع الرسالة، القالب أو النص، الجمهور، ثم المراجعة."
+        actions={canManageTemplates ? (
+          <PrimaryButton type="button" onClick={() => setShowTemplateForm(true)}>
+            <Plus className="h-4 w-4" />
+            قالب جديد
+          </PrimaryButton>
+        ) : null}
+      />
+
+      <DataCard className="mb-6">
+        <div className="grid gap-3 md:grid-cols-4">
+          {steps.map((item) => (
             <button
-              onClick={() => setShowTemplateForm(true)}
-              className="px-4 py-2 rounded-lg bg-blue-500 text-white font-medium hover:bg-blue-600 transition flex items-center gap-2"
+              key={item.id}
+              type="button"
+              onClick={() => setStep(item.id)}
+              className={`rounded-2xl border px-4 py-3 text-sm font-black transition ${
+                step === item.id
+                  ? 'border-sky-400 bg-sky-500/15 text-sky-200'
+                  : item.id < step
+                    ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200'
+                    : 'border-white/10 bg-white/5 text-slate-300'
+              }`}
             >
-              <Plus className="h-4 w-4" />
-              قالب جديد
+              {item.id}. {item.label}
             </button>
-          )}
+          ))}
         </div>
+      </DataCard>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Campaign Form */}
-          <div className="lg:col-span-2 space-y-4">
-            <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-md">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">إنشاء حملة جديدة</h2>
+      <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
+        <DataCard>
+          {step === 1 ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              <Choice selected={campaignType === 'TEXT'} title="رسالة نصية" description="تُرسل داخل نافذة واتساب المتاحة فقط." onClick={() => setCampaignType('TEXT')} />
+              <Choice selected={campaignType === 'TEMPLATE'} title="قالب واتساب" description="مناسب للحملات الرسمية وخارج نافذة 24 ساعة." onClick={() => setCampaignType('TEMPLATE')} />
+            </div>
+          ) : null}
 
-              {/* Message Type */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-900 mb-2">نوع الرسالة</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={campaignType === 'TEXT'}
-                      onChange={() => setCampaignType('TEXT')}
-                      className="w-4 h-4"
-                    />
-                    <span className="text-gray-700">نصية</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="radio"
-                      checked={campaignType === 'TEMPLATE'}
-                      onChange={() => setCampaignType('TEMPLATE')}
-                      className="w-4 h-4"
-                    />
-                    <span className="text-gray-700">قالب</span>
-                  </label>
+          {step === 2 ? (
+            <div className="space-y-4">
+              {campaignType === 'TEXT' ? (
+                <Field label="نص الرسالة">
+                  <textarea className={`${inputClass} min-h-[180px]`} value={messageText} onChange={(event) => setMessageText(event.target.value)} placeholder="اكتب الرسالة هنا. يمكنك استخدام {{name}} لاسم المريض." />
+                </Field>
+              ) : (
+                <>
+                  <Field label="القالب">
+                    <select className={inputClass} value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)} disabled={templatesLoading}>
+                      <option value="">اختر قالباً محفوظاً</option>
+                      {templates.filter((template) => template.active).map((template) => (
+                        <option key={template.id} value={template.id}>{template.displayName || template.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+
+                  {selectedTemplate ? (
+                    <DataCard className="bg-white/[0.03]">
+                      <StatusBadge tone={selectedTemplate.headerType === 'IMAGE' ? 'blue' : 'slate'}>
+                        Header: {selectedTemplate.headerType}
+                      </StatusBadge>
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectedTemplate.bodyText || 'قالب بدون نص معاينة داخلي.'}</p>
+                    </DataCard>
+                  ) : null}
+
+                  {needsImage ? (
+                    <Field label="صورة القالب لهذه الحملة">
+                      <div className="flex flex-col gap-3">
+                        <input className={inputClass} value={campaignImageUrl} onChange={(event) => setCampaignImageUrl(event.target.value)} placeholder="رابط الصورة أو ارفع صورة" />
+                        <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold text-slate-300 transition hover:bg-white/10">
+                          <Upload className="h-4 w-4" />
+                          {uploadingImage ? 'جاري الرفع...' : 'رفع صورة'}
+                          <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
+                        </label>
+                      </div>
+                    </Field>
+                  ) : null}
+                </>
+              )}
+            </div>
+          ) : null}
+
+          {step === 3 ? (
+            <div className="space-y-4">
+              <Field label="بحث في المرضى">
+                <div className="relative">
+                  <Search className="absolute right-3 top-3 h-4 w-4 text-slate-500" />
+                  <input className={`${inputClass} pr-10`} value={patientSearch} onChange={(event) => setPatientSearch(event.target.value)} placeholder="اسم أو رقم المريض" />
                 </div>
+              </Field>
+              <div className="flex flex-wrap gap-2">
+                <SecondaryButton type="button" onClick={() => setSelectedPatientIds(filteredPatients.map((patient) => patient.id))}>تحديد الكل ({filteredPatients.length})</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => setSelectedPatientIds([])}>إلغاء التحديد</SecondaryButton>
               </div>
-
-              {/* Message Input */}
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-900 mb-2">الرسالة</label>
-                <textarea
-                  value={messageText}
-                  onChange={(e) => setMessageText(e.target.value)}
-                  placeholder="اكتب رسالتك..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                  rows="4"
-                />
-                <p className="text-xs text-gray-500 mt-1">{messageText.length} حرف</p>
-              </div>
-
-              {/* Action Button */}
-              <button
-                onClick={handleSendCampaign}
-                disabled={sending || selectedPatientIds.length === 0 || !messageText.trim()}
-                className="w-full px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              >
-                {sending ? (
-                  <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
-                ) : (
-                  <Send className="h-4 w-4" />
-                )}
-                إرسال ({selectedPatientIds.length})
-              </button>
-            </div>
-          </div>
-
-          {/* Patient Selection */}
-          <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-md">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">اختيار المرضى</h2>
-
-            <div className="mb-3">
-              <input
-                type="text"
-                placeholder="ابحث..."
-                value={patientSearch}
-                onChange={(e) => setPatientSearch(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
-
-            <button
-              onClick={() => setSelectedPatientIds(filteredPatients.map((p) => p.id))}
-              className="w-full px-3 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-xs font-medium hover:bg-gray-200 transition mb-3"
-            >
-              تحديد الكل ({filteredPatients.length})
-            </button>
-
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {filteredPatients.map((patient) => (
-                <label
-                  key={patient.id}
-                  className="flex items-center gap-2 p-2 rounded hover:bg-gray-50 cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedPatientIds.includes(patient.id)}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedPatientIds([...selectedPatientIds, patient.id]);
-                      } else {
-                        setSelectedPatientIds(selectedPatientIds.filter((id) => id !== patient.id));
-                      }
-                    }}
-                    className="w-4 h-4"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">{patient.name}</p>
-                    <p className="text-xs text-gray-500" dir="ltr">
-                      {patient.phone}
-                    </p>
-                  </div>
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Templates Section */}
-        {canManageTemplates && (
-          <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-md">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">القوالب</h2>
-
-            {templatesLoading ? (
-              <div className="flex justify-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
-              </div>
-            ) : templates.length === 0 ? (
-              <p className="text-gray-500 text-center py-8">لا توجد قوالب</p>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {templates.map((template) => (
-                  <div key={template.id} className="border border-gray-200 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-bold text-gray-900">{template.displayName}</h3>
-                      <button
-                        onClick={() => deleteTemplate(template.id)}
-                        className="text-red-600 hover:text-red-700"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                    <p className="text-sm text-gray-600 line-clamp-2">{template.bodyText}</p>
-                    <button
-                      onClick={() => {
-                        setTemplateForm(template);
-                        setShowTemplateForm(true);
+              <div className="grid max-h-[520px] gap-2 overflow-y-auto">
+                {filteredPatients.map((patient) => (
+                  <label key={patient.id} className="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedPatientIds.includes(patient.id)}
+                      onChange={(event) => {
+                        setSelectedPatientIds((current) =>
+                          event.target.checked ? [...current, patient.id] : current.filter((id) => id !== patient.id)
+                        );
                       }}
-                      className="mt-3 w-full px-2 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-xs font-medium hover:bg-blue-200 transition"
-                    >
-                      تعديل
-                    </button>
-                  </div>
+                    />
+                    <span className="flex-1">
+                      <span className="block font-bold text-white">{patient.displayName || patient.name}</span>
+                      <span className="block text-xs text-slate-400" dir="ltr">{patient.phone}</span>
+                    </span>
+                  </label>
                 ))}
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Template Form Modal */}
-        {showTemplateForm && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 overflow-auto">
-            <div className="bg-white rounded-lg border border-gray-200 shadow-2xl w-full max-w-2xl my-4">
-              <div className="flex items-center justify-between p-6 border-b border-gray-200">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {templateForm.id ? 'تعديل القالب' : 'قالب جديد'}
-                </h2>
-                <button
-                  onClick={() => {
-                    setShowTemplateForm(false);
-                    setTemplateForm(emptyTemplateForm);
-                  }}
-                  className="text-gray-600 hover:text-gray-900"
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="p-6 space-y-4 max-h-[calc(100vh-200px)] overflow-y-auto">
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1">اسم القالب</label>
-                  <input
-                    type="text"
-                    value={templateForm.name}
-                    onChange={(e) => setTemplateForm({ ...templateForm, name: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 mb-1">الرسالة</label>
-                  <textarea
-                    value={templateForm.bodyText}
-                    onChange={(e) => setTemplateForm({ ...templateForm, bodyText: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    rows="4"
-                  />
-                </div>
-
-                <div className="flex gap-2 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={saveTemplate}
-                    disabled={templateSaving}
-                    className="flex-1 px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                  >
-                    <Save className="h-4 w-4" />
-                    حفظ
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowTemplateForm(false);
-                      setTemplateForm(emptyTemplateForm);
-                    }}
-                    className="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition"
-                  >
-                    إلغاء
-                  </button>
-                </div>
-              </div>
             </div>
+          ) : null}
+
+          {step === 4 ? (
+            <div className="space-y-4">
+              <h2 className="text-xl font-black text-white">مراجعة الحملة</h2>
+              <div className="grid gap-3 md:grid-cols-3">
+                <Info label="النوع" value={campaignType === 'TEXT' ? 'رسالة نصية' : 'قالب واتساب'} />
+                <Info label="المرضى" value={selectedPatientIds.length} />
+                <Info label="الصورة" value={campaignImageUrl || selectedTemplate?.imageUrl ? 'موجودة' : 'بدون'} />
+              </div>
+              <PrimaryButton type="button" onClick={handleSendCampaign} disabled={sending} className="w-full">
+                <Send className="h-4 w-4" />
+                إرسال الحملة
+              </PrimaryButton>
+            </div>
+          ) : null}
+
+          <div className="mt-6 flex justify-between border-t border-white/10 pt-4">
+            <SecondaryButton type="button" disabled={step === 1} onClick={() => setStep((current) => Math.max(1, current - 1))}>السابق</SecondaryButton>
+            <PrimaryButton type="button" disabled={!canMoveNext || step === 4} onClick={() => setStep((current) => Math.min(4, current + 1))}>التالي</PrimaryButton>
           </div>
-        )}
+        </DataCard>
+
+        <DataCard>
+          <div className="mb-4 flex items-center gap-2">
+            <Megaphone className="h-5 w-5 text-sky-300" />
+            <h2 className="text-lg font-black text-white">معاينة</h2>
+          </div>
+          <div className="rounded-3xl border border-white/10 bg-[#111827] p-4">
+            <div className="mb-3 text-xs text-slate-400">واتساب - عيادتي</div>
+            {campaignImageUrl || selectedTemplate?.imageUrl ? (
+              <div className="mb-3 flex h-36 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-slate-400">
+                <Image className="h-8 w-8" />
+              </div>
+            ) : null}
+            <p className="whitespace-pre-wrap text-sm leading-7 text-white">
+              {campaignType === 'TEXT'
+                ? messageText || 'اكتب نص الرسالة لظهور المعاينة.'
+                : selectedTemplate?.bodyText || 'اختر قالباً لظهور المعاينة.'}
+            </p>
+          </div>
+          <div className="mt-4 text-sm text-slate-400">
+            المحددون: {selectedPatients.slice(0, 3).map((patient) => patient.displayName || patient.name).join('، ')}
+            {selectedPatients.length > 3 ? ` و ${selectedPatients.length - 3} آخرين` : ''}
+          </div>
+        </DataCard>
       </div>
+
+      {canManageTemplates ? (
+        <DataCard className="mt-6">
+          <h2 className="mb-4 text-lg font-black text-white">القوالب المحفوظة</h2>
+          {templates.length === 0 ? (
+            <p className="text-slate-400">لا توجد قوالب محفوظة.</p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {templates.map((template) => (
+                <div key={template.id} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="font-black text-white">{template.displayName}</h3>
+                      <p className="text-xs text-slate-500">{template.name}</p>
+                    </div>
+                    <button type="button" onClick={() => deleteTemplate(template.id)} className="text-rose-300 hover:text-rose-200">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="mt-3 line-clamp-3 text-sm text-slate-300">{template.bodyText}</p>
+                  <SecondaryButton type="button" onClick={() => { setTemplateForm(template); setShowTemplateForm(true); }} className="mt-3 w-full">تعديل</SecondaryButton>
+                </div>
+              ))}
+            </div>
+          )}
+        </DataCard>
+      ) : null}
+
+      {showTemplateForm ? (
+        <TemplateModal
+          form={templateForm}
+          setForm={setTemplateForm}
+          saving={templateSaving}
+          onSave={saveTemplate}
+          onClose={() => { setShowTemplateForm(false); setTemplateForm(emptyTemplateForm); }}
+        />
+      ) : null}
     </AppLayout>
+  );
+}
+
+function Choice({ selected, title, description, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-3xl border p-5 text-right transition ${
+        selected ? 'border-sky-400 bg-sky-500/15' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
+      }`}
+    >
+      <h3 className="text-lg font-black text-white">{title}</h3>
+      <p className="mt-2 text-sm leading-6 text-slate-400">{description}</p>
+    </button>
+  );
+}
+
+function Info({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-black text-white">{value}</p>
+    </div>
+  );
+}
+
+function TemplateModal({ form, setForm, saving, onSave, onClose }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#0b1020] p-6 shadow-2xl">
+        <div className="mb-5 flex items-center justify-between">
+          <h2 className="text-xl font-black text-white">{form.id ? 'تعديل القالب' : 'قالب جديد'}</h2>
+          <button type="button" onClick={onClose} className="text-slate-400 hover:text-white">إغلاق</button>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="اسم القالب في Meta">
+            <input className={inputClass} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+          </Field>
+          <Field label="اسم العرض داخل النظام">
+            <input className={inputClass} value={form.displayName} onChange={(event) => setForm({ ...form, displayName: event.target.value })} />
+          </Field>
+          <Field label="نوع الهيدر">
+            <select className={inputClass} value={form.headerType} onChange={(event) => setForm({ ...form, headerType: event.target.value })}>
+              <option value="NONE">بدون</option>
+              <option value="IMAGE">صورة</option>
+            </select>
+          </Field>
+          <Field label="رابط صورة القالب الافتراضية">
+            <input className={inputClass} value={form.imageUrl || ''} onChange={(event) => setForm({ ...form, imageUrl: event.target.value })} />
+          </Field>
+          <Field label="نص القالب">
+            <textarea className={`${inputClass} min-h-[140px] md:col-span-2`} value={form.bodyText || ''} onChange={(event) => setForm({ ...form, bodyText: event.target.value })} />
+          </Field>
+        </div>
+        <div className="mt-6 flex justify-end gap-3">
+          <SecondaryButton type="button" onClick={onClose}>إلغاء</SecondaryButton>
+          <PrimaryButton type="button" onClick={onSave} disabled={saving}>
+            <Save className="h-4 w-4" />
+            حفظ
+          </PrimaryButton>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -1367,7 +1367,7 @@ const handleInquiry = async (from, patient, content) => {
 
     const history = recentMessages.reverse();
 
-    const aiResponse = await openaiService.getInquiryResponse(content, history);
+    const aiResponse = await openaiService.getInquiryResponse(content, history, patient.id);
 
     // Send AI response
     await whatsappService.sendTextMessage(from, aiResponse);

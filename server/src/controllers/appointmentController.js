@@ -294,13 +294,9 @@ const rescheduleByDoctor = async (req, res, next) => {
     });
 
     if (notifyPatient) {
-      const whatsappService = require('../services/whatsappService');
       for (const appointment of appointments) {
         try {
-          await whatsappService.sendTextMessage(
-            appointment.patient.phone,
-            `تم تعيين د. ${toDoctor.name} بدلاً من د. ${fromDoctor.name} لموعدك القادم. وقت الموعد والخدمة كما هما بدون تغيير.`
-          );
+          await notificationService.sendDoctorRescheduled(appointment, fromDoctor, toDoctor);
         } catch (error) {
           console.error('[Doctor reschedule] notify failed:', error.message);
         }

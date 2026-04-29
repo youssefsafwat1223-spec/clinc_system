@@ -3,6 +3,7 @@ const config = require('../config/env');
 const prisma = require('../lib/prisma');
 const { resolveWhatsAppChatLink } = require('../utils/clinicLinks');
 const { formatCurrency } = require('../utils/helpers');
+const { getDiscountForService } = require('./discountService');
 const {
   formatFaqsForPrompt,
   formatKnowledgeForPrompt,
@@ -47,26 +48,41 @@ const formatWorkingHours = (workingHours = {}) =>
     })
     .join('\n');
 
-const buildServicesInfo = async () => {
+const formatServicePriceForPatient = async (service, patientId) => {
+  if (!service?.price) return '';
+  if (!patientId) return formatCurrency(service.price);
+
+  const discount = await getDiscountForService({ patientId, service });
+  if (!discount.discountAmount) return formatCurrency(discount.amount);
+
+  const label = discount.rule?.type === 'PERCENT'
+    ? `خصم ${Number(discount.rule.value).toLocaleString('ar-EG')}%`
+    : `خصم ${formatCurrency(discount.discountAmount)}`;
+
+  return `${formatCurrency(discount.finalAmount)} بعد ${label}`;
+};
+
+const buildServicesInfo = async (patientId = null) => {
   try {
     const services = await prisma.service.findMany({ where: { active: true } });
     if (!services.length) return '';
 
+    const lines = [];
+    for (const service of services) {
+      const price = await formatServicePriceForPatient(service, patientId);
+      lines.push(`- ${service.nameAr || service.name}: ${service.description || ''}${price ? ` (${price})` : ''}`);
+    }
+
     return [
       'الخدمات المتاحة:',
-      ...services.map(
-        (service) =>
-          `- ${service.nameAr || service.name}: ${service.description || ''}${
-            service.price ? ` (${formatCurrency(service.price)})` : ''
-          }`
-      ),
+      ...lines,
     ].join('\n');
   } catch (error) {
     return '';
   }
 };
 
-const buildServicePricesReplySuffix = async () => {
+const buildServicePricesReplySuffix = async (patientId = null) => {
   try {
     const services = await prisma.service.findMany({
       where: {
@@ -83,16 +99,19 @@ const buildServicePricesReplySuffix = async () => {
 
     if (!services.length) return '';
 
-    return [
-      'أسعار الخدمات المتاحة:',
-      ...services.map((service) => `- ${service.nameAr || service.name || 'خدمة'}: ${formatCurrency(service.price)}`),
-    ].join('\n');
+    const lines = [];
+    for (const service of services) {
+      const price = await formatServicePriceForPatient(service, patientId);
+      lines.push(`- ${service.nameAr || service.name || 'خدمة'}: ${price}`);
+    }
+
+    return ['أسعار الخدمات المتاحة:', ...lines].join('\n');
   } catch (error) {
     return '';
   }
 };
 
-const buildServicesDirectReply = async () => {
+const buildServicesDirectReply = async (patientId = null) => {
   try {
     const services = await prisma.service.findMany({
       where: { active: true },
@@ -109,15 +128,16 @@ const buildServicesDirectReply = async () => {
       return 'لا توجد خدمات مضافة حالياً.';
     }
 
-    return [
-      'الخدمات المتاحة في العيادة:',
-      ...services.map((service) => {
-        const serviceName = service.nameAr || service.name || 'خدمة';
-        const pricePart = service.price ? ` - ${formatCurrency(service.price)}` : '';
-        const descriptionPart = service.description ? `\n${service.description}` : '';
-        return `- ${serviceName}${pricePart}${descriptionPart}`;
-      }),
-    ].join('\n');
+    const lines = [];
+    for (const service of services) {
+      const serviceName = service.nameAr || service.name || 'خدمة';
+      const price = await formatServicePriceForPatient(service, patientId);
+      const pricePart = price ? ` - ${price}` : '';
+      const descriptionPart = service.description ? `\n${service.description}` : '';
+      lines.push(`- ${serviceName}${pricePart}${descriptionPart}`);
+    }
+
+    return ['الخدمات المتاحة في العيادة:', ...lines].join('\n');
   } catch (error) {
     return '';
   }
@@ -244,6 +264,7 @@ const generateInquiryResponse = async ({
   conversationHistory = [],
   settingsOverride = null,
   includeDebug = false,
+  patientId = null,
 }) => {
   let settingsSource = settingsOverride;
   if (!settingsSource) {
@@ -259,8 +280,8 @@ const generateInquiryResponse = async ({
   const wantsServices = SERVICES_INTENT_PATTERN.test(String(userMessage || ''));
   const wantsDoctorSchedules = DOCTOR_SCHEDULE_INTENT_PATTERN.test(String(userMessage || ''));
 
-  const servicePricesSuffix = wantsServicePrices ? await buildServicePricesReplySuffix() : '';
-  const servicesDirectReply = wantsServices ? await buildServicesDirectReply() : '';
+  const servicePricesSuffix = wantsServicePrices ? await buildServicePricesReplySuffix(patientId) : '';
+  const servicesDirectReply = wantsServices ? await buildServicesDirectReply(patientId) : '';
   const doctorSchedulesReply = wantsDoctorSchedules ? await buildDoctorsSchedulesReply() : '';
 
   const directSections = [directClinicReply, servicesDirectReply, doctorSchedulesReply].filter(Boolean);
@@ -290,7 +311,7 @@ const generateInquiryResponse = async ({
     userMessage
   );
   const clinicInfo = buildClinicInfoContext(settingsSource);
-  const servicesInfo = await buildServicesInfo();
+  const servicesInfo = await buildServicesInfo(patientId);
   const faqInfo = formatFaqsForPrompt(aiConfig.faqs);
   const knowledgeInfo = formatKnowledgeForPrompt(selectedKnowledge);
 
@@ -359,8 +380,8 @@ const generateInquiryResponse = async ({
   }
 };
 
-const getInquiryResponse = async (userMessage, conversationHistory = []) =>
-  generateInquiryResponse({ userMessage, conversationHistory });
+const getInquiryResponse = async (userMessage, conversationHistory = [], patientId = null) =>
+  generateInquiryResponse({ userMessage, conversationHistory, patientId });
 
 const previewInquiryResponse = async ({
   userMessage,

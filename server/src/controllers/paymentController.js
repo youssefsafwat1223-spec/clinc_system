@@ -1,9 +1,5 @@
 const prisma = require('../lib/prisma');
-
-const toNumber = (value, fallback = 0) => {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : fallback;
-};
+const { getDiscountForAppointment, toNumber } = require('../services/discountService');
 
 const resolveStatus = (paidAmount, finalAmount, explicitStatus) => {
   if (['UNPAID', 'PARTIAL', 'PAID'].includes(explicitStatus)) return explicitStatus;
@@ -12,58 +8,12 @@ const resolveStatus = (paidAmount, finalAmount, explicitStatus) => {
   return 'PAID';
 };
 
-const getDiscountForAppointment = async (appointment) => {
-  if (!appointment?.patientId) return 0;
-
-  const amount = toNumber(appointment.service?.price);
-  if (amount <= 0) return 0;
-
-  const memberships = await prisma.patientGroupMember.findMany({
-    where: { patientId: appointment.patientId },
-    select: { groupId: true },
-  });
-  const groupIds = memberships.map((membership) => membership.groupId);
-  const now = new Date();
-
-  const rules = await prisma.discountRule.findMany({
-    where: {
-      active: true,
-      OR: [{ groupId: null }, { groupId: { in: groupIds } }],
-      AND: [
-        {
-          OR: [
-            { serviceId: null },
-            { serviceId: appointment.serviceId },
-            { serviceName: appointment.service?.name },
-            { serviceName: appointment.service?.nameAr },
-          ],
-        },
-        {
-          OR: [{ startsAt: null }, { startsAt: { lte: now } }],
-        },
-        {
-          OR: [{ endsAt: null }, { endsAt: { gte: now } }],
-        },
-      ],
-    },
-    orderBy: { createdAt: 'desc' },
-  });
-
-  if (!rules.length) return 0;
-
-  const discounts = rules.map((rule) => {
-    const value = toNumber(rule.value);
-    if (rule.type === 'FIXED') return value;
-    return (amount * value) / 100;
-  });
-
-  return Math.max(0, Math.min(amount, Math.max(...discounts)));
-};
-
 const buildPaymentData = async (appointment, body = {}) => {
   const amount = body.amount !== undefined ? toNumber(body.amount) : toNumber(appointment.service?.price);
   const discountAmount =
-    body.discountAmount !== undefined ? toNumber(body.discountAmount) : await getDiscountForAppointment(appointment);
+    body.discountAmount !== undefined
+      ? toNumber(body.discountAmount)
+      : (await getDiscountForAppointment(appointment)).discountAmount;
   const finalAmount = Math.max(0, amount - Math.max(0, discountAmount));
   const paidAmount = Math.max(0, toNumber(body.paidAmount));
   const status = resolveStatus(paidAmount, finalAmount, body.status);

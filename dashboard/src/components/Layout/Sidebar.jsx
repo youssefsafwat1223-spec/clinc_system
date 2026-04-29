@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   Bot,
   Calendar,
+  ClipboardCheck,
   CreditCard,
   FileText,
   Home,
@@ -15,6 +16,7 @@ import {
   Settings,
   Star,
   Stethoscope,
+  UserPlus,
   UserSquare2,
   Users,
 } from 'lucide-react';
@@ -24,6 +26,9 @@ import api from '../../api/client';
 const navItems = [
   { path: '/dashboard', label: 'الرئيسية', icon: Home },
   { path: '/inbox', label: 'صندوق الوارد', icon: MessageSquare },
+  { path: '/today-patients', label: 'مرضى اليوم', icon: Users },
+  { path: '/add-patient', label: 'إضافة مريض / موعد', icon: UserPlus },
+  { path: '/appointment-requests', label: 'قبول الطلبات والكشف', icon: ClipboardCheck },
   { path: '/appointments', label: 'المواعيد', icon: Calendar },
   { path: '/patients', label: 'المرضى', icon: Users },
   { path: '/prescriptions', label: 'الروشتات', icon: Pill, allowedRoles: ['ADMIN', 'DOCTOR'] },
@@ -83,6 +88,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
     () => ({
       '/inbox': counts.unreadMessages > 0 ? counts.unreadMessages : null,
       '/appointments': counts.pendingAppointments > 0 ? counts.pendingAppointments : null,
+      '/appointment-requests': counts.pendingAppointments > 0 ? counts.pendingAppointments : null,
     }),
     [counts]
   );

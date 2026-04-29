@@ -54,4 +54,15 @@ router.post('/', requireRole('ADMIN'), upload.single('image'), (req, res) => {
   });
 });
 
+router.post('/campaign-image', requireRole('ADMIN', 'STAFF'), upload.single('image'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'الرجاء اختيار صورة للحملة' });
+  }
+
+  res.json({
+    message: 'تم رفع صورة الحملة بنجاح',
+    url: `/api/images/${req.file.filename}`,
+  });
+});
+
 module.exports = router;

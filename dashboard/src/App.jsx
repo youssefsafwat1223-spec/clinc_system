@@ -6,7 +6,11 @@ const LoginPage = lazy(() => import('./pages/LoginPage.jsx'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const InboxPage = lazy(() => import('./pages/InboxPage.jsx'));
 const PatientsPage = lazy(() => import('./pages/PatientsPage.jsx'));
+const PatientProfilePage = lazy(() => import('./pages/PatientProfilePage.jsx'));
 const AppointmentsPage = lazy(() => import('./pages/AppointmentsPage.jsx'));
+const TodayPatientsPage = lazy(() => import('./pages/TodayPatientsPage.jsx'));
+const AddPatientAppointmentPage = lazy(() => import('./pages/AddPatientAppointmentPage.jsx'));
+const AppointmentRequestsPage = lazy(() => import('./pages/AppointmentRequestsPage.jsx'));
 const ServicesPage = lazy(() => import('./pages/ServicesPage.jsx'));
 const StaffPage = lazy(() => import('./pages/StaffPage.jsx'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'));
@@ -88,6 +92,38 @@ function App() {
             element={
               <ProtectedRoute>
                 <PatientsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/patients/:id"
+            element={
+              <ProtectedRoute>
+                <PatientProfilePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/today-patients"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION']}>
+                <TodayPatientsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/add-patient"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION']}>
+                <AddPatientAppointmentPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/appointment-requests"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION']}>
+                <AppointmentRequestsPage />
               </ProtectedRoute>
             }
           />

@@ -1,15 +1,21 @@
 import { useEffect, useState } from 'react';
-import { CheckCircle, Clock, MessageSquare, Search, Send } from 'lucide-react';
-import { format, parseISO } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { HelpCircle, MessageSquare, Send } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
+import { DataCard, PageHeader, PrimaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import { formatDateTime } from '../utils/appointmentUi';
 
 const statusLabels = {
   PENDING: 'قيد الانتظار',
   REPLIED: 'تم الرد',
   CLOSED: 'مغلقة',
+};
+
+const statusTone = {
+  PENDING: 'amber',
+  REPLIED: 'green',
+  CLOSED: 'slate',
 };
 
 const getPatientName = (consultation) =>
@@ -33,14 +39,9 @@ export default function ConsultationsPage() {
       const res = await api.get('/consultations');
       const data = res.data || [];
       setConsultations(data);
-      setSelectedInquiry((current) => {
-        if (current && data.some((c) => c.id === current.id)) {
-          return data.find((c) => c.id === current.id);
-        }
-        return data[0] || null;
-      });
+      setSelectedInquiry((current) => data.find((item) => item.id === current?.id) || data[0] || null);
     } catch (error) {
-      toast.error('فشل في تحميل الاستشارات');
+      toast.error('فشل تحميل الاستشارات');
     } finally {
       setLoading(false);
     }
@@ -50,15 +51,13 @@ export default function ConsultationsPage() {
     fetchConsultations();
   }, []);
 
-  const handleReply = async (e) => {
-    e.preventDefault();
+  const handleReply = async (event) => {
+    event.preventDefault();
     if (!selectedInquiry || !replyText.trim()) return;
 
     try {
       setReplying(true);
-      await api.post(`/consultations/${selectedInquiry.id}/reply`, {
-        reply: replyText,
-      });
+      await api.post(`/consultations/${selectedInquiry.id}/reply`, { reply: replyText });
       toast.success('تم إرسال الرد');
       setReplyText('');
       fetchConsultations();
@@ -69,185 +68,137 @@ export default function ConsultationsPage() {
     }
   };
 
-  const filteredConsultations = consultations.filter((c) => {
-    if (activeFilter !== 'ALL' && c.status !== activeFilter) return false;
-    const haystack = `${getPatientName(c)} ${c.patient?.phone || ''} ${getQuestionText(c)}`.toLowerCase();
-    if (searchTerm && !haystack.includes(searchTerm.toLowerCase())) return false;
-    return true;
+  const filteredConsultations = consultations.filter((consultation) => {
+    if (activeFilter !== 'ALL' && consultation.status !== activeFilter) return false;
+    const haystack = `${getPatientName(consultation)} ${consultation.patient?.phone || ''} ${getQuestionText(consultation)}`.toLowerCase();
+    return !searchTerm || haystack.includes(searchTerm.toLowerCase());
   });
 
   const stats = {
     total: consultations.length,
-    pending: consultations.filter((c) => c.status === 'PENDING').length,
-    replied: consultations.filter((c) => c.status === 'REPLIED').length,
-    closed: consultations.filter((c) => c.status === 'CLOSED').length,
+    pending: consultations.filter((item) => item.status === 'PENDING').length,
+    replied: consultations.filter((item) => item.status === 'REPLIED').length,
+    closed: consultations.filter((item) => item.status === 'CLOSED').length,
   };
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">📋 الاستشارات</h1>
-          <p className="text-sm text-gray-500 mt-1">الرد على استشارات المرضى</p>
-        </div>
+      <PageHeader
+        title="الاستشارات"
+        description="متابعة أسئلة المرضى الطبية والرد عليها من لوحة التحكم."
+      />
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-            <p className="text-xs font-medium text-gray-600">الإجمالي</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.total}</p>
+      <DataCard className="mb-6">
+        <div className="flex items-start gap-3">
+          <div className="rounded-2xl bg-sky-500/10 p-3 text-sky-300">
+            <HelpCircle className="h-6 w-6" />
           </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-            <p className="text-xs font-medium text-gray-600">قيد الانتظار</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.pending}</p>
-          </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-            <p className="text-xs font-medium text-gray-600">مردود</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.replied}</p>
-          </div>
-          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
-            <p className="text-xs font-medium text-gray-600">مغلقة</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{stats.closed}</p>
+          <div className="space-y-2 text-sm leading-7 text-slate-300">
+            <h2 className="text-lg font-black text-white">شرح استخدام صفحة الاستشارات</h2>
+            <p>الاستشارة قيد الانتظار تعني أن المريض أرسل سؤالاً يحتاج رد طبي أو إداري. بعد كتابة الرد وإرساله تتغير الحالة إلى تم الرد.</p>
+            <p>لو السؤال يحتاج كشف، اكتب للمريض أن الحالة تحتاج فحص ثم أنشئ له موعد من صفحة إضافة مريض / موعد. لا تكتب تشخيص نهائي من غير كشف.</p>
+            <p>الرد يُرسل للمريض على القناة المرتبطة به، ويتسجل في ملف المريض للرجوع له لاحقاً.</p>
           </div>
         </div>
+      </DataCard>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Consultations List */}
-          <div className="lg:col-span-1 bg-white rounded-lg border border-gray-200 shadow-md overflow-hidden flex flex-col">
-            <div className="p-4 border-b border-gray-200">
-              <input
-                type="text"
-                placeholder="ابحث..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-              />
-            </div>
+      <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="الإجمالي" value={stats.total} icon={MessageSquare} tone="blue" />
+        <StatCard title="قيد الانتظار" value={stats.pending} icon={MessageSquare} tone="amber" />
+        <StatCard title="تم الرد" value={stats.replied} icon={MessageSquare} tone="green" />
+        <StatCard title="مغلقة" value={stats.closed} icon={MessageSquare} tone="slate" />
+      </div>
 
-            <div className="flex gap-1 p-2 border-b border-gray-200 overflow-x-auto">
+      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+        <DataCard className="p-0">
+          <div className="border-b border-white/10 p-4">
+            <input className={inputClass} value={searchTerm} onChange={(event) => setSearchTerm(event.target.value)} placeholder="بحث في الاستشارات" />
+            <div className="mt-3 flex gap-2 overflow-x-auto">
               {['ALL', 'PENDING', 'REPLIED', 'CLOSED'].map((status) => (
                 <button
                   key={status}
+                  type="button"
                   onClick={() => setActiveFilter(status)}
-                  className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap transition ${
-                    activeFilter === status
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  className={`rounded-xl px-3 py-2 text-xs font-bold transition ${
+                    activeFilter === status ? 'bg-sky-500 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'
                   }`}
                 >
                   {status === 'ALL' ? 'الكل' : statusLabels[status]}
                 </button>
               ))}
             </div>
-
-            <div className="flex-1 overflow-y-auto divide-y divide-gray-200">
-              {loading ? (
-                <div className="flex justify-center items-center h-40">
-                  <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
-                </div>
-              ) : filteredConsultations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-gray-500">
-                  <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
-                  <p className="text-sm">لا توجد استشارات</p>
-                </div>
-              ) : (
-                filteredConsultations.map((consultation) => (
-                  <button
-                    key={consultation.id}
-                    onClick={() => setSelectedInquiry(consultation)}
-                    className={`w-full p-3 text-right transition hover:bg-gray-50 ${
-                      selectedInquiry?.id === consultation.id ? 'bg-green-50 border-l-4 border-green-500' : ''
-                    }`}
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-bold text-gray-900 text-sm">{getPatientName(consultation)}</h4>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                        consultation.status === 'PENDING'
-                          ? 'bg-yellow-100 text-yellow-700'
-                          : consultation.status === 'REPLIED'
-                            ? 'bg-green-100 text-green-700'
-                            : 'bg-gray-100 text-gray-700'
-                      }`}>
-                        {statusLabels[consultation.status]}
-                      </span>
-                    </div>
-                    <p className="text-xs text-gray-600 line-clamp-2">{getQuestionText(consultation)}</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {format(parseISO(consultation.createdAt), 'dd MMM', { locale: ar })}
-                    </p>
-                  </button>
-                ))
-              )}
-            </div>
           </div>
 
-          {/* Consultation Details */}
-          <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 shadow-md overflow-hidden flex flex-col">
-            {selectedInquiry ? (
-              <>
-                <div className="p-4 border-b border-gray-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-lg font-bold text-gray-900">{getPatientName(selectedInquiry)}</h2>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      selectedInquiry.status === 'PENDING'
-                        ? 'bg-yellow-100 text-yellow-700'
-                        : selectedInquiry.status === 'REPLIED'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700'
-                    }`}>
-                      {statusLabels[selectedInquiry.status]}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    {format(parseISO(selectedInquiry.createdAt), 'dd MMM yyyy - hh:mm a', { locale: ar })}
-                  </p>
-                </div>
-
-                <div className="flex-1 p-4 overflow-y-auto bg-gray-50">
-                  <div className="space-y-4">
-                    <div className="bg-white rounded-lg p-4 border border-gray-200">
-                      <p className="text-sm font-medium text-gray-900 mb-2">السؤال:</p>
-                      <p className="text-sm text-gray-700">{getQuestionText(selectedInquiry)}</p>
-                    </div>
-
-                    {selectedInquiry.reply && (
-                      <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                        <p className="text-sm font-medium text-green-900 mb-2">الرد:</p>
-                        <p className="text-sm text-green-800">{selectedInquiry.reply}</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {selectedInquiry.status !== 'CLOSED' && (
-                  <div className="p-4 border-t border-gray-200">
-                    <form onSubmit={handleReply} className="space-y-2">
-                      <textarea
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        placeholder="أكتب الرد..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                        rows="3"
-                      />
-                      <button
-                        type="submit"
-                        disabled={replying || !replyText.trim()}
-                        className="w-full px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition disabled:opacity-50 flex items-center justify-center gap-2"
-                      >
-                        {replying ? 'جاري...' : <><Send className="h-4 w-4" /> إرسال</>}
-                      </button>
-                    </form>
-                  </div>
-                )}
-              </>
+          <div className="max-h-[620px] divide-y divide-white/5 overflow-y-auto">
+            {loading ? (
+              <div className="p-6 text-slate-400">جاري التحميل...</div>
+            ) : filteredConsultations.length === 0 ? (
+              <div className="p-6 text-slate-400">لا توجد استشارات.</div>
             ) : (
-              <div className="flex-1 flex flex-col items-center justify-center text-gray-500">
-                <MessageSquare className="h-12 w-12 mb-3 opacity-30" />
-                <p className="text-sm">اختر استشارة من القائمة</p>
-              </div>
+              filteredConsultations.map((consultation) => (
+                <button
+                  key={consultation.id}
+                  type="button"
+                  onClick={() => setSelectedInquiry(consultation)}
+                  className={`w-full p-4 text-right transition hover:bg-white/5 ${
+                    selectedInquiry?.id === consultation.id ? 'bg-sky-500/10' : ''
+                  }`}
+                >
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <h3 className="truncate font-bold text-white">{getPatientName(consultation)}</h3>
+                    <StatusBadge tone={statusTone[consultation.status]}>{statusLabels[consultation.status]}</StatusBadge>
+                  </div>
+                  <p className="line-clamp-2 text-sm text-slate-400">{getQuestionText(consultation)}</p>
+                  <p className="mt-2 text-xs text-slate-500">{formatDateTime(consultation.createdAt)}</p>
+                </button>
+              ))
             )}
           </div>
-        </div>
+        </DataCard>
+
+        <DataCard className="flex min-h-[560px] flex-col">
+          {selectedInquiry ? (
+            <>
+              <div className="border-b border-white/10 pb-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="text-xl font-black text-white">{getPatientName(selectedInquiry)}</h2>
+                    <p className="mt-1 text-sm text-slate-400">{formatDateTime(selectedInquiry.createdAt)}</p>
+                  </div>
+                  <StatusBadge tone={statusTone[selectedInquiry.status]}>{statusLabels[selectedInquiry.status]}</StatusBadge>
+                </div>
+              </div>
+
+              <div className="flex-1 space-y-4 py-4">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                  <p className="mb-2 text-sm font-bold text-slate-300">السؤال</p>
+                  <p className="text-sm leading-7 text-white">{getQuestionText(selectedInquiry)}</p>
+                </div>
+                {selectedInquiry.reply ? (
+                  <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+                    <p className="mb-2 text-sm font-bold text-emerald-200">الرد السابق</p>
+                    <p className="text-sm leading-7 text-emerald-100">{selectedInquiry.reply}</p>
+                  </div>
+                ) : null}
+              </div>
+
+              {selectedInquiry.status !== 'CLOSED' ? (
+                <form onSubmit={handleReply} className="border-t border-white/10 pt-4">
+                  <textarea className={`${inputClass} min-h-[120px]`} value={replyText} onChange={(event) => setReplyText(event.target.value)} placeholder="اكتب الرد الطبي أو الإداري هنا..." />
+                  <PrimaryButton type="submit" disabled={replying || !replyText.trim()} className="mt-3 w-full">
+                    <Send className="h-4 w-4" />
+                    إرسال الرد
+                  </PrimaryButton>
+                </form>
+              ) : null}
+            </>
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center text-slate-500">
+              <MessageSquare className="mb-3 h-12 w-12" />
+              اختر استشارة من القائمة
+            </div>
+          )}
+        </DataCard>
       </div>
     </AppLayout>
   );

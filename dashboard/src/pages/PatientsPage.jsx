@@ -5,8 +5,36 @@ import { ar } from 'date-fns/locale';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
+import { useNavigate } from 'react-router-dom';
+
+const formatMedicationLine = (medication, index) => {
+  if (typeof medication === 'string') {
+    return `${index + 1}. ${medication}`;
+  }
+
+  if (!medication || typeof medication !== 'object') {
+    return null;
+  }
+
+  const parts = [
+    medication.name,
+    medication.dosage,
+    medication.frequency,
+    medication.interval,
+    medication.duration,
+    medication.timing,
+  ].filter(Boolean);
+
+  return `${index + 1}. ${parts.join(' - ')}${medication.notes ? ` (${medication.notes})` : ''}`;
+};
+
+const getPrescriptionMedications = (prescription) => {
+  const medications = Array.isArray(prescription?.medications) ? prescription.medications : [];
+  return medications.map(formatMedicationLine).filter(Boolean);
+};
 
 export default function PatientsPage() {
+  const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isDoctor = user.role === 'DOCTOR';
 
@@ -68,11 +96,8 @@ export default function PatientsPage() {
     fetchPatients(page, searchTerm);
   }, [page, searchTerm]);
 
-  const openPatientModal = async (patient) => {
-    setSelectedPatient(patient);
-    setPatientDetails(null);
-    setModalTab('OVERVIEW');
-    await fetchPatientDetails(patient.id);
+  const openPatientModal = (patient) => {
+    navigate(`/patients/${patient.id}`);
   };
 
   const closePatientModal = () => {
@@ -267,6 +292,7 @@ export default function PatientsPage() {
               <div className="flex border-b border-gray-200">
                 {[
                   { id: 'OVERVIEW', label: 'الملف' },
+                  { id: 'PRESCRIPTIONS', label: `الروشتات (${patientDetails?.prescriptions?.length || 0})` },
                   { id: 'ACTIVITY', label: 'النشاط' },
                 ].map((tab) => (
                   <button
@@ -357,6 +383,60 @@ export default function PatientsPage() {
                         />
                       </div>
                     </div>
+                  </div>
+                ) : modalTab === 'PRESCRIPTIONS' ? (
+                  <div className="space-y-4">
+                    {!patientDetails?.prescriptions?.length ? (
+                      <div className="rounded-lg border border-dashed border-gray-300 p-8 text-center text-gray-500">
+                        <FileText className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+                        <p className="text-sm font-medium">لا توجد روشتات محفوظة لهذا المريض</p>
+                      </div>
+                    ) : (
+                      patientDetails.prescriptions.map((prescription) => {
+                        const medications = getPrescriptionMedications(prescription);
+                        return (
+                          <div key={prescription.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+                              <div>
+                                <h3 className="font-bold text-gray-900">
+                                  {prescription.diagnosis || 'تشخيص غير مسجل'}
+                                </h3>
+                                <p className="mt-1 text-xs text-gray-500">
+                                  {prescription.doctor?.name || 'طبيب غير محدد'}
+                                  {prescription.doctor?.specialization ? ` - ${prescription.doctor.specialization}` : ''}
+                                </p>
+                              </div>
+                              <div className="text-left text-xs text-gray-500">
+                                <p>{format(parseISO(prescription.createdAt), 'dd MMM yyyy - hh:mm a', { locale: ar })}</p>
+                                {prescription.appointmentId && (
+                                  <p className="mt-1 font-mono" dir="ltr">{prescription.appointmentId}</p>
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="rounded-lg bg-gray-50 p-3">
+                              <p className="mb-2 text-xs font-bold text-gray-700">الأدوية</p>
+                              {medications.length > 0 ? (
+                                <ul className="space-y-1 text-sm leading-6 text-gray-700">
+                                  {medications.map((line) => (
+                                    <li key={line}>{line}</li>
+                                  ))}
+                                </ul>
+                              ) : (
+                                <p className="text-sm text-gray-500">لا توجد أدوية مسجلة.</p>
+                              )}
+                            </div>
+
+                            {prescription.notes && (
+                              <div className="mt-3 rounded-lg bg-amber-50 p-3">
+                                <p className="mb-1 text-xs font-bold text-amber-800">ملاحظات</p>
+                                <p className="text-sm leading-6 text-amber-900">{prescription.notes}</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">
