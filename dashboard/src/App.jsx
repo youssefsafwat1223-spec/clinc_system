@@ -15,6 +15,9 @@ const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage.jsx'));
 const ConsultationsPage = lazy(() => import('./pages/ConsultationsPage.jsx'));
 const CampaignsPage = lazy(() => import('./pages/CampaignsPage.jsx'));
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage.jsx'));
+const PrescriptionsPage = lazy(() => import('./pages/PrescriptionsPage.jsx'));
+const PaymentsPage = lazy(() => import('./pages/PaymentsPage.jsx'));
+const RescheduleDoctorPage = lazy(() => import('./pages/RescheduleDoctorPage.jsx'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage.jsx'));
 const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage.jsx'));
 const DataDeletionPage = lazy(() => import('./pages/DataDeletionPage.jsx'));
@@ -101,6 +104,33 @@ function App() {
             element={
               <ProtectedRoute>
                 <ConsultationsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/prescriptions"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'DOCTOR']}>
+                <PrescriptionsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/payments"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'STAFF', 'RECEPTION']}>
+                <PaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/reschedule-doctor"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <RescheduleDoctorPage />
               </ProtectedRoute>
             }
           />

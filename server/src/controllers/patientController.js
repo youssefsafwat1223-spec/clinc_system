@@ -355,6 +355,13 @@ const listDiscounts = async (req, res, next) => {
 
 const saveDiscount = async (req, res, next) => {
   try {
+    const phoneNumbers = Array.isArray(req.body.phoneNumbers)
+      ? req.body.phoneNumbers.map((item) => String(item || '').trim()).filter(Boolean)
+      : String(req.body.phoneNumbers || '')
+          .split(/[\n,،]+/)
+          .map((item) => item.trim())
+          .filter(Boolean);
+
     const data = {
       name: req.body.name?.trim(),
       type: req.body.type === 'FIXED' ? 'FIXED' : 'PERCENT',
@@ -369,6 +376,30 @@ const saveDiscount = async (req, res, next) => {
 
     if (!data.name || !Number.isFinite(data.value) || data.value <= 0) {
       return res.status(400).json({ error: 'اسم الخصم وقيمته مطلوبان' });
+    }
+
+    if (phoneNumbers.length > 0) {
+      const groupName = req.body.groupName?.trim() || `${data.name} - أرقام محددة`;
+      const group = await prisma.patientGroup.upsert({
+        where: { name: groupName },
+        update: { description: req.body.groupDescription || null },
+        create: { name: groupName, description: req.body.groupDescription || null },
+      });
+
+      for (const phone of phoneNumbers) {
+        const patient = await prisma.patient.upsert({
+          where: { phone },
+          update: {},
+          create: {
+            name: phone,
+            phone,
+            platform: 'WHATSAPP',
+          },
+        });
+        await prisma.patientGroupMember.create({ data: { patientId: patient.id, groupId: group.id } }).catch(() => null);
+      }
+
+      data.groupId = group.id;
     }
 
     const discount = req.params.id

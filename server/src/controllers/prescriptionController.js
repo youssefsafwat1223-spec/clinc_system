@@ -202,6 +202,45 @@ const getAccessiblePrescription = async (req, prescriptionId) => {
   return { prescription, scopedDoctor };
 };
 
+const getAccessibleAppointmentForPrescription = async (req, appointmentId) => {
+  const scopedDoctor = await getScopedDoctor(req);
+
+  const appointment = await prisma.appointment.findFirst({
+    where: {
+      id: appointmentId,
+      ...(scopedDoctor ? { doctorId: scopedDoctor.id } : {}),
+    },
+    include: {
+      patient: true,
+      doctor: true,
+      service: true,
+      prescriptions: { orderBy: { createdAt: 'desc' }, take: 5 },
+      payment: true,
+    },
+  });
+
+  return { appointment, scopedDoctor };
+};
+
+const resolve = async (req, res, next) => {
+  try {
+    const { appointmentId } = req.query;
+
+    if (!appointmentId) {
+      return res.status(400).json({ error: 'Appointment ID is required' });
+    }
+
+    const { appointment } = await getAccessibleAppointmentForPrescription(req, appointmentId);
+    if (!appointment) {
+      return res.status(404).json({ error: 'Appointment not found' });
+    }
+
+    res.json({ appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const getAll = async (req, res, next) => {
   try {
     const { patientId } = req.query;
@@ -217,6 +256,11 @@ const getAll = async (req, res, next) => {
       include: {
         doctor: { select: { name: true, specialization: true } },
         patient: { select: { name: true, phone: true } },
+        appointment: {
+          include: {
+            service: true,
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -229,9 +273,9 @@ const getAll = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
-    const { patientId, doctorId, diagnosis, medications, medicines, notes } = req.body;
+    const { appointmentId, patientId, doctorId, diagnosis, medications, medicines, notes } = req.body;
 
-    if (!patientId || !diagnosis?.trim()) {
+    if ((!appointmentId && !patientId) || !diagnosis?.trim()) {
       return res.status(400).json({ error: 'المريض والتشخيص مطلوبان' });
     }
 
@@ -240,12 +284,31 @@ const create = async (req, res, next) => {
       return res.status(400).json({ error: 'الأدوية مطلوبة' });
     }
 
-    const { patient, scopedDoctor } = await getAccessiblePatient(req, patientId);
+    let resolvedPatientId = patientId;
+    let resolvedDoctorId = doctorId;
+    let scopedDoctor = null;
+
+    if (appointmentId) {
+      const appointmentResult = await getAccessibleAppointmentForPrescription(req, appointmentId);
+      const appointment = appointmentResult.appointment;
+      scopedDoctor = appointmentResult.scopedDoctor;
+
+      if (!appointment) {
+        return res.status(404).json({ error: 'Appointment not found' });
+      }
+
+      resolvedPatientId = appointment.patientId;
+      resolvedDoctorId = appointment.doctorId;
+    }
+
+    const patientResult = await getAccessiblePatient(req, resolvedPatientId);
+    const { patient } = patientResult;
+    scopedDoctor = scopedDoctor || patientResult.scopedDoctor;
     if (!patient) {
       return res.status(404).json({ error: 'المريض غير موجود' });
     }
 
-    let resolvedDoctorId = scopedDoctor?.id || doctorId;
+    resolvedDoctorId = scopedDoctor?.id || resolvedDoctorId;
     if (!resolvedDoctorId) {
       resolvedDoctorId = await resolveFallbackDoctorIdForPatient(patient.id);
     }
@@ -267,6 +330,7 @@ const create = async (req, res, next) => {
 
     const prescription = await prisma.prescription.create({
       data: {
+        ...(appointmentId && { appointmentId }),
         patientId: patient.id,
         doctorId: resolvedDoctorId,
         diagnosis: diagnosis.trim(),
@@ -276,6 +340,9 @@ const create = async (req, res, next) => {
       include: {
         patient: true,
         doctor: true,
+        appointment: {
+          include: { service: true },
+        },
       },
     });
 
@@ -346,4 +413,4 @@ const sendToWhatsApp = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, create, sendToWhatsApp };
+module.exports = { getAll, resolve, create, sendToWhatsApp };

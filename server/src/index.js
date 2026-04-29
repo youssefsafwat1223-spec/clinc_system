@@ -30,6 +30,7 @@ const uploadRoutes = require('./routes/upload');
 const reviewRoutes = require('./routes/reviews');
 const contactRoutes = require('./routes/contacts');
 const discountRoutes = require('./routes/discounts');
+const paymentRoutes = require('./routes/payments');
 
 const app = express();
 
@@ -91,6 +92,7 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/contacts', contactRoutes);
 app.use('/api/discounts', discountRoutes);
+app.use('/api/payments', paymentRoutes);
 
 app.use(errorHandler);
 

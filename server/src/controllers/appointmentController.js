@@ -189,6 +189,58 @@ const availability = async (req, res, next) => {
   }
 };
 
+const previewRescheduleByDoctor = async (req, res, next) => {
+  try {
+    const { fromDoctorId, toDoctorId } = req.body;
+
+    if (!fromDoctorId || !toDoctorId || fromDoctorId === toDoctorId) {
+      return res.status(400).json({ error: 'اختر الطبيب القديم والطبيب البديل بشكل صحيح' });
+    }
+
+    const [fromDoctor, toDoctor] = await Promise.all([
+      prisma.doctor.findUnique({ where: { id: fromDoctorId } }),
+      prisma.doctor.findFirst({ where: { id: toDoctorId, active: true } }),
+    ]);
+
+    if (!fromDoctor || !toDoctor) {
+      return res.status(404).json({ error: 'الطبيب غير موجود أو غير مفعل' });
+    }
+
+    const appointments = await prisma.appointment.findMany({
+      where: {
+        doctorId: fromDoctorId,
+        status: { in: ['PENDING', 'CONFIRMED'] },
+        scheduledTime: { gte: new Date() },
+      },
+      include: { patient: true, service: true },
+      orderBy: { scheduledTime: 'asc' },
+    });
+
+    const unavailableAppointmentIds = [];
+    const checkedAppointments = [];
+    for (const appointment of appointments) {
+      const available = await appointmentService.isDoctorAvailableAt({
+        doctorId: toDoctorId,
+        scheduledTime: appointment.scheduledTime,
+        duration: appointment.service?.duration || 30,
+      });
+      if (!available) unavailableAppointmentIds.push(appointment.id);
+      checkedAppointments.push({ ...appointment, targetDoctorAvailable: available });
+    }
+
+    res.json({
+      fromDoctor,
+      toDoctor,
+      appointments: checkedAppointments,
+      affectedAppointments: checkedAppointments.length,
+      unavailableAppointmentIds,
+      canProceed: unavailableAppointmentIds.length === 0,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const rescheduleByDoctor = async (req, res, next) => {
   try {
     const { fromDoctorId, toDoctorId, notifyPatient = true } = req.body;
@@ -514,5 +566,6 @@ module.exports = {
   cancel,
   getStats,
   availability,
+  previewRescheduleByDoctor,
   rescheduleByDoctor,
 };

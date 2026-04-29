@@ -48,6 +48,12 @@ enum Platform {
   DASHBOARD
 }
 
+enum PaymentStatus {
+  UNPAID
+  PARTIAL
+  PAID
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -102,6 +108,7 @@ model Patient {
   lastPaymentDate DateTime?    @map("last_payment_date")
   creditBalance Float          @default(0) @map("credit_balance")
   appointments  Appointment[]
+  payments      Payment[]
   messages      Message[]
   consultations Consultation[]
   prescriptions Prescription[]
@@ -122,6 +129,7 @@ model Service {
   duration     Int           @default(30)
   active       Boolean       @default(true)
   appointments Appointment[]
+  payments     Payment[]
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
@@ -144,6 +152,8 @@ model Appointment {
   reviewSent    Boolean           @default(false) @map("review_sent")
   notifications Notification[]
   review        Review?
+  prescriptions Prescription[]
+  payment       Payment?
   createdAt     DateTime          @default(now()) @map("created_at")
   updatedAt     DateTime          @updatedAt @map("updated_at")
 
@@ -292,6 +302,8 @@ model Consultation {
 
 model Prescription {
   id          String   @id @default(uuid())
+  appointmentId String? @map("appointment_id")
+  appointment   Appointment? @relation(fields: [appointmentId], references: [id], onDelete: SetNull)
   patientId   String   @map("patient_id")
   patient     Patient  @relation(fields: [patientId], references: [id])
   doctorId    String   @map("doctor_id")
@@ -302,6 +314,28 @@ model Prescription {
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("prescriptions")
+}
+
+model Payment {
+  id             String        @id @default(uuid())
+  appointmentId  String        @unique @map("appointment_id")
+  appointment    Appointment   @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  patientId      String        @map("patient_id")
+  patient        Patient       @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  serviceId      String?       @map("service_id")
+  service        Service?      @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  amount         Float         @default(0)
+  discountAmount Float         @default(0) @map("discount_amount")
+  finalAmount    Float         @default(0) @map("final_amount")
+  paidAmount     Float         @default(0) @map("paid_amount")
+  status         PaymentStatus @default(UNPAID)
+  method         String?
+  notes          String?
+  paidAt         DateTime?     @map("paid_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@map("payments")
 }
 
 model AdminNotification {
