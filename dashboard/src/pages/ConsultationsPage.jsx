@@ -12,6 +12,12 @@ const statusLabels = {
   CLOSED: 'مغلقة',
 };
 
+const getPatientName = (consultation) =>
+  consultation?.patientName || consultation?.patient?.displayName || consultation?.patient?.name || 'مريض غير معروف';
+
+const getQuestionText = (consultation) =>
+  consultation?.message || consultation?.question || consultation?.symptoms || consultation?.content || '';
+
 export default function ConsultationsPage() {
   const [consultations, setConsultations] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -65,7 +71,8 @@ export default function ConsultationsPage() {
 
   const filteredConsultations = consultations.filter((c) => {
     if (activeFilter !== 'ALL' && c.status !== activeFilter) return false;
-    if (searchTerm && !c.patientName?.toLowerCase().includes(searchTerm.toLowerCase())) return false;
+    const haystack = `${getPatientName(c)} ${c.patient?.phone || ''} ${getQuestionText(c)}`.toLowerCase();
+    if (searchTerm && !haystack.includes(searchTerm.toLowerCase())) return false;
     return true;
   });
 
@@ -153,7 +160,7 @@ export default function ConsultationsPage() {
                     }`}
                   >
                     <div className="flex items-center justify-between mb-1">
-                      <h4 className="font-bold text-gray-900 text-sm">{consultation.patientName}</h4>
+                      <h4 className="font-bold text-gray-900 text-sm">{getPatientName(consultation)}</h4>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                         consultation.status === 'PENDING'
                           ? 'bg-yellow-100 text-yellow-700'
@@ -164,7 +171,7 @@ export default function ConsultationsPage() {
                         {statusLabels[consultation.status]}
                       </span>
                     </div>
-                    <p className="text-xs text-gray-600 line-clamp-2">{consultation.message}</p>
+                    <p className="text-xs text-gray-600 line-clamp-2">{getQuestionText(consultation)}</p>
                     <p className="text-xs text-gray-500 mt-1">
                       {format(parseISO(consultation.createdAt), 'dd MMM', { locale: ar })}
                     </p>
@@ -180,7 +187,7 @@ export default function ConsultationsPage() {
               <>
                 <div className="p-4 border-b border-gray-200">
                   <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-lg font-bold text-gray-900">{selectedInquiry.patientName}</h2>
+                    <h2 className="text-lg font-bold text-gray-900">{getPatientName(selectedInquiry)}</h2>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                       selectedInquiry.status === 'PENDING'
                         ? 'bg-yellow-100 text-yellow-700'
@@ -200,7 +207,7 @@ export default function ConsultationsPage() {
                   <div className="space-y-4">
                     <div className="bg-white rounded-lg p-4 border border-gray-200">
                       <p className="text-sm font-medium text-gray-900 mb-2">السؤال:</p>
-                      <p className="text-sm text-gray-700">{selectedInquiry.message}</p>
+                      <p className="text-sm text-gray-700">{getQuestionText(selectedInquiry)}</p>
                     </div>
 
                     {selectedInquiry.reply && (

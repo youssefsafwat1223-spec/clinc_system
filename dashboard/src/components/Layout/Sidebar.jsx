@@ -100,16 +100,23 @@ export default function Sidebar({ isOpen = false, onClose }) {
       {isOpen && <div className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden" onClick={onClose} />}
       <aside
         className={clsx(
-          'fixed inset-y-0 right-0 z-40 flex h-screen w-72 flex-col overflow-y-auto border-l border-slate-800 bg-slate-950 p-5 transition-transform duration-300 md:static md:w-72 md:translate-x-0',
+          'fixed inset-y-0 right-0 z-40 flex h-screen w-72 flex-col overflow-y-auto border-l border-white/5 bg-[#060a16]/95 p-5 text-white shadow-2xl shadow-black/40 backdrop-blur-xl transition-transform duration-300 md:static md:w-72 md:translate-x-0',
           isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
         )}
       >
-        <div className="mb-6 border-b border-slate-800 pb-5">
-          <h1 className="text-2xl font-bold text-white">عيادتي</h1>
-          <p className="mt-1 text-xs text-slate-400">نظام إدارة العيادة</p>
+        <div className="mb-6 border-b border-white/5 pb-5">
+          <div className="flex items-center gap-3">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-cyan-600 shadow-lg shadow-sky-500/25">
+              <Stethoscope className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-xl font-black tracking-tight text-white">عيادتي</h1>
+              <p className="text-[11px] font-medium text-sky-400/80">نظام الإدارة الذكي</p>
+            </div>
+          </div>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1">
+        <nav className="flex flex-1 flex-col gap-1.5 pt-2">
           {visibleItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path || location.pathname.startsWith(`${item.path}/`);
@@ -121,14 +128,16 @@ export default function Sidebar({ isOpen = false, onClose }) {
                 to={item.path}
                 onClick={onClose}
                 className={clsx(
-                  'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition',
-                  isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-950/30' : 'text-slate-300 hover:bg-slate-900 hover:text-white'
+                  'mb-1 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all',
+                  isActive
+                    ? 'border border-sky-500/20 bg-sky-500/10 text-sky-300 shadow-lg shadow-sky-950/20'
+                    : 'text-slate-300 hover:bg-white/5 hover:text-white'
                 )}
               >
                 <Icon className="h-5 w-5 flex-shrink-0" />
                 <span className="flex-1">{item.label}</span>
                 {badge && (
-                  <span className="rounded-full bg-rose-500 px-2 py-0.5 text-xs font-bold text-white">
+                  <span className="rounded-full bg-sky-500/20 px-2 py-1 text-xs font-bold text-sky-300">
                     {badge > 99 ? '+99' : badge}
                   </span>
                 )}
@@ -137,10 +146,10 @@ export default function Sidebar({ isOpen = false, onClose }) {
           })}
         </nav>
 
-        <div className="mt-5 border-t border-slate-800 pt-4">
+        <div className="mt-auto border-t border-white/5 pt-4">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-bold text-slate-200 transition hover:bg-rose-600 hover:text-white"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-300 transition hover:bg-rose-500/20 hover:text-white"
           >
             <LogOut className="h-4 w-4" />
             تسجيل الخروج

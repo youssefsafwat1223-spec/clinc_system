@@ -203,8 +203,8 @@ export default function SettingsPage() {
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
-                activeTab === tab.id ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              className={`rounded-lg px-4 py-2 text-sm font-bold transition ${
+                activeTab === tab.id ? 'bg-green-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               {tab.label}
@@ -250,10 +250,10 @@ export default function SettingsPage() {
             {Object.entries(daysAr).map(([key, label]) => {
               const day = settings?.workingHours?.[key];
               return (
-                <div key={key} className="rounded-2xl border border-slate-200 p-4">
+                <div key={key} className="rounded-lg border border-gray-200 p-4">
                   <div className="mb-3 flex items-center justify-between">
-                    <h3 className="font-bold text-slate-950">{label}</h3>
-                    <button type="button" onClick={() => toggleDay(key)} className={`rounded-full px-3 py-1 text-xs font-bold ${day ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>
+                    <h3 className="font-bold text-gray-900">{label}</h3>
+                    <button type="button" onClick={() => toggleDay(key)} className={`rounded-full px-3 py-1 text-xs font-bold ${day ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
                       {day ? 'يعمل' : 'إجازة'}
                     </button>
                   </div>
@@ -277,7 +277,7 @@ export default function SettingsPage() {
       {activeTab === 'contacts' && (
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <DataCard>
-            <h2 className="mb-4 text-lg font-bold text-slate-950">إضافة جهة اتصال</h2>
+            <h2 className="mb-4 text-lg font-bold text-gray-900">إضافة جهة اتصال</h2>
             <div className="space-y-4">
               <Field label="الاسم">
                 <input className={inputClass} value={contactForm.name} onChange={(event) => setContactForm((current) => ({ ...current, name: event.target.value }))} />
@@ -297,11 +297,11 @@ export default function SettingsPage() {
               <DataCard key={contact.id}>
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-bold text-slate-950">{contact.name}</h3>
-                    <p className="text-sm text-slate-500">{contact.phone}</p>
-                    {contact.description && <p className="mt-1 text-sm text-slate-600">{contact.description}</p>}
+                    <h3 className="font-bold text-gray-900">{contact.name}</h3>
+                    <p className="text-sm text-gray-500">{contact.phone}</p>
+                    {contact.description && <p className="mt-1 text-sm text-gray-600">{contact.description}</p>}
                   </div>
-                  <SecondaryButton type="button" onClick={() => removeContact(contact)} className="text-rose-600">
+                  <SecondaryButton type="button" onClick={() => removeContact(contact)} className="text-red-600">
                     <Trash2 className="h-4 w-4" />
                     حذف
                   </SecondaryButton>
@@ -315,7 +315,7 @@ export default function SettingsPage() {
       {activeTab === 'discounts' && (
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <DataCard>
-            <h2 className="mb-4 text-lg font-bold text-slate-950">إضافة خصم لمجموعة أرقام</h2>
+            <h2 className="mb-4 text-lg font-bold text-gray-900">إضافة خصم لمجموعة أرقام</h2>
             <div className="space-y-4">
               <Field label="اسم الخصم">
                 <input className={inputClass} value={discountForm.name} onChange={(event) => setDiscountForm((current) => ({ ...current, name: event.target.value }))} />
@@ -361,10 +361,10 @@ export default function SettingsPage() {
                       <StatusBadge tone={discount.active ? 'green' : 'slate'}>{discount.active ? 'نشط' : 'متوقف'}</StatusBadge>
                       <StatusBadge tone="blue">{discount.type === 'FIXED' ? `${discount.value} ج.م` : `${discount.value}%`}</StatusBadge>
                     </div>
-                    <h3 className="font-bold text-slate-950">{discount.name}</h3>
-                    <p className="text-sm text-slate-500">المجموعة: {discount.group?.name || 'كل المرضى'} - الخدمة: {discount.serviceName || 'كل الخدمات'}</p>
+                    <h3 className="font-bold text-gray-900">{discount.name}</h3>
+                    <p className="text-sm text-gray-500">المجموعة: {discount.group?.name || 'كل المرضى'} - الخدمة: {discount.serviceName || 'كل الخدمات'}</p>
                   </div>
-                  <SecondaryButton type="button" onClick={() => removeDiscount(discount)} className="text-rose-600">
+                  <SecondaryButton type="button" onClick={() => removeDiscount(discount)} className="text-red-600">
                     <Trash2 className="h-4 w-4" />
                     حذف
                   </SecondaryButton>

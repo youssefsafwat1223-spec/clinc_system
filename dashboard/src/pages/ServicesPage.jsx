@@ -9,7 +9,7 @@ export default function ServicesPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({ nameAr: '', nameEn: '', description: '', price: '', duration: '' });
+  const [formData, setFormData] = useState({ nameAr: '', name: '', description: '', price: '', duration: '' });
   const [saving, setSaving] = useState(false);
 
   const fetchServices = async () => {
@@ -29,21 +29,26 @@ export default function ServicesPage() {
   }, []);
 
   const handleSave = async () => {
-    if (!formData.nameAr.trim() || !formData.nameEn.trim()) {
+    if (!formData.nameAr.trim() || !formData.name.trim()) {
       toast.error('الاسم بالعربية والإنجليزية مطلوب');
       return;
     }
 
     try {
       setSaving(true);
+      const payload = {
+        ...formData,
+        price: formData.price === '' ? null : Number(formData.price),
+        duration: formData.duration === '' ? 30 : Number(formData.duration),
+      };
       if (editingId) {
-        await api.put(`/services/${editingId}`, formData);
+        await api.put(`/services/${editingId}`, payload);
         toast.success('تم تحديث الخدمة');
       } else {
-        await api.post('/services', formData);
+        await api.post('/services', payload);
         toast.success('تمت إضافة الخدمة');
       }
-      setFormData({ nameAr: '', nameEn: '', description: '', price: '', duration: '' });
+      setFormData({ nameAr: '', name: '', description: '', price: '', duration: '' });
       setEditingId(null);
       setShowForm(false);
       fetchServices();
@@ -68,7 +73,7 @@ export default function ServicesPage() {
   const handleEdit = (service) => {
     setFormData({
       nameAr: service.nameAr || service.name || '',
-      nameEn: service.nameEn || '',
+      name: service.name || '',
       description: service.description || '',
       price: service.price || '',
       duration: service.duration || '',
@@ -87,7 +92,7 @@ export default function ServicesPage() {
           </div>
           <button
             onClick={() => {
-              setFormData({ nameAr: '', nameEn: '', description: '', price: '', duration: '' });
+              setFormData({ nameAr: '', name: '', description: '', price: '', duration: '' });
               setEditingId(null);
               setShowForm(true);
             }}
@@ -113,7 +118,7 @@ export default function ServicesPage() {
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
                     <h3 className="font-bold text-gray-900">{service.nameAr || service.name}</h3>
-                    <p className="text-xs text-gray-500" dir="ltr">{service.nameEn}</p>
+                    <p className="text-xs text-gray-500" dir="ltr">{service.name}</p>
                   </div>
                   <div className="flex gap-1">
                     <button
@@ -169,8 +174,8 @@ export default function ServicesPage() {
                   <label className="block text-sm font-medium text-gray-900 mb-1">الاسم بالإنجليزية</label>
                   <input
                     type="text"
-                    value={formData.nameEn}
-                    onChange={(e) => setFormData({ ...formData, nameEn: e.target.value })}
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     dir="ltr"
                   />

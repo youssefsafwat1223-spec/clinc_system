@@ -60,6 +60,72 @@
   }
 }
 
+@layer utilities {
+  .dashboard-shell [class*="bg-white"] {
+    background-color: rgb(255 255 255 / 0.02) !important;
+    backdrop-filter: blur(8px);
+  }
+
+  .dashboard-shell [class*="bg-gray-50"],
+  .dashboard-shell [class*="bg-gray-100"],
+  .dashboard-shell [class*="bg-slate-50"],
+  .dashboard-shell [class*="bg-slate-100"] {
+    background-color: rgb(255 255 255 / 0.05) !important;
+  }
+
+  .dashboard-shell [class*="border-gray-"],
+  .dashboard-shell [class*="border-slate-"] {
+    border-color: rgb(255 255 255 / 0.08) !important;
+  }
+
+  .dashboard-shell [class*="text-gray-900"],
+  .dashboard-shell [class*="text-slate-950"],
+  .dashboard-shell [class*="text-slate-900"] {
+    color: rgb(255 255 255) !important;
+  }
+
+  .dashboard-shell [class*="text-gray-700"],
+  .dashboard-shell [class*="text-slate-700"],
+  .dashboard-shell [class*="text-slate-800"] {
+    color: rgb(203 213 225) !important;
+  }
+
+  .dashboard-shell [class*="text-gray-600"],
+  .dashboard-shell [class*="text-gray-500"],
+  .dashboard-shell [class*="text-slate-600"],
+  .dashboard-shell [class*="text-slate-500"],
+  .dashboard-shell [class*="text-slate-400"] {
+    color: rgb(148 163 184) !important;
+  }
+
+  .dashboard-shell input,
+  .dashboard-shell select,
+  .dashboard-shell textarea {
+    background-color: #0d1225 !important;
+    border-color: rgb(255 255 255 / 0.1) !important;
+    color: white !important;
+  }
+
+  .dashboard-shell input::placeholder,
+  .dashboard-shell textarea::placeholder {
+    color: rgb(100 116 139) !important;
+  }
+
+  .dashboard-shell table thead {
+    background-color: rgb(255 255 255 / 0.04) !important;
+  }
+
+  .dashboard-shell table tbody tr {
+    border-color: rgb(255 255 255 / 0.06) !important;
+  }
+
+  .dashboard-shell .shadow-sm,
+  .dashboard-shell .shadow-md,
+  .dashboard-shell .shadow-lg {
+    box-shadow: 0 20px 45px rgb(0 0 0 / 0.2) !important;
+  }
+}
+
 /* Page transitions */
 .fade-in {
   animation: fadeIn 0.3s ease-in-out;

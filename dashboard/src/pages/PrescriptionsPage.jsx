@@ -222,7 +222,7 @@ export default function PrescriptionsPage() {
 
             <div className="mt-5 space-y-4">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-lg font-bold text-slate-950">الأدوية</h2>
+                <h2 className="text-lg font-bold text-gray-900">الأدوية</h2>
                 <SecondaryButton type="button" onClick={addMedication}>
                   <Plus className="h-4 w-4" />
                   إضافة دواء
@@ -230,7 +230,7 @@ export default function PrescriptionsPage() {
               </div>
 
               {medications.map((medication, index) => (
-                <div key={index} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div key={index} className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                   <div className="grid gap-3 md:grid-cols-3">
                     <Field label="اسم الدواء">
                       <input className={inputClass} value={medication.name} onChange={(event) => updateMedication(index, 'name', event.target.value)} placeholder="Augmentin 1gm" />
@@ -262,7 +262,7 @@ export default function PrescriptionsPage() {
                   <div className="mt-3 grid gap-3 md:grid-cols-[1fr_auto]">
                     <input className={inputClass} value={medication.notes} onChange={(event) => updateMedication(index, 'notes', event.target.value)} placeholder="ملاحظات خاصة بالدواء" />
                     {medications.length > 1 && (
-                      <SecondaryButton type="button" onClick={() => removeMedication(index)} className="text-rose-600">
+                      <SecondaryButton type="button" onClick={() => removeMedication(index)} className="text-red-600">
                         <Trash2 className="h-4 w-4" />
                         حذف
                       </SecondaryButton>
@@ -295,13 +295,13 @@ export default function PrescriptionsPage() {
         </div>
 
         <DataCard className="xl:sticky xl:top-24 xl:self-start">
-          <h2 className="mb-4 text-xl font-bold text-slate-950">معاينة الروشتة</h2>
-          <div className="rounded-2xl border border-slate-200 bg-white p-5">
-            <div className="border-b border-slate-200 pb-4 text-center">
-              <p className="text-2xl font-bold text-blue-700">عيادتي</p>
-              <p className="text-sm text-slate-500">روشتة طبية إلكترونية</p>
+          <h2 className="mb-4 text-xl font-bold text-gray-900">معاينة الروشتة</h2>
+          <div className="rounded-lg border border-gray-200 bg-white p-5">
+            <div className="border-b border-gray-200 pb-4 text-center">
+              <p className="text-2xl font-bold text-green-600">عيادتي</p>
+              <p className="text-sm text-gray-500">روشتة طبية إلكترونية</p>
             </div>
-            <div className="mt-4 grid gap-3 text-sm text-slate-700">
+            <div className="mt-4 grid gap-3 text-sm text-gray-700">
               <p><span className="font-bold">المريض:</span> {selectedPatient?.name || '-'}</p>
               <p><span className="font-bold">الهاتف:</span> {selectedPatient?.phone || '-'}</p>
               <p><span className="font-bold">الطبيب:</span> {selectedDoctor?.name || '-'}</p>
@@ -311,15 +311,15 @@ export default function PrescriptionsPage() {
             </div>
             <div className="mt-5 space-y-3">
               {medications.filter((medication) => medication.name).map((medication, index) => (
-                <div key={index} className="rounded-xl bg-blue-50 p-3 text-sm text-slate-800">
+                <div key={index} className="rounded-lg bg-green-50 p-3 text-sm text-gray-800">
                   <p className="font-bold">{index + 1}. {medication.name}</p>
                   <p>{[medication.dosage, medication.frequency, medication.interval, medication.duration, medication.timing].filter(Boolean).join(' - ')}</p>
-                  {medication.notes && <p className="mt-1 text-slate-500">{medication.notes}</p>}
+                  {medication.notes && <p className="mt-1 text-gray-500">{medication.notes}</p>}
                 </div>
               ))}
-              {!medications.some((medication) => medication.name) && <p className="text-sm text-slate-400">لم يتم إدخال أدوية بعد.</p>}
+              {!medications.some((medication) => medication.name) && <p className="text-sm text-gray-400">لم يتم إدخال أدوية بعد.</p>}
             </div>
-            {notes && <p className="mt-5 rounded-xl bg-slate-50 p-3 text-sm text-slate-600">{notes}</p>}
+            {notes && <p className="mt-5 rounded-lg bg-gray-50 p-3 text-sm text-gray-600">{notes}</p>}
           </div>
         </DataCard>
       </div>

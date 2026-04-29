@@ -108,8 +108,8 @@ export default function RescheduleDoctorPage() {
           <DataCard>
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
-                <h2 className="text-xl font-bold text-slate-950">المعاينة قبل التنفيذ</h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <h2 className="text-xl font-bold text-gray-900">المعاينة قبل التنفيذ</h2>
+                <p className="mt-1 text-sm text-gray-500">
                   من {preview.fromDoctor?.name} إلى {preview.toDoctor?.name}
                 </p>
               </div>
@@ -141,11 +141,11 @@ export default function RescheduleDoctorPage() {
                       ) : (
                         <StatusBadge tone="red"><AlertTriangle className="ml-1 inline h-3 w-3" /> تعارض</StatusBadge>
                       )}
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-mono text-slate-600">{appointment.id}</span>
+                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-mono text-gray-600">{appointment.id}</span>
                     </div>
-                    <h3 className="text-lg font-bold text-slate-950">{appointment.patient?.name || '-'}</h3>
-                    <p className="text-sm text-slate-500">{appointment.patient?.phone || '-'} - {formatDate(appointment.scheduledTime)}</p>
-                    <p className="mt-1 text-sm text-slate-600">{appointment.service?.nameAr || appointment.service?.name || '-'}</p>
+                    <h3 className="text-lg font-bold text-gray-900">{appointment.patient?.name || '-'}</h3>
+                    <p className="text-sm text-gray-500">{appointment.patient?.phone || '-'} - {formatDate(appointment.scheduledTime)}</p>
+                    <p className="mt-1 text-sm text-gray-600">{appointment.service?.nameAr || appointment.service?.name || '-'}</p>
                   </div>
                   <StatusBadge tone={appointment.status === 'CONFIRMED' ? 'green' : 'amber'}>{appointment.status}</StatusBadge>
                 </div>

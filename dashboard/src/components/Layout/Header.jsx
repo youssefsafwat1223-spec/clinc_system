@@ -25,32 +25,32 @@ export default function Header({ onMenuClick }) {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 shadow-sm sm:px-6">
+    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/5 bg-[#0a0f1e]/90 px-6 py-4 shadow-lg shadow-black/20 backdrop-blur-xl">
       <button
         type="button"
         onClick={onMenuClick}
-        className="rounded-xl border border-slate-200 p-2 text-slate-700 hover:bg-slate-50 md:hidden"
+        className="rounded-lg p-2 text-slate-300 transition hover:bg-white/10 hover:text-white md:hidden"
         aria-label="فتح القائمة"
       >
         <Menu className="h-6 w-6" />
       </button>
 
       <div className="hidden md:block">
-        <h2 className="text-xl font-bold text-slate-950">{title}</h2>
-        <p className="text-xs text-slate-500">متصل بالسيرفر الحي</p>
+        <h2 className="text-2xl font-black tracking-tight text-white">{title}</h2>
+        <p className="text-xs font-medium text-sky-400/80">متصل بالسيرفر الحي</p>
       </div>
 
       <div className="flex items-center gap-3">
-        <button className="rounded-xl border border-slate-200 p-2 text-slate-600 hover:bg-slate-50" aria-label="الإشعارات">
+        <button className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300 transition hover:bg-white/10 hover:text-white" aria-label="الإشعارات">
           <Bell className="h-5 w-5" />
         </button>
-        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-sm">
           <div className="text-right">
-            <p className="text-sm font-bold text-slate-950">{user.name || 'المستخدم'}</p>
-            <p className="text-xs text-slate-500">{user.role || '-'}</p>
+            <p className="text-sm font-bold text-white">{user.name || 'المستخدم'}</p>
+            <p className="text-xs text-slate-400">{user.role || '-'}</p>
           </div>
-          <div className="rounded-xl bg-blue-600 p-2 text-white">
-            <User className="h-4 w-4" />
+          <div className="rounded-xl bg-gradient-to-br from-sky-400 to-cyan-600 p-2 text-white shadow-lg shadow-sky-500/25">
+            <User className="h-5 w-5" />
           </div>
         </div>
       </div>

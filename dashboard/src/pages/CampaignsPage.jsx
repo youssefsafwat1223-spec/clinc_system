@@ -72,9 +72,10 @@ export default function CampaignsPage() {
 
     try {
       setSending(true);
-      await api.post('/campaigns/send', {
-        type: campaignType,
-        content: messageText,
+      await api.post('/campaigns/broadcast', {
+        broadcastType: 'TEXT',
+        messageText,
+        audience: 'SELECTED',
         patientIds: selectedPatientIds,
       });
       toast.success('تم إرسال الحملة');

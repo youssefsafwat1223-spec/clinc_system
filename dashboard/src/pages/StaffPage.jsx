@@ -9,7 +9,7 @@ export default function StaffPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({ name: '', email: '', phone: '', role: 'STAFF' });
+  const [formData, setFormData] = useState({ name: '', email: '', phone: '', password: '', role: 'STAFF' });
   const [saving, setSaving] = useState(false);
 
   const fetchStaff = async () => {
@@ -29,8 +29,8 @@ export default function StaffPage() {
   }, []);
 
   const handleSave = async () => {
-    if (!formData.name.trim() || !formData.email.trim()) {
-      toast.error('الاسم والبريد مطلوبان');
+    if (!formData.name.trim() || !formData.email.trim() || (!editingId && !formData.password.trim())) {
+      toast.error('الاسم والبريد وكلمة المرور مطلوبة');
       return;
     }
 
@@ -43,7 +43,7 @@ export default function StaffPage() {
         await api.post('/staff', formData);
         toast.success('تم إضافة موظف');
       }
-      setFormData({ name: '', email: '', phone: '', role: 'STAFF' });
+      setFormData({ name: '', email: '', phone: '', password: '', role: 'STAFF' });
       setEditingId(null);
       setShowForm(false);
       fetchStaff();
@@ -77,7 +77,7 @@ export default function StaffPage() {
           </div>
           <button
             onClick={() => {
-              setFormData({ name: '', email: '', phone: '', role: 'STAFF' });
+              setFormData({ name: '', email: '', phone: '', password: '', role: 'STAFF' });
               setEditingId(null);
               setShowForm(true);
             }}
@@ -127,7 +127,7 @@ export default function StaffPage() {
                   <div className="flex gap-1">
                     <button
                       onClick={() => {
-                        setFormData(member);
+                        setFormData({ ...member, password: '' });
                         setEditingId(member.id);
                         setShowForm(true);
                       }}
@@ -182,6 +182,19 @@ export default function StaffPage() {
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    dir="ltr"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">
+                    {editingId ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور'}
+                  </label>
+                  <input
+                    type="password"
+                    value={formData.password || ''}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     dir="ltr"
                   />

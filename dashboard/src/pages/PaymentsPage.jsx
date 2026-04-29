@@ -146,11 +146,11 @@ export default function PaymentsPage() {
                   <div>
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <StatusBadge tone={statusTone[payment.status]}>{statusLabels[payment.status] || payment.status}</StatusBadge>
-                      <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-mono text-slate-600">{payment.appointmentId}</span>
+                      <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-mono text-gray-600">{payment.appointmentId}</span>
                     </div>
-                    <h2 className="text-lg font-bold text-slate-950">{appointment.patient?.name || '-'}</h2>
-                    <p className="text-sm text-slate-500">{appointment.patient?.phone || '-'} - {formatDate(appointment.scheduledTime)}</p>
-                    <p className="mt-1 text-sm text-slate-600">{appointment.doctor?.name || '-'} - {appointment.service?.nameAr || appointment.service?.name || '-'}</p>
+                    <h2 className="text-lg font-bold text-gray-900">{appointment.patient?.name || '-'}</h2>
+                    <p className="text-sm text-gray-500">{appointment.patient?.phone || '-'} - {formatDate(appointment.scheduledTime)}</p>
+                    <p className="mt-1 text-sm text-gray-600">{appointment.doctor?.name || '-'} - {appointment.service?.nameAr || appointment.service?.name || '-'}</p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-3 text-sm md:grid-cols-4 xl:grid-cols-2">
@@ -175,9 +175,9 @@ export default function PaymentsPage() {
 
       {editing && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-xl font-bold text-slate-950">تعديل الدفع</h2>
-            <p className="mt-1 text-sm text-slate-500">{editing.appointment?.patient?.name} - {editing.appointmentId}</p>
+          <div className="w-full max-w-xl rounded-lg bg-white p-6 shadow-lg">
+            <h2 className="text-xl font-bold text-gray-900">تعديل الدفع</h2>
+            <p className="mt-1 text-sm text-gray-500">{editing.appointment?.patient?.name} - {editing.appointmentId}</p>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <Field label="المبلغ المدفوع">
                 <input className={inputClass} type="number" value={form.paidAmount} onChange={(event) => setForm((current) => ({ ...current, paidAmount: event.target.value }))} />
@@ -210,9 +210,9 @@ export default function PaymentsPage() {
 
 function Info({ label, value }) {
   return (
-    <div className="rounded-xl bg-slate-50 p-3">
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 font-bold text-slate-900">{value}</p>
+    <div className="rounded-lg bg-gray-50 p-3">
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className="mt-1 font-bold text-gray-900">{value}</p>
     </div>
   );
 }
