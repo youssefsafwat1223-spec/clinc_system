@@ -1,482 +1,232 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Edit2, Mail, Phone, Plus, Search, ShieldCheck, Stethoscope, Trash2, UserSquare2, Users, UploadCloud, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Plus, Edit2, Trash2, Users } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 
-function SummaryCard({ title, value, hint, icon: Icon, accentClass }) {
-  return (
-    <div className={`glass-card border p-5 ${accentClass}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-dark-muted">{title}</p>
-          <p className="text-3xl font-bold tracking-tight text-white">{value}</p>
-          <p className="text-xs font-medium text-slate-400">{hint}</p>
-        </div>
-        <div className="rounded-2xl bg-dark-bg/70 p-3">
-          <Icon className="h-5 w-5 text-white" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function StatusBadge({ active }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold ring-1 ring-inset ${
-        active
-          ? 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
-          : 'bg-rose-500/10 text-rose-300 ring-rose-500/20'
-      }`}
-    >
-      <span className={`h-1.5 w-1.5 rounded-full ${active ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-      {active ? 'نشط' : 'معطل'}
-    </span>
-  );
-}
-
 export default function StaffPage() {
-  const [doctors, setDoctors] = useState([]);
+  const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [currentDoctor, setCurrentDoctor] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [formData, setFormData] = useState({ name: '', email: '', phone: '', role: 'STAFF' });
+  const [saving, setSaving] = useState(false);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    specialization: '',
-    phone: '',
-    image: '',
-    displayName: '',
-    email: '',
-    password: '',
-    active: true,
-  });
-
-  const fetchDoctors = async () => {
+  const fetchStaff = async () => {
     try {
       setLoading(true);
-      const res = await api.get('/doctors');
-      setDoctors(res.data.doctors || []);
+      const res = await api.get('/staff');
+      setStaff(res.data.staff || res.data || []);
     } catch (error) {
-      toast.error('فشل في تحميل الكادر الطبي');
+      toast.error('فشل في تحميل الموظفين');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDoctors();
+    fetchStaff();
   }, []);
 
-  const handleOpenModal = (doctor = null) => {
-    if (doctor) {
-      setCurrentDoctor(doctor);
-      setFormData({
-        name: doctor.name || '',
-        specialization: doctor.specialization || '',
-        phone: doctor.phone || '',
-        image: doctor.image || '',
-        displayName: doctor.user?.displayName || doctor.name || '',
-        email: doctor.user?.email || '',
-        password: '',
-        active: doctor.active ?? doctor.user?.active ?? true,
-      });
-    } else {
-      setCurrentDoctor(null);
-      setFormData({
-        name: '',
-        specialization: '',
-        phone: '',
-        image: '',
-        displayName: '',
-        email: '',
-        password: '',
-        active: true,
-      });
+  const handleSave = async () => {
+    if (!formData.name.trim() || !formData.email.trim()) {
+      toast.error('الاسم والبريد مطلوبان');
+      return;
     }
 
-    setIsModalOpen(true);
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-
     try {
-      const payload = {
-        ...formData,
-        phone: formData.phone || null,
-        image: formData.image || null,
-      };
-
-      if (!payload.password) {
-        delete payload.password;
-      }
-
-      if (!payload.email) {
-        delete payload.email;
-      }
-
-      if (currentDoctor) {
-        await api.put(`/doctors/${currentDoctor.id}`, payload);
-        toast.success('تم تحديث بيانات الطبيب بنجاح');
+      setSaving(true);
+      if (editingId) {
+        await api.put(`/staff/${editingId}`, formData);
+        toast.success('تم تحديث الموظف');
       } else {
-        await api.post('/doctors', payload);
-        toast.success('تمت إضافة الطبيب بنجاح');
+        await api.post('/staff', formData);
+        toast.success('تم إضافة موظف');
       }
-
-      setIsModalOpen(false);
-      fetchDoctors();
+      setFormData({ name: '', email: '', phone: '', role: 'STAFF' });
+      setEditingId(null);
+      setShowForm(false);
+      fetchStaff();
     } catch (error) {
-      toast.error(error.message || 'خطأ في الحفظ');
+      toast.error('فشل الحفظ');
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('تأكيد حذف الطبيب وحساب دخوله المرتبط؟')) {
-      return;
-    }
-
+    if (!window.confirm('حذف هذا الموظف؟')) return;
     try {
-      await api.delete(`/doctors/${id}`);
-      toast.success('تم الحذف بنجاح');
-      fetchDoctors();
+      await api.delete(`/staff/${id}`);
+      toast.success('تم حذف الموظف');
+      fetchStaff();
     } catch (error) {
-      toast.error(error.message || 'فشل الحذف');
+      toast.error('فشل الحذف');
     }
   };
 
-  const handleImageUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('حجم الصورة يجب أن لا يتجاوز 5 ميجابايت');
-      return;
-    }
-
-    try {
-      setIsUploading(true);
-      const uploadData = new FormData();
-      uploadData.append('image', file);
-
-      const res = await api.post('/upload', uploadData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-
-      setFormData((prev) => ({ ...prev, image: res.data.url }));
-      toast.success('تم رفع الصورة بنجاح');
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'فشل رفع الصورة');
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  const filteredDoctors = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-
-    return doctors.filter((doctor) => {
-      const haystack = [doctor.name, doctor.specialization, doctor.phone, doctor.user?.email].filter(Boolean).join(' ').toLowerCase();
-      return !query || haystack.includes(query);
-    });
-  }, [doctors, searchTerm]);
-
-  const summary = useMemo(
-    () => ({
-      total: doctors.length,
-      active: doctors.filter((doctor) => doctor.active).length,
-      withAccounts: doctors.filter((doctor) => doctor.user?.email).length,
-      appointments: doctors.reduce((sum, doctor) => sum + (doctor._count?.appointments || 0), 0),
-    }),
-    [doctors]
-  );
+  const roleLabels = { ADMIN: 'إدارة', DOCTOR: 'طبيب', STAFF: 'موظف' };
 
   return (
     <AppLayout>
-      <div className="space-y-6 fade-in">
-        <div className="flex flex-col items-start justify-between gap-4 lg:flex-row lg:items-end">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">الكادر الطبي والموظفون</h1>
-            <p className="mt-1 text-sm text-dark-muted">إدارة الأطباء، حسابات الدخول، وحالة كل حساب من صفحة واحدة.</p>
+            <h1 className="text-2xl font-bold text-gray-900">👨‍⚕️ الموظفين</h1>
+            <p className="text-sm text-gray-500 mt-1">إدارة فريق العمل</p>
           </div>
+          <button
+            onClick={() => {
+              setFormData({ name: '', email: '', phone: '', role: 'STAFF' });
+              setEditingId(null);
+              setShowForm(true);
+            }}
+            className="px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition flex items-center gap-2"
+          >
+            <Plus className="h-4 w-4" />
+            موظف جديد
+          </button>
+        </div>
 
-          <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row">
-            <div className="relative w-full md:w-80">
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-3">
-                <Search className="h-4 w-4 text-dark-muted" />
-              </div>
-              <input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="ابحث بالاسم أو التخصص أو البريد..."
-                className="input-field border-dark-border bg-dark-card/80 pr-10"
-              />
-            </div>
-
-            <button onClick={() => handleOpenModal()} className="btn-primary">
-              <Plus className="h-5 w-5" />
-              إضافة طبيب
-            </button>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-600">الإجمالي</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{staff.length}</p>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-600">أطباء</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{staff.filter((s) => s.role === 'DOCTOR').length}</p>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-600">موظفين</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{staff.filter((s) => s.role === 'STAFF').length}</p>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-600">إدارة</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{staff.filter((s) => s.role === 'ADMIN').length}</p>
           </div>
         </div>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard title="إجمالي الأطباء" value={summary.total} hint="كل السجلات الحالية" icon={Users} accentClass="border-primary-500/20" />
-          <SummaryCard title="الحسابات النشطة" value={summary.active} hint="متاح لها العمل داخل النظام" icon={ShieldCheck} accentClass="border-emerald-500/20" />
-          <SummaryCard title="بحساب دخول" value={summary.withAccounts} hint="مربوطة بـ dashboard login" icon={Mail} accentClass="border-sky-500/20" />
-          <SummaryCard title="إجمالي الحجوزات" value={summary.appointments} hint="موزعة على جميع الأطباء" icon={Stethoscope} accentClass="border-amber-500/20" />
-        </section>
-
         {loading ? (
-          <div className="flex h-64 items-center justify-center">
-            <span className="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></span>
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
           </div>
-        ) : filteredDoctors.length === 0 ? (
-          <div className="glass-card flex flex-col items-center justify-center p-16 text-dark-muted">
-            <Users className="mb-4 h-16 w-16 opacity-20" />
-            <p className="text-lg">لا يوجد أطباء مطابقون للبحث</p>
+        ) : staff.length === 0 ? (
+          <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
+            <p className="text-gray-500">لا يوجد موظفين</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {filteredDoctors.map((doctor) => {
-              const activeWorkingDays = Object.values(doctor.workingHours || {}).filter(Boolean).length;
-
-              return (
-                <div key={doctor.id} className="glass-card group overflow-hidden">
-                  <div className="relative h-24 bg-gradient-to-r from-slate-800 to-primary-900/40">
-                    <div className="absolute left-4 top-4 flex gap-2">
-                      <button
-                        onClick={() => handleOpenModal(doctor)}
-                        className="rounded-md bg-dark-card/50 p-1.5 text-slate-300 backdrop-blur-sm transition-colors hover:bg-primary-500 hover:text-white"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(doctor.id)}
-                        className="rounded-md bg-dark-card/50 p-1.5 text-slate-300 backdrop-blur-sm transition-colors hover:bg-red-500 hover:text-white"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-
-                    <div className="absolute -bottom-10 right-6 flex h-20 w-20 items-center justify-center rounded-full border-4 border-dark-card bg-dark-card shadow-xl overflow-hidden">
-                      {doctor.image ? (
-                        <img src={doctor.image} alt={doctor.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary-400/20 to-primary-600/20">
-                          <UserSquare2 className="h-8 w-8 text-primary-400" />
-                        </div>
-                      )}
-                    </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {staff.map((member) => (
+              <div key={member.id} className="bg-white rounded-lg border border-gray-200 p-4 shadow-sm">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <h3 className="font-bold text-gray-900">{member.name}</h3>
+                    <p className="text-xs text-gray-500 mt-0.5">{roleLabels[member.role]}</p>
                   </div>
-
-                  <div className="p-6 pt-12">
-                    <div className="mb-3 flex items-start justify-between gap-3">
-                      <div>
-                        <h3 className="text-xl font-bold text-white">{doctor.name}</h3>
-                        <div className="mt-2 inline-flex items-center gap-1.5 rounded-md border border-primary-500/20 bg-primary-500/10 px-2.5 py-1 text-sm font-medium text-primary-300 shadow-inner">
-                          <Stethoscope className="h-3.5 w-3.5" />
-                          {doctor.specialization}
-                        </div>
-                      </div>
-                      <StatusBadge active={doctor.active} />
-                    </div>
-
-                    <div className="space-y-3 text-sm">
-                      {doctor.phone ? (
-                        <div className="flex items-center gap-3 rounded-lg border border-dark-border/50 bg-dark-bg/50 px-3 py-2 text-slate-300">
-                          <Phone className="h-4 w-4 text-dark-muted" />
-                          <span dir="ltr">{doctor.phone}</span>
-                        </div>
-                      ) : null}
-
-                      {doctor.user?.displayName ? (
-                        <div className="flex items-center gap-3 rounded-lg border border-dark-border/50 bg-dark-bg/50 px-3 py-2 text-slate-300">
-                          <UserSquare2 className="h-4 w-4 text-dark-muted" />
-                          <span>{doctor.user.displayName}</span>
-                        </div>
-                      ) : null}
-
-                      <div className="flex items-center gap-3 rounded-lg border border-dark-border/50 bg-dark-bg/50 px-3 py-2 text-slate-300">
-                        <Mail className="h-4 w-4 text-dark-muted" />
-                        <span dir="ltr" className="truncate">
-                          {doctor.user?.email || 'لا يوجد حساب دخول'}
-                        </span>
-                      </div>
-
-                      <div className="mt-4 space-y-3 border-t border-dark-border/50 pt-4">
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-center">
-                            <span className="mb-1 block text-[10px] uppercase tracking-wider text-emerald-300">الحجوزات</span>
-                            <span className="text-lg font-bold text-white">{doctor._count?.appointments || 0}</span>
-                          </div>
-                          <div className="rounded-lg border border-sky-500/20 bg-sky-500/10 px-3 py-2 text-center">
-                            <span className="mb-1 block text-[10px] uppercase tracking-wider text-sky-300">أيام عمل</span>
-                            <span className="text-lg font-bold text-white">{activeWorkingDays}</span>
-                          </div>
-                          <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-center">
-                            <span className="mb-1 block text-[10px] uppercase tracking-wider text-amber-300">الدخول</span>
-                            <span className="text-sm font-bold text-white">{doctor.user?.email ? '✓' : '✗'}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => {
+                        setFormData(member);
+                        setEditingId(member.id);
+                        setShowForm(true);
+                      }}
+                      className="p-2 rounded-lg bg-blue-100 text-blue-600 hover:bg-blue-200 transition"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(member.id)}
+                      className="p-2 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
                 </div>
-              );
-            })}
+
+                <div className="space-y-1 text-sm text-gray-600">
+                  {member.email && <p>✉️ {member.email}</p>}
+                  {member.phone && <p dir="ltr">📱 {member.phone}</p>}
+                </div>
+              </div>
+            ))}
           </div>
         )}
 
-        {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-dark-bg/80 p-4 backdrop-blur-sm">
-            <div className="w-full max-w-lg rounded-2xl border border-dark-border bg-dark-card p-6 shadow-2xl">
-              <h2 className="mb-6 text-xl font-bold text-white">
-                {currentDoctor ? 'تعديل بيانات الطبيب' : 'إضافة طبيب جديد'}
-              </h2>
+        {showForm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white rounded-lg border border-gray-200 shadow-2xl w-full max-w-md my-4">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200">
+                <h2 className="text-xl font-bold text-gray-900">
+                  {editingId ? 'تعديل الموظف' : 'موظف جديد'}
+                </h2>
+                <button onClick={() => setShowForm(false)} className="text-gray-600 hover:text-gray-900">
+                  ✕
+                </button>
+              </div>
 
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="p-6 space-y-4">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-dark-muted">الاسم الكامل</label>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">الاسم</label>
                   <input
-                    required
                     type="text"
                     value={formData.name}
-                    onChange={(event) => setFormData({ ...formData, name: event.target.value })}
-                    className="input-field"
-                    placeholder="د. أحمد محمد"
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-dark-muted">التخصص</label>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">البريد الإلكتروني</label>
                   <input
-                    required
-                    type="text"
-                    value={formData.specialization}
-                    onChange={(event) => setFormData({ ...formData, specialization: event.target.value })}
-                    className="input-field"
-                    placeholder="باطنة - أطفال - جلدية"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-dark-muted">اسم الظهور في رسائل المرضى</label>
-                  <input
-                    type="text"
-                    value={formData.displayName}
-                    onChange={(event) => setFormData({ ...formData, displayName: event.target.value })}
-                    className="input-field"
-                    placeholder="مثال: الاستقبال - د. أحمد"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-dark-muted">رقم الهاتف</label>
-                  <input
-                    type="text"
-                    value={formData.phone}
-                    onChange={(event) => setFormData({ ...formData, phone: event.target.value })}
-                    className="input-field"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                     dir="ltr"
-                    placeholder="+201000000000"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-dark-muted">صورة الطبيب (اختياري)</label>
-                  
-                  <div className="flex items-center gap-4">
-                    {formData.image ? (
-                      <div className="relative h-16 w-16 overflow-hidden rounded-full ring-2 ring-primary-500/20">
-                        <img src={formData.image} alt="صورة الطبيب" className="h-full w-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setFormData({ ...formData, image: '' })}
-                          className="absolute inset-0 flex items-center justify-center bg-black/50 text-white opacity-0 transition-opacity hover:opacity-100"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-dark-bg/50 ring-1 ring-dark-border">
-                        <UserSquare2 className="h-6 w-6 text-dark-muted" />
-                      </div>
-                    )}
-                    
-                    <div className="flex-1 relative">
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={handleImageUpload}
-                        disabled={isUploading}
-                        className="absolute inset-0 h-full w-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
-                      />
-                      <div className={`flex items-center gap-2 rounded-lg border border-dashed border-dark-border bg-dark-bg/30 px-4 py-3 text-sm text-slate-300 transition-colors ${isUploading ? 'opacity-50' : 'hover:border-primary-500/50 hover:bg-dark-bg/50'}`}>
-                        {isUploading ? <Loader2 className="h-5 w-5 animate-spin text-primary-400" /> : <UploadCloud className="h-5 w-5 text-dark-muted" />}
-                        {isUploading ? 'جاري الرفع...' : 'اضغط لاختيار صورة (أو اسحبها هنا)'}
-                      </div>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-[10px] text-dark-muted">أنواع الملفات المسموحة: jpeg, png, webp (الحد الأقصى 5MB)</p>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">الهاتف</label>
+                  <input
+                    type="tel"
+                    value={formData.phone}
+                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    dir="ltr"
+                  />
                 </div>
 
-                <div className="rounded-xl border border-dark-border/60 bg-dark-bg/30 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <h4 className="text-sm font-medium text-primary-300">حساب الدخول إلى الـ Dashboard</h4>
-                    <label className="flex items-center gap-2 text-sm text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={formData.active}
-                        onChange={(event) => setFormData({ ...formData, active: event.target.checked })}
-                        className="h-4 w-4 rounded border-dark-border bg-dark-bg text-primary-500 focus:ring-primary-500"
-                      />
-                      حساب نشط
-                    </label>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-dark-muted">البريد الإلكتروني</label>
-                      <input
-                        type="email"
-                        value={formData.email}
-                        onChange={(event) => setFormData({ ...formData, email: event.target.value })}
-                        className="input-field"
-                        dir="ltr"
-                        placeholder="doctor@clinic.com"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-dark-muted">
-                        كلمة المرور {currentDoctor ? '(اتركها فارغة إذا لم ترغب في تغييرها)' : ''}
-                      </label>
-                      <input
-                        type={currentDoctor ? 'password' : 'text'}
-                        required={!currentDoctor && !!formData.email}
-                        value={formData.password}
-                        onChange={(event) => setFormData({ ...formData, password: event.target.value })}
-                        className="input-field"
-                        dir="ltr"
-                        placeholder={currentDoctor ? '********' : 'doctor123'}
-                      />
-                    </div>
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-900 mb-1">الدور</label>
+                  <select
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                  >
+                    <option value="STAFF">موظف</option>
+                    <option value="DOCTOR">طبيب</option>
+                    <option value="ADMIN">إدارة</option>
+                  </select>
                 </div>
 
-                <div className="mt-6 flex justify-end gap-3 border-t border-dark-border pt-4">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 font-medium text-dark-muted transition-colors hover:text-white">
+                <div className="flex gap-2 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex-1 px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition disabled:opacity-50"
+                  >
+                    حفظ
+                  </button>
+                  <button
+                    onClick={() => setShowForm(false)}
+                    className="flex-1 px-4 py-2 rounded-lg bg-gray-100 text-gray-700 font-medium hover:bg-gray-200 transition"
+                  >
                     إلغاء
                   </button>
-                  <button type="submit" className="btn-primary rounded-lg px-6">
-                    حفظ البيانات
-                  </button>
                 </div>
-              </form>
+              </div>
             </div>
           </div>
         )}

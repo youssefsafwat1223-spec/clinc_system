@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCheck, MessageSquare, Pause, Phone, Play, Search, Send, User } from 'lucide-react';
 import { format, isToday, isYesterday, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
@@ -24,23 +24,16 @@ const chatStateLabels = {
 };
 
 function PlatformIcon({ platform, className = 'w-4 h-4' }) {
-  if (platform === 'WHATSAPP') return <Phone className={`${className} text-emerald-500`} />;
+  if (platform === 'WHATSAPP') return <Phone className={`${className} text-green-500`} />;
   if (platform === 'FACEBOOK') return <MessageSquare className={`${className} text-blue-500`} />;
   if (platform === 'INSTAGRAM') return <MessageSquare className={`${className} text-pink-500`} />;
-  return <MessageSquare className={`${className} text-slate-500`} />;
+  return <MessageSquare className={`${className} text-gray-500`} />;
 }
 
 function formatMessageDayLabel(value) {
   const parsed = parseISO(value);
-
-  if (isToday(parsed)) {
-    return 'اليوم';
-  }
-
-  if (isYesterday(parsed)) {
-    return 'أمس';
-  }
-
+  if (isToday(parsed)) return 'اليوم';
+  if (isYesterday(parsed)) return 'أمس';
   return format(parsed, 'EEEE dd MMMM', { locale: ar });
 }
 
@@ -50,7 +43,6 @@ function formatTime(value) {
 
 function getMessageSourceLabel(metadata) {
   const source = metadata?.source;
-
   if (source === 'COMMENT') return 'تعليق';
   if (source === 'COMMENT_REPLY') return 'رد تعليق';
   if (source === 'APPOINTMENT_CONFIRMATION') return 'تأكيد موعد';
@@ -60,13 +52,12 @@ function getMessageSourceLabel(metadata) {
 
 function StatusPill({ chatState }) {
   const isHuman = chatState === 'HUMAN';
-
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold ring-1 ring-inset ${
+      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${
         isHuman
-          ? 'bg-amber-500/10 text-amber-300 ring-amber-500/20'
-          : 'bg-emerald-500/10 text-emerald-300 ring-emerald-500/20'
+          ? 'bg-red-100 text-red-700'
+          : 'bg-green-100 text-green-700'
       }`}
     >
       {chatStateLabels[chatState] || 'غير معروف'}
@@ -104,16 +95,12 @@ export default function InboxPage() {
         fetchConversation(selectedPatientId, false);
       }
     }, 5000);
-
     return () => clearInterval(interval);
   }, [selectedPatientId]);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
-    if (!container) {
-      return;
-    }
-
+    if (!container) return;
     container.scrollTo({
       top: container.scrollHeight,
       behavior: 'smooth',
@@ -122,16 +109,12 @@ export default function InboxPage() {
 
   const fetchPatientsList = async (showLoading = true) => {
     try {
-      if (showLoading) {
-        setLoadingList(true);
-      }
-
+      if (showLoading) setLoadingList(true);
       const res = await api.get('/messages', { params: { limit: 500 } });
       const uniquePatientsMap = new Map();
 
       (res.data.messages || []).forEach((msg) => {
         const existing = uniquePatientsMap.get(msg.patientId);
-
         if (!existing) {
           uniquePatientsMap.set(msg.patientId, {
             ...msg.patient,
@@ -148,7 +131,6 @@ export default function InboxPage() {
           });
           return;
         }
-
         existing.messageCount += 1;
         if (msg.type === 'INBOUND' && !msg.readAt) {
           existing.unreadCount = (existing.unreadCount || 0) + 1;
@@ -167,24 +149,18 @@ export default function InboxPage() {
         if (current && nextPatients.some((patient) => patient.id === current)) {
           return current;
         }
-
         return nextPatients[0]?.id || null;
       });
     } catch (error) {
       toast.error('فشل في تحميل قائمة الرسائل');
     } finally {
-      if (showLoading) {
-        setLoadingList(false);
-      }
+      if (showLoading) setLoadingList(false);
     }
   };
 
   const fetchConversation = async (patientId, showLoading = true) => {
     try {
-      if (showLoading) {
-        setLoadingChat(true);
-      }
-
+      if (showLoading) setLoadingChat(true);
       const res = await api.get(`/messages/conversation/${patientId}`);
       setConversation(res.data.messages || []);
 
@@ -205,9 +181,7 @@ export default function InboxPage() {
     } catch (error) {
       toast.error('فشل في تحميل المحادثة');
     } finally {
-      if (showLoading) {
-        setLoadingChat(false);
-      }
+      if (showLoading) setLoadingChat(false);
     }
   };
 
@@ -231,10 +205,7 @@ export default function InboxPage() {
 
   const handleSend = async (event) => {
     event.preventDefault();
-
-    if (!replyText.trim() || !selectedPatientId) {
-      return;
-    }
+    if (!replyText.trim() || !selectedPatientId) return;
 
     try {
       const selectedPatient = patients.find((patient) => patient.id === selectedPatientId);
@@ -268,10 +239,7 @@ export default function InboxPage() {
   };
 
   const handleEndConversation = async () => {
-    if (!selectedPatientId) {
-      return;
-    }
-
+    if (!selectedPatientId) return;
     try {
       await api.post(`/messages/${selectedPatientId}/end`);
       toast.success('تم إنهاء المحادثة وسيعود الرد الآلي للعمل الآن.');
@@ -287,10 +255,7 @@ export default function InboxPage() {
   };
 
   const handlePauseBot = async () => {
-    if (!selectedPatientId) {
-      return;
-    }
-
+    if (!selectedPatientId) return;
     try {
       await api.post(`/messages/${selectedPatientId}/pause`);
       toast.success('تم إيقاف الرد الآلي لهذه المحادثة.');
@@ -325,7 +290,6 @@ export default function InboxPage() {
 
   const filteredPatients = useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
-
     return patients.filter((patient) => {
       const isStateTab = activeTab === 'HUMAN' || activeTab === 'UNREAD' || activeTab === 'REVIEWED';
       const matchesPlatform = activeTab === 'ALL' || isStateTab || patient.platform === activeTab;
@@ -348,7 +312,6 @@ export default function InboxPage() {
       setSelectedPatientId(null);
       return;
     }
-
     if (!selectedPatientId || !filteredPatients.some((patient) => patient.id === selectedPatientId)) {
       setSelectedPatientId(filteredPatients[0].id);
     }
@@ -361,20 +324,16 @@ export default function InboxPage() {
 
   const groupedConversation = useMemo(() => {
     const groups = [];
-
     conversation.forEach((message) => {
       const key = format(parseISO(message.createdAt), 'yyyy-MM-dd');
       const label = formatMessageDayLabel(message.createdAt);
       const lastGroup = groups[groups.length - 1];
-
       if (!lastGroup || lastGroup.key !== key) {
         groups.push({ key, label, messages: [message] });
         return;
       }
-
       lastGroup.messages.push(message);
     });
-
     return groups;
   }, [conversation]);
 
@@ -384,351 +343,242 @@ export default function InboxPage() {
   );
 
   return (
-    <AppLayout noPadding={true}>
-      <div className="relative z-20 flex h-full min-h-0 flex-col overflow-hidden bg-dark-bg/80 backdrop-blur-3xl">
-        <div className="mx-auto flex min-h-0 w-full max-w-[1600px] flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4 pt-6 sm:px-6 sm:pb-6 lg:gap-6 lg:pt-7 xl:flex-row xl:overflow-hidden">
-          <div className="flex min-h-[320px] w-full shrink-0 flex-col overflow-hidden rounded-2xl border border-dark-border/60 bg-[#0a1120]/75 shadow-2xl backdrop-blur-xl xl:h-full xl:w-[26rem]">
-            <div className="space-y-4 border-b border-dark-border/50 bg-[#0a1120]/95 p-5">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="flex items-center gap-2 text-lg font-extrabold tracking-wide text-white">
-                    <MessageSquare className="h-5 w-5 text-primary-400" />
-                    المحادثات
-                  </h2>
-                  <p className="mt-1 text-xs text-slate-400">قائمة المحادثات الأحدث مع ملخص سريع لكل حالة</p>
-                </div>
-                <div className="rounded-2xl border border-dark-border/50 bg-dark-bg/50 px-3 py-2 text-right">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Threads</p>
-                  <p className="mt-1 text-base font-extrabold text-white">{patients.length}</p>
-                </div>
+    <AppLayout>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-200px)]">
+        {/* Patient List */}
+        <div className="lg:col-span-1 bg-white rounded-xl shadow-md border border-gray-200 flex flex-col overflow-hidden">
+          <div className="p-6 border-b border-gray-200 bg-white">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-gray-900">💬 المحادثات</h2>
+                <p className="text-sm text-gray-500 mt-1">قائمة الرسائل الأخيرة</p>
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-2xl border border-dark-border/40 bg-dark-bg/40 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Manual</p>
-                  <p className="mt-2 text-lg font-bold text-amber-300">{humanThreadsCount}</p>
-                  <p className="mt-1 text-[11px] text-slate-400">تحتاج متابعة بشرية</p>
-                </div>
-                <div className="rounded-2xl border border-dark-border/40 bg-dark-bg/40 p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Bot</p>
-                  <p className="mt-2 text-lg font-bold text-emerald-300">{patients.length - humanThreadsCount}</p>
-                  <p className="mt-1 text-[11px] text-slate-400">تعمل بالرد الآلي</p>
-                </div>
-              </div>
-
-              <div className="relative">
-                <Search className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                <input
-                  value={searchTerm}
-                  onChange={(event) => setSearchTerm(event.target.value)}
-                  placeholder="ابحث بالاسم أو الرقم أو آخر رسالة..."
-                  className="input-field rounded-2xl border-dark-border/60 bg-dark-bg/70 pr-11 text-sm"
-                />
-              </div>
-
-              <div className="flex gap-2 overflow-x-auto rounded-xl border border-dark-border/40 bg-dark-bg/50 p-1 custom-scrollbar">
-                {platformTabs.map((tab) => (
-                  <button
-                    key={tab}
-                    onClick={() => setActiveTab(tab)}
-                    className={`flex min-w-fit items-center gap-2 rounded-lg px-3 py-2 text-xs font-bold transition-all ${
-                      activeTab === tab
-                        ? 'bg-primary-500 text-white shadow-lg shadow-primary-500/20'
-                        : 'text-slate-400 hover:bg-dark-border/40 hover:text-white'
-                    }`}
-                  >
-                    <span>{platformLabels[tab]}</span>
-                    <span
-                      className={`rounded-full px-1.5 py-0.5 text-[10px] ${
-                        activeTab === tab ? 'bg-white/15 text-white' : 'bg-dark-border/50 text-slate-300'
-                      }`}
-                    >
-                      {platformCounts[tab] || 0}
-                    </span>
-                  </button>
-                ))}
+              <div className="bg-gray-100 rounded-lg px-3 py-2">
+                <p className="text-xs font-medium text-gray-600">الإجمالي</p>
+                <p className="text-lg font-bold text-gray-900 mt-1">{patients.length}</p>
               </div>
             </div>
 
-            <div className="min-h-0 flex-1 overflow-y-auto custom-scrollbar">
-              {loadingList ? (
-                <div className="flex justify-center p-8">
-                  <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-primary-500 border-t-transparent shadow-lg shadow-primary-500/20"></span>
-                </div>
-              ) : filteredPatients.length === 0 ? (
-                <div className="flex flex-col items-center p-12 text-center text-slate-500">
-                  <MessageSquare className="mb-3 h-12 w-12 opacity-30" />
-                  <p className="font-semibold text-sm">
-                    {patients.length === 0 ? 'صندوق الوارد فارغ' : 'لا توجد محادثات تطابق الفلاتر الحالية'}
-                  </p>
-                  <p className="mt-2 text-xs text-slate-500">جرّب تغيير التصنيف أو امسح نص البحث.</p>
-                </div>
-              ) : (
-                <div className="divide-y divide-dark-border/30">
-                  {filteredPatients.map((patient) => {
-                    const isSelected = selectedPatientId === patient.id;
-                    const isOutbound = patient.lastMessageType === 'OUTBOUND';
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-2">
+                <p className="text-xs font-medium text-red-700">متابعة بشرية</p>
+                <p className="text-base font-bold text-red-600 mt-1">{humanThreadsCount}</p>
+              </div>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-2">
+                <p className="text-xs font-medium text-green-700">رد آلي</p>
+                <p className="text-base font-bold text-green-600 mt-1">{patients.length - humanThreadsCount}</p>
+              </div>
+            </div>
 
-                    return (
-                      <button
-                        key={patient.id}
-                        onClick={() => setSelectedPatientId(patient.id)}
-                        className={`relative flex w-full gap-4 p-4 text-right transition-all duration-200 group ${
-                          isSelected
-                            ? 'border-r-4 border-primary-500 bg-gradient-to-r from-primary-900/30 to-transparent'
-                            : 'border-r-4 border-transparent hover:bg-[#111c33]/70'
-                        }`}
-                      >
-                        {/* Unread Badge - في الأعلى اليمين */}
-                        {patient.unreadCount > 0 && (
-                          <div className="absolute top-2 right-2">
-                            <span className="flex items-center justify-center h-6 w-6 rounded-full bg-red-500 text-white text-xs font-bold shadow-lg">
-                              {patient.unreadCount > 9 ? '9+' : patient.unreadCount}
-                            </span>
-                          </div>
-                        )}
+            <div className="relative mb-4">
+              <Search className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="ابحث بالاسم أو الرقم..."
+                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
 
-                        <div className="relative h-12 w-12 shrink-0 rounded-full bg-slate-800/80 ring-2 ring-slate-700/50 shadow-inner">
-                          <div className="flex h-full w-full items-center justify-center">
-                            <User className="h-5 w-5 text-slate-300" />
-                          </div>
-                          <div className="absolute -bottom-1 -left-1 rounded-full bg-[#0a1120] p-1 shadow-md">
-                            <PlatformIcon platform={patient.platform} className="h-3.5 w-3.5" />
-                          </div>
-                        </div>
-
-                        <div className="min-w-0 flex-1">
-                          <div className="mb-1 flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <h4 className={`truncate text-sm font-bold ${isSelected ? 'text-primary-100' : 'text-slate-100'}`}>
-                                {patient.displayName || patient.name || 'بدون اسم'}
-                              </h4>
-                              <p className="mt-1 text-[11px] text-slate-400" dir="ltr">
-                                📱 {patient.phone || 'لا يوجد رقم'}
-                              </p>
-                            </div>
-                            <span className="shrink-0 text-[10px] font-medium tracking-wide text-slate-500 whitespace-nowrap" dir="ltr">
-                              {patient.lastMessageTime ? formatTime(patient.lastMessageTime) : '--'}
-                            </span>
-                          </div>
-
-                          <div className="mb-2 flex flex-wrap items-center gap-2">
-                            <StatusPill chatState={patient.chatState} />
-                            <span className="inline-flex items-center gap-1 rounded-full bg-dark-bg/70 px-2.5 py-1 text-[10px] font-bold text-slate-400 ring-1 ring-dark-border/60">
-                              <PlatformIcon platform={patient.platform} className="h-3 w-3" />
-                              {platformLabels[patient.platform] || 'منصة'}
-                            </span>
-                            <span className="rounded-full bg-dark-bg/70 px-2.5 py-1 text-[10px] font-bold text-slate-500 ring-1 ring-dark-border/60">
-                              {patient.messageCount || 0} رسالة
-                            </span>
-                            {(patient.unreadCount || 0) > 0 ? (
-                              <span className="rounded-full bg-rose-500 px-2.5 py-1 text-[10px] font-bold text-white">
-                                {patient.unreadCount} غير مقروء
-                              </span>
-                            ) : null}
-                          </div>
-
-                          <div className={`flex items-center gap-2 text-xs ${isSelected ? 'text-primary-200/90' : 'text-slate-400'}`}>
-                            <span
-                              className={`rounded-full px-2 py-0.5 font-bold ${
-                                isOutbound ? 'bg-primary-500/10 text-primary-300' : 'bg-slate-700/60 text-slate-300'
-                              }`}
-                            >
-                              {isOutbound ? 'صادر' : 'وارد'}
-                            </span>
-                            {patient.lastMessageSource ? (
-                              <span className="rounded-full bg-sky-500/10 px-2 py-0.5 font-bold text-sky-300">
-                                {patient.lastMessageSource}
-                              </span>
-                            ) : null}
-                            <p className="truncate">{patient.lastMessage || 'لا توجد رسالة بعد'}</p>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
+            <div className="flex gap-2 overflow-x-auto pb-2">
+              {platformTabs.map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition ${
+                    activeTab === tab
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                >
+                  {platformLabels[tab]} ({platformCounts[tab] || 0})
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="relative z-10 flex min-h-[520px] flex-1 flex-col overflow-hidden rounded-2xl border border-dark-border/60 bg-[#060a12]/80 shadow-2xl xl:h-full xl:min-h-0">
-            <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:24px_24px] opacity-5"></div>
-
-            {selectedPatientData ? (
-              <>
-                <div className="relative z-20 flex h-[92px] shrink-0 items-center justify-between border-b border-dark-border/50 bg-[#0a1120]/95 px-6 backdrop-blur-md">
-                  <div className="flex min-w-0 items-center gap-4">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-slate-700 to-slate-800 shadow-inner ring-1 ring-slate-600/50">
-                      <User className="h-6 w-6 text-slate-300" />
-                    </div>
-
-                    <div className="min-w-0">
-                      <h3 className="truncate text-base font-extrabold leading-tight text-white">
-                        {selectedPatientData.displayName || selectedPatientData.name || 'بدون اسم'}
-                      </h3>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <p className="text-xs font-medium tracking-wide text-primary-300 opacity-90" dir="ltr">
-                          {selectedPatientData.phone || 'No phone'}
-                        </p>
-                        <span className="h-1 w-1 rounded-full bg-dark-muted"></span>
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400">
-                          <PlatformIcon platform={selectedPatientData.platform} className="h-3 w-3" />
-                          {platformLabels[selectedPatientData.platform] || 'منصة'}
+          {/* Patients List */}
+          <div className="flex-1 overflow-y-auto">
+            {loadingList ? (
+              <div className="flex justify-center items-center h-40">
+                <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
+              </div>
+            ) : filteredPatients.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-gray-500 text-center px-4">
+                <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
+                <p className="text-sm font-medium">لا توجد محادثات</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-200">
+                {filteredPatients.map((patient) => {
+                  const isSelected = selectedPatientId === patient.id;
+                  return (
+                    <button
+                      key={patient.id}
+                      onClick={() => setSelectedPatientId(patient.id)}
+                      className={`w-full p-4 text-right transition ${
+                        isSelected
+                          ? 'bg-green-50 border-r-4 border-green-500'
+                          : 'hover:bg-gray-50'
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="relative flex-shrink-0">
+                          <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                            <User className="h-5 w-5 text-white" />
+                          </div>
+                          {patient.unreadCount > 0 && (
+                            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
+                              {patient.unreadCount > 9 ? '9+' : patient.unreadCount}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-bold text-gray-900 truncate text-sm">{patient.name || 'بدون اسم'}</h4>
+                          <p className="text-xs text-gray-500 mt-0.5" dir="ltr">
+                            📱 {patient.phone || 'لا يوجد رقم'}
+                          </p>
+                          <div className="flex items-center gap-1 mt-1.5">
+                            <StatusPill chatState={patient.chatState} />
+                            {patient.unreadCount > 0 && (
+                              <span className="text-xs font-medium bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
+                                {patient.unreadCount} جديد
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1 truncate">{patient.lastMessage || 'لا توجد رسالة'}</p>
+                        </div>
+                        <span className="text-xs text-gray-400 shrink-0" dir="ltr">
+                          {patient.lastMessageTime ? formatTime(patient.lastMessageTime) : '--'}
                         </span>
-                        <StatusPill chatState={selectedPatientData.chatState} />
                       </div>
-                    </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Chat Window */}
+        <div className="lg:col-span-2 bg-white rounded-xl shadow-md border border-gray-200 flex flex-col overflow-hidden">
+          {selectedPatientData ? (
+            <>
+              {/* Chat Header */}
+              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
+                    <User className="h-5 w-5 text-white" />
                   </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="hidden rounded-2xl border border-dark-border/50 bg-dark-bg/50 px-3 py-2 text-right md:block">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">Messages</p>
-                      <p className="mt-1 text-sm font-bold text-white">{conversation.length}</p>
-                    </div>
-
-                    {selectedPatientData.chatState === 'HUMAN' ? (
-                      <button
-                        onClick={handleEndConversation}
-                        className="flex items-center gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-xs font-bold text-emerald-400 transition-all duration-300 hover:-translate-y-0.5 hover:bg-emerald-500 hover:text-white hover:shadow-[0_0_15px_rgba(16,185,129,0.4)]"
-                        title="إرجاع المحادثة إلى الرد الآلي"
-                      >
-                        <Play className="h-4 w-4" />
-                        تشغيل البوت
-                      </button>
-                    ) : (
-                      <button
-                        onClick={handlePauseBot}
-                        className="flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs font-bold text-amber-400 transition-all duration-300 hover:-translate-y-0.5 hover:bg-amber-500 hover:text-white hover:shadow-[0_0_15px_rgba(245,158,11,0.4)]"
-                        title="إيقاف الرد الآلي لهذه المحادثة"
-                      >
-                        <Pause className="h-4 w-4" />
-                        إيقاف البوت
-                      </button>
-                    )}
+                  <div>
+                    <h3 className="font-bold text-gray-900">{selectedPatientData.name || 'بدون اسم'}</h3>
+                    <p className="text-xs text-gray-500 mt-0.5" dir="ltr">
+                      📱 {selectedPatientData.phone || 'لا يوجد رقم'}
+                    </p>
                   </div>
                 </div>
 
-                <div ref={messagesContainerRef} className="relative z-10 min-h-0 flex-1 overflow-y-auto p-6 custom-scrollbar">
-                  {loadingChat ? (
-                    <div className="absolute inset-0 z-30 flex items-center justify-center bg-dark-bg/50 backdrop-blur-sm">
-                      <span className="h-10 w-10 animate-spin rounded-full border-[3px] border-primary-500 border-t-transparent"></span>
-                    </div>
-                  ) : groupedConversation.length === 0 ? (
-                    <div className="flex h-full flex-col items-center justify-center text-center">
-                      <MessageSquare className="mb-4 h-12 w-12 text-slate-600/50" />
-                      <p className="text-base font-bold text-slate-300">لا توجد رسائل داخل هذه المحادثة</p>
-                      <p className="mt-2 max-w-sm text-sm text-slate-500">يمكنك إرسال أول رسالة من الصندوق السفلي إذا كانت القناة تسمح بذلك.</p>
-                    </div>
+                <div className="flex items-center gap-2">
+                  {selectedPatientData.chatState === 'HUMAN' ? (
+                    <button
+                      onClick={handleEndConversation}
+                      className="px-4 py-2 rounded-lg bg-green-500 text-white text-sm font-medium hover:bg-green-600 transition flex items-center gap-2"
+                    >
+                      <Play className="h-4 w-4" />
+                      تشغيل البوت
+                    </button>
                   ) : (
-                    <div className="space-y-8">
-                      {groupedConversation.map((group) => (
-                        <div key={group.key} className="space-y-4">
-                          <div className="flex items-center justify-center gap-4 opacity-80">
-                            <div className="h-px w-16 bg-gradient-to-l from-dark-border to-transparent"></div>
-                            <span className="rounded-full border border-dark-border/50 bg-[#0a1120] px-4 py-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                              {group.label}
-                            </span>
-                            <div className="h-px w-16 bg-gradient-to-r from-dark-border to-transparent"></div>
-                          </div>
+                    <button
+                      onClick={handlePauseBot}
+                      className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition flex items-center gap-2"
+                    >
+                      <Pause className="h-4 w-4" />
+                      إيقاف البوت
+                    </button>
+                  )}
+                </div>
+              </div>
 
+              {/* Messages Container */}
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-gray-50">
+                {loadingChat ? (
+                  <div className="flex justify-center items-center h-full">
+                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
+                  </div>
+                ) : groupedConversation.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-full text-gray-500 text-center">
+                    <MessageSquare className="h-12 w-12 mb-3 opacity-30" />
+                    <p className="font-medium">لا توجد رسائل</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {groupedConversation.map((group) => (
+                      <div key={group.key}>
+                        <div className="flex justify-center mb-3">
+                          <span className="text-xs font-medium text-gray-500 bg-white px-3 py-1 rounded-full border border-gray-200">
+                            {group.label}
+                          </span>
+                        </div>
+                        <div className="space-y-3">
                           {group.messages.map((message) => {
                             const isOutbound = message.type === 'OUTBOUND';
-
                             return (
-                              <div key={message.id} className={`flex w-full ${isOutbound ? 'justify-end' : 'justify-start'}`}>
+                              <div key={message.id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
                                 <div
-                                  className={`max-w-[82%] rounded-2xl border p-4 shadow-lg lg:max-w-[68%] ${
+                                  className={`max-w-xs px-4 py-2 rounded-lg ${
                                     isOutbound
-                                      ? 'rounded-tl-sm border-primary-400/30 bg-gradient-to-br from-primary-600 to-primary-700 text-white'
-                                      : 'rounded-tr-sm border-dark-border/60 bg-[#111c33] text-slate-100'
+                                      ? 'bg-green-500 text-white rounded-tr-none'
+                                      : 'bg-gray-300 text-gray-900 rounded-tl-none'
                                   }`}
                                 >
-                                  <p className="whitespace-pre-wrap text-sm font-medium leading-7">{message.content}</p>
-
-                                  {message.reviewedAt ? (
-                                    <div className="mt-3 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-[11px] font-bold text-emerald-200">
-                                      تمت المراجعة بواسطة {message.reviewedBy?.displayName || message.reviewedBy?.name || 'موظف'} في{' '}
-                                      <span dir="ltr">{formatTime(message.reviewedAt)}</span>
-                                    </div>
-                                  ) : null}
-
-                                  <div
-                                    className={`mt-3 flex flex-wrap items-center justify-end gap-1.5 text-[10px] font-bold tracking-wide ${
-                                      isOutbound ? 'text-primary-100/90' : 'text-slate-500'
-                                    }`}
-                                  >
-                                    {getMessageSourceLabel(message.metadata) ? (
-                                      <span
-                                        className={`rounded-full px-2 py-0.5 ${
-                                          isOutbound
-                                            ? 'bg-white/10 text-primary-50'
-                                            : 'bg-sky-500/10 text-sky-300'
-                                        }`}
-                                      >
-                                        {getMessageSourceLabel(message.metadata)}
-                                      </span>
-                                    ) : null}
-                                    <span className="rounded-full px-1.5 py-0.5">
-                                      {isOutbound ? 'صادر' : 'وارد'}
-                                    </span>
-                                    <span className="font-sans" dir="ltr">
-                                      {formatTime(message.createdAt)}
-                                    </span>
-                                    {isOutbound ? <CheckCheck className="h-3.5 w-3.5" /> : null}
-                                  </div>
+                                  <p className="text-sm">{message.content}</p>
+                                  <p className={`text-xs mt-1 ${isOutbound ? 'text-green-100' : 'text-gray-600'}`}>
+                                    {formatTime(message.createdAt)}
+                                  </p>
                                 </div>
                               </div>
                             );
                           })}
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="relative z-20 shrink-0 border-t border-dark-border/50 bg-[#0a1120]/95 p-4 backdrop-blur-md">
-                  <form onSubmit={handleSend} className="mx-auto flex max-w-5xl items-end gap-3">
-                    <div className="group relative flex flex-1 overflow-hidden rounded-2xl border border-dark-border/60 bg-[#060a12] shadow-inner transition-all focus-within:border-primary-500/50 focus-within:ring-2 ring-primary-500/30">
-                      <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-primary-500/5 to-transparent opacity-0 transition-opacity group-focus-within:opacity-100"></div>
-
-                      <textarea
-                        value={replyText}
-                        onChange={(event) => setReplyText(event.target.value)}
-                        placeholder="اكتب رسالتك للمريض..."
-                        className="custom-scrollbar relative z-10 min-h-[56px] max-h-32 w-full resize-none bg-transparent px-5 py-4 text-[15px] font-medium text-white placeholder-slate-500 focus:outline-none"
-                        rows={1}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' && !event.shiftKey) {
-                            event.preventDefault();
-                            handleSend(event);
-                          }
-                        }}
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      disabled={!replyText.trim()}
-                      className="btn-primary group h-14 w-14 shrink-0 rounded-2xl shadow-[0_8px_20px_-6px_rgba(14,165,233,0.4)] transition-all duration-300 disabled:scale-95 disabled:opacity-40"
-                    >
-                      <Send className="relative z-10 h-5 w-5 text-white transition-transform group-hover:-translate-y-1 group-hover:-translate-x-1 rtl:scale-x-[-1] rtl:group-hover:translate-x-1 rtl:group-hover:-translate-y-1" />
-                    </button>
-                  </form>
-                </div>
-              </>
-            ) : (
-              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center">
-                <div className="mb-6 flex h-32 w-32 items-center justify-center rounded-full border border-dark-border/30 bg-[#0a1120]/50 shadow-inner backdrop-blur-sm">
-                  <MessageSquare className="h-12 w-12 text-slate-600/50" />
-                </div>
-                <h3 className="mb-2 text-xl font-bold text-slate-300">اختر محادثة من القائمة</h3>
-                <p className="max-w-sm text-center text-sm text-slate-500">
-                  افتح أي محادثة من الشريط الجانبي لعرض الرسائل، متابعة الحالة، أو إرسال رد سريع.
-                </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+
+              {/* Message Input */}
+              <div className="p-4 border-t border-gray-200">
+                <form onSubmit={handleSend} className="flex items-end gap-3">
+                  <textarea
+                    value={replyText}
+                    onChange={(event) => setReplyText(event.target.value)}
+                    placeholder="اكتب رسالتك..."
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
+                    rows={2}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey) {
+                        event.preventDefault();
+                        handleSend(event);
+                      }
+                    }}
+                  />
+                  <button
+                    type="submit"
+                    disabled={!replyText.trim()}
+                    className="px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    <Send className="h-4 w-4" />
+                  </button>
+                </form>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-gray-500 text-center">
+              <MessageSquare className="h-16 w-16 mb-4 opacity-30" />
+              <p className="font-medium text-lg">اختر محادثة من القائمة</p>
+              <p className="text-sm mt-2">افتح أي محادثة لعرض الرسائل وإرسال الرد</p>
+            </div>
+          )}
         </div>
       </div>
     </AppLayout>

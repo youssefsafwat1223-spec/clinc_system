@@ -1,9 +1,8 @@
-﻿import { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Clock3, MapPin, Phone, Save, Settings, ShieldCheck } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Clock, MapPin, Phone, Save, Settings } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
-import Tabs from '../components/Tabs';
 
 const daysAr = {
   sunday: 'الأحد',
@@ -15,29 +14,13 @@ const daysAr = {
   saturday: 'السبت',
 };
 
-function SummaryCard({ title, value, hint, icon: Icon, accentClass }) {
-  return (
-    <div className={`glass-card border p-5 ${accentClass}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-dark-muted">{title}</p>
-          <p className="text-3xl font-bold tracking-tight text-white">{value}</p>
-          <p className="text-xs font-medium text-slate-400">{hint}</p>
-        </div>
-        <div className="rounded-2xl bg-dark-bg/70 p-3">
-          <Icon className="h-5 w-5 text-white" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function SettingsPage() {
   const [settings, setSettings] = useState(null);
   const [contacts, setContacts] = useState([]);
-  const [contactForm, setContactForm] = useState({ name: '', phone: '', description: '', priority: 0, active: true });
+  const [contactForm, setContactForm] = useState({ name: '', phone: '', description: '', active: true });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState('basic');
 
   const fetchSettings = async () => {
     try {
@@ -57,16 +40,13 @@ export default function SettingsPage() {
   }, []);
 
   const handleSave = async () => {
-    if (!settings) {
-      return;
-    }
-
+    if (!settings) return;
     try {
       setSaving(true);
       await api.put('/settings', settings);
-      toast.success('تم حفظ الإعدادات بنجاح');
+      toast.success('تم حفظ الإعدادات');
     } catch (error) {
-      toast.error(error.message || 'فشل في الحفظ');
+      toast.error('فشل في الحفظ');
     } finally {
       setSaving(false);
     }
@@ -74,17 +54,16 @@ export default function SettingsPage() {
 
   const saveContact = async () => {
     if (!contactForm.name.trim() || !contactForm.phone.trim()) {
-      toast.error('اسم جهة الاتصال ورقم الهاتف مطلوبان');
+      toast.error('الاسم والرقم مطلوبان');
       return;
     }
-
     try {
       const res = await api.post('/contacts', contactForm);
       setContacts((current) => [res.data.contact, ...current]);
-      setContactForm({ name: '', phone: '', description: '', priority: 0, active: true });
-      toast.success('تمت إضافة جهة الاتصال');
+      setContactForm({ name: '', phone: '', description: '', active: true });
+      toast.success('تمت إضافة الرقم');
     } catch (error) {
-      toast.error(error.message || 'فشل حفظ جهة الاتصال');
+      toast.error('فشل حفظ الرقم');
     }
   };
 
@@ -93,7 +72,7 @@ export default function SettingsPage() {
       const res = await api.put(`/contacts/${contact.id}`, { active: !contact.active });
       setContacts((current) => current.map((item) => (item.id === contact.id ? res.data.contact : item)));
     } catch (error) {
-      toast.error(error.message || 'فشل تحديث جهة الاتصال');
+      toast.error('فشل تحديث الرقم');
     }
   };
 
@@ -138,8 +117,8 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <AppLayout>
-        <div className="flex justify-center p-20">
-          <span className="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></span>
+        <div className="flex justify-center py-20">
+          <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
         </div>
       </AppLayout>
     );
@@ -147,296 +126,255 @@ export default function SettingsPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-6xl space-y-6 fade-in">
-        <div className="flex flex-col items-start justify-between gap-4 lg:flex-row lg:items-end">
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-white">إعدادات العيادة</h1>
-            <p className="mt-1 text-sm text-dark-muted">معلومات العيادة الأساسية وساعات العمل العامة التي يعتمد عليها النظام.</p>
+            <h1 className="text-2xl font-bold text-gray-900">⚙️ الإعدادات</h1>
+            <p className="text-sm text-gray-500 mt-1">إعدادات العيادة والساعات والتواصل</p>
           </div>
 
-          <button onClick={handleSave} disabled={saving || !settings} className="btn-primary">
+          <button
+            onClick={handleSave}
+            disabled={saving || !settings}
+            className="px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
             {saving ? (
-              <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              <div className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full"></div>
             ) : (
-              <Save className="h-5 w-5" />
+              <Save className="h-4 w-4" />
             )}
-            حفظ التغييرات
+            حفظ
           </button>
         </div>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard title="أيام العمل" value={activeWorkingDays} hint="أيام مفعلة داخل الجدول العام" icon={Clock3} accentClass="border-primary-500/20" />
-          <SummaryCard title="حالة الذكاء الاصطناعي" value={settings?.aiEnabled ? 'مفعل' : 'معطل'} hint="الحالة الحالية للردود الآلية" icon={ShieldCheck} accentClass="border-emerald-500/20" />
-          <SummaryCard title="رقم التواصل" value={settings?.phone ? 'موجود' : 'غير مضبوط'} hint={settings?.phone || 'أضف رقمًا رسميًا للعيادة'} icon={Phone} accentClass="border-sky-500/20" />
-          <SummaryCard title="العنوان" value={settings?.address ? 'موجود' : 'غير مضبوط'} hint={settings?.address || 'أضف عنوان العيادة'} icon={MapPin} accentClass="border-amber-500/20" />
-        </section>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-600">أيام العمل</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{activeWorkingDays}</p>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-600">رقم التواصل</p>
+            <p className="text-lg font-bold text-gray-900 mt-1">{settings?.phone ? '✓' : '✗'}</p>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-600">العنوان</p>
+            <p className="text-lg font-bold text-gray-900 mt-1">{settings?.address ? '✓' : '✗'}</p>
+          </div>
+          <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+            <p className="text-xs font-medium text-gray-600">أرقام التواصل</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{contacts.length}</p>
+          </div>
+        </div>
 
-        <div className="glass-card p-6 md:p-8">
-          <Tabs
-            tabs={[
-              {
-                label: '⚙️ المعلومات الأساسية',
-                content: (
-                  <section className="space-y-6">
+        {/* Tabs */}
+        <div className="bg-white rounded-lg border border-gray-200 shadow-md overflow-hidden">
+          <div className="flex border-b border-gray-200">
+            {[
+              { id: 'basic', label: 'المعلومات الأساسية' },
+              { id: 'hours', label: 'ساعات العمل' },
+              { id: 'contacts', label: 'أرقام التواصل' },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 px-4 py-3 text-sm font-medium border-b-2 transition ${
+                  activeTab === tab.id
+                    ? 'border-green-500 text-green-600'
+                    : 'border-transparent text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">اسم العيادة بالعربية</label>
-                <input
-                  type="text"
-                  value={settings?.clinicNameAr || ''}
-                  onChange={(event) => updateField('clinicNameAr', event.target.value)}
-                  className="input-field"
-                />
+          <div className="p-6">
+            {/* Basic Info Tab */}
+            {activeTab === 'basic' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">اسم العيادة بالعربية</label>
+                    <input
+                      type="text"
+                      value={settings?.clinicNameAr || ''}
+                      onChange={(e) => updateField('clinicNameAr', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">اسم العيادة بالإنجليزية</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      value={settings?.clinicName || ''}
+                      onChange={(e) => updateField('clinicName', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">رقم الهاتف</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      placeholder="+201000000000"
+                      value={settings?.phone || ''}
+                      onChange={(e) => updateField('phone', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">العنوان</label>
+                    <input
+                      type="text"
+                      value={settings?.address || ''}
+                      onChange={(e) => updateField('address', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">رابط واتساب</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      placeholder="https://wa.me/..."
+                      value={settings?.whatsappChatLink || ''}
+                      onChange={(e) => updateField('whatsappChatLink', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-900 mb-1">رابط Google Maps</label>
+                    <input
+                      type="text"
+                      dir="ltr"
+                      placeholder="https://maps.google.com/..."
+                      value={settings?.googleMapsLink || ''}
+                      onChange={(e) => updateField('googleMapsLink', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    />
+                  </div>
+                </div>
               </div>
+            )}
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">اسم العيادة بالإنجليزية</label>
-                <input
-                  type="text"
-                  dir="ltr"
-                  value={settings?.clinicName || ''}
-                  onChange={(event) => updateField('clinicName', event.target.value)}
-                  className="input-field"
-                />
+            {/* Working Hours Tab */}
+            {activeTab === 'hours' && (
+              <div className="space-y-3">
+                {Object.keys(daysAr).map((day) => {
+                  const isActive = !!settings?.workingHours?.[day];
+                  return (
+                    <div
+                      key={day}
+                      className={`flex items-center justify-between p-3 rounded-lg border ${
+                        isActive ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
+                      }`}
+                    >
+                      <label className="flex items-center gap-3 cursor-pointer flex-1">
+                        <input
+                          type="checkbox"
+                          checked={isActive}
+                          onChange={() => toggleDay(day)}
+                          className="w-4 h-4 rounded border-gray-300"
+                        />
+                        <span className="font-medium text-gray-900 w-20">{daysAr[day]}</span>
+                      </label>
+                      {isActive ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="time"
+                            value={settings?.workingHours?.[day]?.start || '09:00'}
+                            onChange={(e) => updateWorkingHours(day, 'start', e.target.value)}
+                            className="px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                          <span className="text-gray-600 text-sm">إلى</span>
+                          <input
+                            type="time"
+                            value={settings?.workingHours?.[day]?.end || '17:00'}
+                            onChange={(e) => updateWorkingHours(day, 'end', e.target.value)}
+                            className="px-2 py-1 border border-gray-300 rounded text-sm"
+                          />
+                        </div>
+                      ) : (
+                        <span className="text-sm text-gray-500">مغلق</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
+            )}
 
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">اسم المرسل الآلي في واتساب</label>
-                <input
-                  type="text"
-                  value={settings?.botName || ''}
-                  onChange={(event) => updateField('botName', event.target.value)}
-                  className="input-field"
-                  placeholder={settings?.clinicNameAr || 'اسم العيادة'}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">رقم هاتف التواصل</label>
-                <input
-                  type="text"
-                  dir="ltr"
-                  placeholder="+201000000000"
-                  value={settings?.phone || ''}
-                  onChange={(event) => updateField('phone', event.target.value)}
-                  className="input-field"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">العنوان</label>
-                <input
-                  type="text"
-                  value={settings?.address || ''}
-                  onChange={(event) => updateField('address', event.target.value)}
-                  className="input-field"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">رابط واتساب المباشر</label>
-                <input
-                  type="text"
-                  dir="ltr"
-                  placeholder="https://wa.me/201000000000?text=..."
-                  value={settings?.whatsappChatLink || ''}
-                  onChange={(event) => updateField('whatsappChatLink', event.target.value)}
-                  className="input-field"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">رابط Google Maps</label>
-                <input
-                  type="text"
-                  dir="ltr"
-                  placeholder="https://maps.google.com/?q=..."
-                  value={settings?.googleMapsLink || ''}
-                  onChange={(event) => updateField('googleMapsLink', event.target.value)}
-                  className="input-field"
-                />
-              </div>
-            </div>
-                  </section>
-                ),
-              },
-              {
-                label: '🎨 براند الروشتة والرسائل',
-                content: (
-                  <section className="space-y-6">
-
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">رابط لوجو العيادة</label>
-                <input
-                  type="text"
-                  dir="ltr"
-                  placeholder="/uploads/logo.png أو https://..."
-                  value={settings?.logoUrl || settings?.brandLogoUrl || ''}
-                  onChange={(event) => {
-                    updateField('logoUrl', event.target.value);
-                    updateField('brandLogoUrl', event.target.value);
-                  }}
-                  className="input-field"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">ملاحظة أسفل الروشتة</label>
-                <input
-                  type="text"
-                  value={settings?.prescriptionFooter || ''}
-                  onChange={(event) => updateField('prescriptionFooter', event.target.value)}
-                  className="input-field"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">اللون الأساسي</label>
-                <input
-                  type="color"
-                  value={settings?.brandPrimaryColor || '#0B1929'}
-                  onChange={(event) => updateField('brandPrimaryColor', event.target.value)}
-                  className="h-12 w-full rounded-xl border border-dark-border bg-dark-bg p-1"
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-sm font-medium text-dark-muted">لون التمييز</label>
-                <input
-                  type="color"
-                  value={settings?.brandSecondaryColor || '#C9A84C'}
-                  onChange={(event) => updateField('brandSecondaryColor', event.target.value)}
-                  className="h-12 w-full rounded-xl border border-dark-border bg-dark-bg p-1"
-                />
-              </div>
-            </div>
-                  </section>
-                ),
-              },
-              {
-                label: '📞 أرقام التواصل المباشر',
-                content: (
-                  <section className="space-y-6">
-
-            <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
-              <div className="rounded-xl border border-dark-border bg-dark-bg/40 p-4">
+            {/* Contacts Tab */}
+            {activeTab === 'contacts' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-3">
+                  <h3 className="font-bold text-gray-900">إضافة رقم</h3>
                   <input
                     value={contactForm.name}
-                    onChange={(event) => setContactForm((current) => ({ ...current, name: event.target.value }))}
-                    className="input-field"
-                    placeholder="الاسم: الاستقبال، الحسابات، الطوارئ..."
+                    onChange={(e) => setContactForm((c) => ({ ...c, name: e.target.value }))}
+                    placeholder="الاسم: الاستقبال، الحسابات..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <input
                     value={contactForm.phone}
-                    onChange={(event) => setContactForm((current) => ({ ...current, phone: event.target.value }))}
-                    className="input-field"
+                    onChange={(e) => setContactForm((c) => ({ ...c, phone: e.target.value }))}
                     dir="ltr"
                     placeholder="+964..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
                   <input
                     value={contactForm.description}
-                    onChange={(event) => setContactForm((current) => ({ ...current, description: event.target.value }))}
-                    className="input-field"
+                    onChange={(e) => setContactForm((c) => ({ ...c, description: e.target.value }))}
                     placeholder="وصف اختياري"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                   />
-                  <button type="button" onClick={saveContact} className="btn-secondary w-full justify-center">
+                  <button
+                    onClick={saveContact}
+                    className="w-full px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition flex items-center justify-center gap-2"
+                  >
                     <Phone className="h-4 w-4" />
-                    إضافة الرقم
+                    إضافة
                   </button>
                 </div>
-              </div>
 
-              <div className="space-y-2">
-                {contacts.length === 0 ? (
-                  <div className="rounded-xl border border-dark-border bg-dark-bg/30 p-6 text-center text-sm text-dark-muted">
-                    لا توجد أرقام مباشرة بعد.
-                  </div>
-                ) : (
-                  contacts.map((contact) => (
-                    <div key={contact.id} className="flex items-center justify-between gap-3 rounded-xl border border-dark-border bg-dark-bg/40 p-3">
-                      <div>
-                        <p className="font-bold text-white">{contact.name}</p>
-                        <p className="text-xs text-primary-300" dir="ltr">{contact.phone}</p>
-                        {contact.description ? <p className="mt-1 text-xs text-dark-muted">{contact.description}</p> : null}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => toggleContact(contact)}
-                        className={`rounded-lg px-3 py-2 text-xs font-bold ${contact.active ? 'bg-emerald-500/10 text-emerald-300' : 'bg-slate-700 text-slate-300'}`}
-                      >
-                        {contact.active ? 'مفعل' : 'معطل'}
-                      </button>
+                <div className="space-y-2">
+                  <h3 className="font-bold text-gray-900">الأرقام المسجلة</h3>
+                  {contacts.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <p className="text-sm">لا توجد أرقام بعد</p>
                     </div>
-                  ))
-                )}
+                  ) : (
+                    contacts.map((contact) => (
+                      <div key={contact.id} className="flex items-center justify-between gap-2 p-3 rounded-lg border border-gray-200 hover:bg-gray-50">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-bold text-gray-900 text-sm">{contact.name}</p>
+                          <p className="text-xs text-gray-500" dir="ltr">{contact.phone}</p>
+                          {contact.description && <p className="text-xs text-gray-600 mt-0.5">{contact.description}</p>}
+                        </div>
+                        <button
+                          onClick={() => toggleContact(contact)}
+                          className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${
+                            contact.active
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}
+                        >
+                          {contact.active ? 'مفعل' : 'معطل'}
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-            </div>
-                  </section>
-                ),
-              },
-              {
-                label: '⏰ ساعات العمل الموحدة',
-                content: (
-                  <section className="space-y-6">
-
-            <div className="mb-6 flex gap-3 rounded-xl border border-primary-500/20 bg-primary-500/10 p-4">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-primary-400" />
-              <p className="text-sm leading-relaxed text-primary-200">
-                هذا هو الجدول العام للعيادة. يعتمد عليه النظام والـ AI كنطاق عمل افتراضي، بينما يظل لكل طبيب جدول عمله الخاص داخل صفحة المواعيد.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              {Object.keys(daysAr).map((day) => {
-                const isActive = !!settings?.workingHours?.[day];
-
-                return (
-                  <div
-                    key={day}
-                    className={`flex flex-col gap-4 rounded-xl border p-4 transition-colors md:flex-row md:items-center ${
-                      isActive ? 'border-dark-border bg-dark-bg/50' : 'border-dark-border/30 bg-dark-bg/20 opacity-70'
-                    }`}
-                  >
-                    <label className="flex flex-1 cursor-pointer items-center gap-3">
-                      <div className="relative flex items-center">
-                        <input type="checkbox" checked={isActive} onChange={() => toggleDay(day)} className="peer sr-only" />
-                        <div className="h-6 w-11 rounded-full border border-dark-border bg-dark-card transition-colors peer-checked:bg-primary-500"></div>
-                        <div className="absolute left-1 top-1 h-4 w-4 rounded-full bg-dark-muted transition-transform peer-checked:translate-x-5 peer-checked:bg-white"></div>
-                      </div>
-                      <span className="w-24 font-bold text-white">{daysAr[day]}</span>
-                    </label>
-
-                    {isActive ? (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="time"
-                          value={settings?.workingHours?.[day]?.start || '09:00'}
-                          onChange={(event) => updateWorkingHours(day, 'start', event.target.value)}
-                          className="input-field py-1"
-                        />
-                        <span className="text-dark-muted">إلى</span>
-                        <input
-                          type="time"
-                          value={settings?.workingHours?.[day]?.end || '17:00'}
-                          onChange={(event) => updateWorkingHours(day, 'end', event.target.value)}
-                          className="input-field py-1"
-                        />
-                      </div>
-                    ) : (
-                      <span className="text-sm font-medium text-dark-muted">مغلق</span>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-                  </section>
-                ),
-              },
-            ]}
-          />
+            )}
+          </div>
         </div>
       </div>
     </AppLayout>

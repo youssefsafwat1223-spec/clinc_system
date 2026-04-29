@@ -4,7 +4,7 @@ import AppLayout from '../components/Layout';
 import { toast } from 'react-toastify';
 import { format, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
-import { AlertCircle, Ban, Calendar as CalendarIcon, CheckCircle, CheckCheck, Clock, Save, User, XCircle } from 'lucide-react';
+import { Calendar as CalendarIcon, CheckCircle, Clock, User, XCircle } from 'lucide-react';
 import ManualBookingPanel from '../components/appointments/ManualBookingPanel';
 
 const daysAr = {
@@ -17,6 +17,50 @@ const daysAr = {
   saturday: 'السبت',
 };
 
+const statusLabels = {
+  ALL: 'الكل',
+  PENDING: 'قيد الانتظار',
+  CONFIRMED: 'مؤكد',
+  COMPLETED: 'تم الكشف',
+  CANCELLED: 'ملغي',
+  REJECTED: 'مرفوض',
+  BLOCKED: 'مغلق',
+};
+
+const statusColors = {
+  PENDING: { bg: 'bg-yellow-100', text: 'text-yellow-800', badge: 'bg-yellow-500' },
+  CONFIRMED: { bg: 'bg-green-100', text: 'text-green-800', badge: 'bg-green-500' },
+  COMPLETED: { bg: 'bg-blue-100', text: 'text-blue-800', badge: 'bg-blue-500' },
+  CANCELLED: { bg: 'bg-red-100', text: 'text-red-800', badge: 'bg-red-500' },
+  REJECTED: { bg: 'bg-orange-100', text: 'text-orange-800', badge: 'bg-orange-500' },
+  BLOCKED: { bg: 'bg-gray-100', text: 'text-gray-800', badge: 'bg-gray-500' },
+};
+
+function StatusBadge({ status }) {
+  const colors = statusColors[status] || statusColors.PENDING;
+  return (
+    <span className={`px-3 py-1 rounded-full text-xs font-bold ${colors.bg} ${colors.text} inline-flex items-center gap-1`}>
+      {statusLabels[status] || status}
+    </span>
+  );
+}
+
+function StatCard({ title, value, icon: Icon }) {
+  return (
+    <div className="bg-white rounded-lg p-4 border border-gray-200 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-xs font-medium text-gray-600">{title}</p>
+          <p className="text-2xl font-bold text-gray-900 mt-1">{value}</p>
+        </div>
+        <div className="bg-green-100 p-3 rounded-lg">
+          <Icon className="h-5 w-5 text-green-600" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AppointmentsPage() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isDoctor = user.role === 'DOCTOR';
@@ -27,7 +71,6 @@ export default function AppointmentsPage() {
     PENDING: 0,
     CONFIRMED: 0,
     COMPLETED: 0,
-    RESCHEDULED: 0,
     CANCELLED: 0,
     REJECTED: 0,
     BLOCKED: 0,
@@ -37,7 +80,6 @@ export default function AppointmentsPage() {
   const [savingSchedule, setSavingSchedule] = useState(false);
   const [filter, setFilter] = useState('ALL');
   const [doctorProfile, setDoctorProfile] = useState(null);
-  const [viewMode, setViewMode] = useState('list'); // 'list' أو 'calendar'
 
   const fetchAppointments = async () => {
     try {
@@ -46,13 +88,11 @@ export default function AppointmentsPage() {
         api.get('/appointments', { params: { status: filter === 'ALL' ? undefined : filter, limit: 50 } }),
         api.get('/appointments/stats').catch(() => ({ data: {} })),
       ]);
-
       setAppointments(resApt.data.appointments || []);
-      if (resStats.data && typeof resStats.data === 'object' && Object.keys(resStats.data).length > 0) {
+      if (resStats.data && typeof resStats.data === 'object') {
         setStats((prev) => ({ ...prev, ...resStats.data }));
       }
     } catch (error) {
-      console.error(error);
       toast.error('فشل في تحميل المواعيد');
     } finally {
       setLoading(false);
@@ -60,16 +100,13 @@ export default function AppointmentsPage() {
   };
 
   const fetchDoctorProfile = async () => {
-    if (!isDoctor) {
-      return;
-    }
-
+    if (!isDoctor) return;
     try {
       setDoctorLoading(true);
       const res = await api.get('/doctors/me');
       setDoctorProfile(res.data.doctor || null);
     } catch (error) {
-      toast.error(error.message || 'فشل في تحميل جدول الطبيب');
+      toast.error('فشل في تحميل جدول الطبيب');
     } finally {
       setDoctorLoading(false);
     }
@@ -87,29 +124,25 @@ export default function AppointmentsPage() {
     try {
       if (action === 'confirm') {
         await api.post(`/appointments/${id}/confirm`);
-        toast.success('تم تأكيد الموعد وإرسال رسالة للمريض');
-      } else if (action === 'block') {
-        if (!window.confirm('هل أنت متأكد من إغلاق هذا الموعد نهائيًا؟')) return;
-        await api.post(`/appointments/${id}/block`);
-        toast.success('تم إغلاق الموعد ومنع الحجز فيه');
+        toast.success('تم تأكيد الموعد');
       } else if (action === 'complete') {
-        if (!window.confirm('هل تم الكشف على المريض؟ سيتم تحويل الحجز إلى "تم الكشف".')) return;
+        if (!window.confirm('هل تم الكشف على المريض؟')) return;
         await api.post(`/appointments/${id}/complete`);
         toast.success('تم تسجيل الحجز كمكتمل');
       } else if (action === 'cancel') {
-        const reason = prompt('سبب إلغاء الحجز (سيتم إرسال رسالة إلغاء للمريض):');
+        const reason = prompt('سبب الإلغاء:');
         if (reason === null) return;
         await api.post(`/appointments/${id}/cancel`, { reason });
-        toast.success('تم إلغاء الحجز وإرسال رسالة الإلغاء للمريض');
-      } else {
-        const reason = prompt('سبب الرفض (اختياري):');
+        toast.success('تم إلغاء الحجز');
+      } else if (action === 'reject') {
+        const reason = prompt('سبب الرفض:');
         if (reason === null) return;
         await api.post(`/appointments/${id}/reject`, { reason });
-        toast.success('تم رفض الموعد واقتراح بدائل للمريض');
+        toast.success('تم رفض الموعد');
       }
       fetchAppointments();
     } catch (error) {
-      toast.error(error.response?.data?.error || error.message || 'حدث خطأ أثناء تنفيذ الإجراء');
+      toast.error(error.response?.data?.error || 'حدث خطأ');
     }
   };
 
@@ -146,208 +179,13 @@ export default function AppointmentsPage() {
         workingHours: doctorProfile?.workingHours || {},
       });
       setDoctorProfile(res.data.doctor || doctorProfile);
-      toast.success('تم حفظ جدولك بنجاح');
+      toast.success('تم حفظ جدولك');
       fetchAppointments();
     } catch (error) {
-      toast.error(error.message || 'فشل في حفظ الجدول');
+      toast.error('فشل في حفظ الجدول');
     } finally {
       setSavingSchedule(false);
     }
-  };
-
-  const StatusBadge = ({ status }) => {
-    switch (status) {
-      case 'PENDING':
-        return (
-          <span className="px-3 py-1 bg-amber-500/10 text-amber-500 ring-1 ring-amber-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <Clock className="w-3 h-3" /> قيد الانتظار
-          </span>
-        );
-      case 'CONFIRMED':
-        return (
-          <span className="px-3 py-1 bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <CheckCircle className="w-3 h-3" /> مؤكد
-          </span>
-        );
-      case 'COMPLETED':
-        return (
-          <span className="px-3 py-1 bg-teal-500/10 text-teal-300 ring-1 ring-teal-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <CheckCheck className="w-3 h-3" /> تم الكشف
-          </span>
-        );
-      case 'REJECTED':
-        return (
-          <span className="px-3 py-1 bg-red-500/10 text-red-500 ring-1 ring-red-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <XCircle className="w-3 h-3" /> مرفوض
-          </span>
-        );
-      case 'CANCELLED':
-        return (
-          <span className="px-3 py-1 bg-rose-500/10 text-rose-400 ring-1 ring-rose-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <XCircle className="w-3 h-3" /> ملغي من المريض
-          </span>
-        );
-      case 'EXPIRED':
-        return (
-          <span className="px-3 py-1 bg-slate-500/10 text-slate-400 ring-1 ring-slate-500/30 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            منتهي
-          </span>
-        );
-      case 'BLOCKED':
-        return (
-          <span className="px-3 py-1 bg-neutral-800 text-neutral-400 ring-1 ring-neutral-700 rounded-full text-xs font-bold inline-flex items-center gap-1">
-            <XCircle className="w-3 h-3" /> مغلق
-          </span>
-        );
-      default:
-        return null;
-    }
-  };
-
-  const SummaryCard = ({ title, value, hint, icon: Icon, accentClass }) => (
-    <div className={`glass-card p-5 border ${accentClass}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-dark-muted">{title}</p>
-          <p className="text-3xl font-bold tracking-tight text-white">{value}</p>
-          <p className="text-xs font-medium text-slate-400">{hint}</p>
-        </div>
-        <div className="rounded-2xl bg-dark-bg/70 p-3">
-          <Icon className="w-5 h-5 text-white" />
-        </div>
-      </div>
-    </div>
-  );
-
-  const CalendarView = ({ appointments }) => {
-    const [currentDate, setCurrentDate] = useState(new Date());
-
-    const getDaysInMonth = (date) => new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-    const getFirstDayOfMonth = (date) => new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-
-    const appointmentsByDate = appointments.reduce((acc, apt) => {
-      const dateStr = format(parseISO(apt.scheduledTime), 'yyyy-MM-dd');
-      if (!acc[dateStr]) acc[dateStr] = [];
-      acc[dateStr].push(apt);
-      return acc;
-    }, {});
-
-    const daysInMonth = getDaysInMonth(currentDate);
-    const firstDay = getFirstDayOfMonth(currentDate);
-    const prevDaysInMonth = getDaysInMonth(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
-
-    const days = [];
-    for (let i = firstDay - 1; i >= 0; i--) {
-      days.push({ day: prevDaysInMonth - i, isCurrentMonth: false });
-    }
-    for (let i = 1; i <= daysInMonth; i++) {
-      days.push({ day: i, isCurrentMonth: true });
-    }
-    const remainingDays = 42 - days.length;
-    for (let i = 1; i <= remainingDays; i++) {
-      days.push({ day: i, isCurrentMonth: false });
-    }
-
-    const getStatusColor = (statuses) => {
-      if (statuses.includes('PENDING')) return 'bg-amber-500/20 border-amber-500/30';
-      if (statuses.includes('CONFIRMED')) return 'bg-emerald-500/20 border-emerald-500/30';
-      if (statuses.includes('COMPLETED')) return 'bg-teal-500/20 border-teal-500/30';
-      if (statuses.includes('REJECTED') || statuses.includes('CANCELLED')) return 'bg-red-500/20 border-red-500/30';
-      return 'bg-slate-500/20 border-slate-500/30';
-    };
-
-    const prevMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1));
-    const nextMonth = () => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1));
-
-    return (
-      <div className="glass-card p-6 space-y-6">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-bold text-white">تقويم المواعيد</h3>
-          <div className="flex items-center gap-4">
-            <button
-              onClick={prevMonth}
-              className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-white hover:bg-dark-border transition-colors"
-            >
-              ←
-            </button>
-            <span className="text-base font-semibold text-white min-w-[150px] text-center">
-              {format(currentDate, 'MMMM yyyy', { locale: ar })}
-            </span>
-            <button
-              onClick={nextMonth}
-              className="px-3 py-1.5 rounded-lg bg-dark-bg border border-dark-border text-white hover:bg-dark-border transition-colors"
-            >
-              →
-            </button>
-          </div>
-        </div>
-
-        {/* Day headers */}
-        <div className="grid grid-cols-7 gap-2 mb-2">
-          {['ح', 'ن', 'ث', 'أ', 'خ', 'ج', 'س'].map((day) => (
-            <div key={day} className="text-center text-xs font-bold text-dark-muted py-2">
-              {day}
-            </div>
-          ))}
-        </div>
-
-        {/* Calendar grid */}
-        <div className="grid grid-cols-7 gap-2">
-          {days.map((dayObj, idx) => {
-            const day = dayObj.isCurrentMonth ? dayObj.day : null;
-            const dateStr = day
-              ? format(new Date(currentDate.getFullYear(), currentDate.getMonth(), day), 'yyyy-MM-dd')
-              : null;
-            const dayAppointments = dateStr ? appointmentsByDate[dateStr] || [] : [];
-            const isToday = day && dateStr === todayKey;
-
-            return (
-              <div
-                key={idx}
-                className={`relative aspect-square flex flex-col items-center justify-center rounded-lg border p-2 transition-all cursor-pointer hover:border-primary-500 ${
-                  !dayObj.isCurrentMonth
-                    ? 'bg-dark-bg/30 border-dark-border/30 text-dark-muted/30'
-                    : isToday
-                      ? 'bg-primary-500/20 border-primary-500/40'
-                      : dayAppointments.length > 0
-                        ? `border ${getStatusColor(dayAppointments.map((a) => a.status))}`
-                        : 'bg-dark-bg/50 border-dark-border'
-                }`}
-              >
-                <span className={`text-sm font-bold ${dayObj.isCurrentMonth ? 'text-white' : 'text-dark-muted/50'}`}>
-                  {dayObj.day}
-                </span>
-                {dayAppointments.length > 0 && (
-                  <span className="absolute bottom-1 text-xs font-bold bg-primary-500 text-white px-1.5 py-0.5 rounded-full">
-                    {dayAppointments.length}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Legend */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-dark-border">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-amber-500"></div>
-            <span className="text-xs text-dark-muted">قيد الانتظار</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-emerald-500"></div>
-            <span className="text-xs text-dark-muted">مؤكد</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-teal-500"></div>
-            <span className="text-xs text-dark-muted">تم الكشف</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <span className="text-xs text-dark-muted">ملغي/مرفوض</span>
-          </div>
-        </div>
-      </div>
-    );
   };
 
   const groupedAppointments = appointments.reduce((acc, appointment) => {
@@ -358,413 +196,228 @@ export default function AppointmentsPage() {
   }, {});
 
   const sortedDates = Object.keys(groupedAppointments).sort();
-  const todayKey = format(new Date(), 'yyyy-MM-dd');
 
   const todayAppointmentsCount = useMemo(
-    () => appointments.filter((appointment) => format(parseISO(appointment.scheduledTime), 'yyyy-MM-dd') === todayKey).length,
-    [appointments, todayKey]
+    () => appointments.filter((a) => format(parseISO(a.scheduledTime), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd')).length,
+    [appointments]
   );
 
   const nextAppointment = useMemo(
     () =>
-      [...appointments]
-        .filter((appointment) => new Date(appointment.scheduledTime) >= new Date())
-        .sort((first, second) => new Date(first.scheduledTime).getTime() - new Date(second.scheduledTime).getTime())[0] || null,
+      appointments
+        .filter((a) => new Date(a.scheduledTime) >= new Date())
+        .sort((a, b) => new Date(a.scheduledTime) - new Date(b.scheduledTime))[0] || null,
     [appointments]
-  );
-
-  const activeWorkingDaysCount = useMemo(
-    () => Object.values(doctorProfile?.workingHours || {}).filter(Boolean).length,
-    [doctorProfile]
   );
 
   return (
     <AppLayout>
-      <div className="space-y-6 fade-in">
+      <div className="space-y-6">
+        {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white tracking-tight">
-              {isDoctor ? 'مواعيدي وجدولي' : 'إدارة المواعيد'}
-            </h1>
-            <p className="text-dark-muted text-sm mt-1">
-              {isDoctor ? 'إدارة مواعيدك وتحديد أيام عملك وإجازاتك' : 'مراجعة وتأكيد طلبات الحجز الواردة'}
-            </p>
+            <h1 className="text-2xl font-bold text-gray-900">📅 المواعيد</h1>
+            <p className="text-sm text-gray-500 mt-1">{isDoctor ? 'إدارة مواعيدك' : 'إدارة طلبات الحجز'}</p>
           </div>
 
-          <div className="flex flex-wrap bg-dark-card/50 p-1 border border-dark-border rounded-xl backdrop-blur-md gap-1">
-            {['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'RESCHEDULED', 'CANCELLED', 'REJECTED', 'BLOCKED'].map((opt) => (
+          {/* Status Filters */}
+          <div className="flex gap-2 flex-wrap">
+            {Object.keys(statusLabels).map((status) => (
               <button
-                key={opt}
-                onClick={() => setFilter(opt)}
-                className={`relative px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-300 ${
-                  filter === opt
-                    ? 'bg-primary-600 shadow-md text-white shadow-primary-500/20'
-                    : 'text-dark-muted hover:text-white hover:bg-dark-border/50'
+                key={status}
+                onClick={() => setFilter(status)}
+                className={`px-3 py-2 rounded-lg text-xs font-medium transition ${
+                  filter === status
+                    ? 'bg-green-500 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                 }`}
               >
-                {opt === 'ALL'
-                  ? 'الكل'
-                  : opt === 'PENDING'
-                    ? 'قيد الانتظار'
-                    : opt === 'CONFIRMED'
-                      ? 'مؤكد'
-                      : opt === 'COMPLETED'
-                        ? 'تم الكشف'
-                        : opt === 'RESCHEDULED'
-                          ? 'معدل'
-                          : opt === 'CANCELLED'
-                            ? 'ملغي'
-                            : opt === 'REJECTED'
-                              ? 'مرفوض'
-                              : 'مغلق'}
-
-                {stats[opt] > 0 && (
-                  <span
-                    className={`absolute -top-1 -right-1 sm:-top-1.5 sm:-right-1.5 flex h-4 w-4 sm:h-5 sm:w-5 items-center justify-center rounded-full text-[9px] sm:text-[10px] font-bold text-white shadow-sm ring-2 ring-dark-bg ${
-                      opt === 'PENDING'
-                        ? 'bg-amber-500'
-                        : opt === 'RESCHEDULED'
-                          ? 'bg-sky-500'
-                          : opt === 'CANCELLED' || opt === 'REJECTED'
-                            ? 'bg-rose-500'
-                            : opt === 'CONFIRMED'
-                              ? 'bg-emerald-500'
-                              : opt === 'COMPLETED'
-                                ? 'bg-teal-500'
-                                : 'bg-primary-500'
-                    }`}
-                  >
-                    {stats[opt] > 99 ? '99+' : stats[opt]}
-                  </span>
-                )}
+                {statusLabels[status]} ({stats[status] || 0})
               </button>
             ))}
           </div>
         </div>
 
-        {/* View Mode Toggle */}
-        <div className="flex gap-2">
-          <button
-            onClick={() => setViewMode('list')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              viewMode === 'list'
-                ? 'bg-primary-500 text-white'
-                : 'bg-dark-bg text-slate-400 hover:text-white border border-dark-border'
-            }`}
-          >
-            📋 قائمة
-          </button>
-          <button
-            onClick={() => setViewMode('calendar')}
-            className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-              viewMode === 'calendar'
-                ? 'bg-primary-500 text-white'
-                : 'bg-dark-bg text-slate-400 hover:text-white border border-dark-border'
-            }`}
-          >
-            📅 تقويم
-          </button>
-        </div>
+        {/* Manual Booking Panel */}
+        <ManualBookingPanel
+          isDoctor={isDoctor}
+          doctorProfile={doctorProfile}
+          onCreated={() => {
+            fetchAppointments();
+            fetchDoctorProfile();
+          }}
+        />
 
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-          {/* Main Content Area */}
-          <div className="flex-1 space-y-6">
-            {viewMode === 'calendar' && (
-              <CalendarView appointments={appointments} />
-            )}
-
-            {viewMode === 'list' && (
-              <>
-                <ManualBookingPanel
-                  isDoctor={isDoctor}
-                  doctorProfile={doctorProfile}
-                  onCreated={() => {
-                    fetchAppointments();
-                    fetchDoctorProfile();
-                  }}
-                />
-
-                {isDoctor && (
-                  <section className="glass-card p-6 md:p-8 space-y-6">
-            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
+        {/* Doctor Schedule Section */}
+        {isDoctor && (
+          <div className="bg-white rounded-lg p-6 border border-gray-200 shadow-md">
+            <div className="flex items-center justify-between mb-6">
               <div>
-                <h2 className="text-lg font-bold text-white">جدول العمل الخاص بك</h2>
-                <p className="text-sm text-dark-muted mt-1">
-                  أي يوم تغلقه هنا لن يظهر فيه حجز جديد لك من النظام أو من البوت.
-                </p>
+                <h2 className="text-lg font-bold text-gray-900">جدول العمل</h2>
+                <p className="text-sm text-gray-500 mt-1">أيام وساعات عملك</p>
               </div>
-              <button onClick={saveSchedule} disabled={savingSchedule || doctorLoading || !doctorProfile} className="btn-primary">
-                {savingSchedule ? (
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                حفظ الجدول
+              <button
+                onClick={saveSchedule}
+                disabled={savingSchedule || doctorLoading || !doctorProfile}
+                className="px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {savingSchedule ? 'جاري...' : 'حفظ'}
               </button>
             </div>
 
-            <div className="bg-primary-500/10 border border-primary-500/20 rounded-xl p-4 flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-primary-400 mt-0.5 shrink-0" />
-              <p className="text-sm text-primary-100">
-                عدل أيام العمل لكل أسبوع من حسابك مباشرة. زميلك الدكتور سيعدل جدوله هو فقط من حسابه، ولن يؤثر ذلك على جدولك.
-              </p>
-            </div>
-
             {doctorLoading ? (
-              <div className="flex h-32 items-center justify-center">
-                <span className="w-10 h-10 border-4 border-primary-500 border-t-transparent rounded-full animate-spin"></span>
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
               </div>
             ) : !doctorProfile ? (
-              <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
-                لا يوجد ملف طبيب مرتبط بهذا الحساب.
-              </div>
+              <p className="text-sm text-red-600">لا يوجد ملف طبيب</p>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {Object.keys(daysAr).map((day) => {
                   const isActive = !!doctorProfile?.workingHours?.[day];
-
                   return (
                     <div
                       key={day}
-                      className={`flex flex-col md:flex-row md:items-center gap-4 p-4 rounded-xl border transition-colors ${
-                        isActive
-                          ? 'bg-dark-bg/50 border-dark-border'
-                          : 'bg-dark-bg/20 border-dark-border/30 opacity-70'
+                      className={`flex items-center justify-between p-3 rounded-lg border ${
+                        isActive ? 'bg-green-50 border-green-200' : 'bg-gray-50 border-gray-200'
                       }`}
                     >
-                      <label className="flex flex-1 items-center gap-3 cursor-pointer">
-                        <div className="relative flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={isActive}
-                            onChange={() => toggleDay(day)}
-                            className="sr-only peer"
-                          />
-                          <div className="w-11 h-6 bg-dark-card border border-dark-border rounded-full peer peer-checked:bg-primary-500 transition-colors"></div>
-                          <div className="absolute left-1 top-1 w-4 h-4 bg-dark-muted rounded-full transition-transform peer-checked:translate-x-5 peer-checked:bg-white"></div>
-                        </div>
-                        <span className="font-bold text-white w-24">{daysAr[day]}</span>
+                      <label className="flex items-center gap-3 cursor-pointer flex-1">
+                        <input
+                          type="checkbox"
+                          checked={isActive}
+                          onChange={() => toggleDay(day)}
+                          className="w-4 h-4 rounded border-gray-300"
+                        />
+                        <span className="font-medium text-gray-900 w-24">{daysAr[day]}</span>
                       </label>
-
                       {isActive ? (
                         <div className="flex items-center gap-2">
                           <input
                             type="time"
                             value={doctorProfile?.workingHours?.[day]?.start || '09:00'}
                             onChange={(e) => updateWorkingHours(day, 'start', e.target.value)}
-                            className="input-field py-1"
+                            className="px-2 py-1 border border-gray-300 rounded text-sm"
                           />
-                          <span className="text-dark-muted">إلى</span>
+                          <span className="text-gray-600">إلى</span>
                           <input
                             type="time"
                             value={doctorProfile?.workingHours?.[day]?.end || '17:00'}
                             onChange={(e) => updateWorkingHours(day, 'end', e.target.value)}
-                            className="input-field py-1"
+                            className="px-2 py-1 border border-gray-300 rounded text-sm"
                           />
                         </div>
                       ) : (
-                        <span className="text-sm font-medium text-dark-muted">إجازة</span>
+                        <span className="text-sm text-gray-500">إجازة</span>
                       )}
                     </div>
                   );
                 })}
               </div>
-                  )}
-                </section>
-                )}
-
-                {loading ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="relative w-12 h-12">
-              <div className="absolute inset-0 rounded-full border-t-2 border-primary-500 animate-spin"></div>
-              <div
-                className="absolute inset-2 rounded-full border-r-2 border-primary-400 animate-spin opacity-75 inline-block"
-                style={{ animationDuration: '1.5s' }}
-              ></div>
-            </div>
+            )}
           </div>
-        ) : (
-          <div className="space-y-8">
-            {appointments.length === 0 ? (
-              <div className="glass-card p-16 text-center flex flex-col items-center justify-center fade-in">
-                <CalendarIcon className="w-12 h-12 text-dark-muted mb-4 opacity-50" />
-                <p className="text-lg font-medium text-slate-300">لا توجد مواعيد متاحة</p>
-                <p className="text-sm text-dark-muted mt-2">جرّب تغيير حالة الفلتر من الأعلى</p>
-              </div>
-            ) : (
-              sortedDates.map((dateStr, dIndex) => (
-                <div key={dateStr} className="relative fade-in" style={{ animationDelay: `${dIndex * 0.1}s` }}>
-                  <div className="sticky top-0 z-10 flex items-center gap-4 mb-4 bg-dark-bg/90 backdrop-blur-md py-3 px-2 rounded-xl border border-dark-border/50 shadow-sm">
-                    <div className="w-12 h-12 rounded-2xl bg-primary-900/40 border border-primary-500/30 flex flex-col items-center justify-center shrink-0">
-                      <span className="text-base font-bold text-primary-400 leading-none">{format(parseISO(dateStr), 'dd')}</span>
-                      <span className="text-[10px] text-primary-300 uppercase leading-none mt-1">{format(parseISO(dateStr), 'MMM')}</span>
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-white">{format(parseISO(dateStr), 'EEEE', { locale: ar })}</h3>
-                      <p className="text-xs text-dark-muted font-sans" dir="ltr">
-                        {format(parseISO(dateStr), 'dd/MM/yyyy')}
-                      </p>
-                    </div>
+        )}
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <StatCard title="إجمالي" value={stats.ALL || appointments.length} icon={CalendarIcon} />
+          <StatCard title="قيد الانتظار" value={stats.PENDING || 0} icon={Clock} />
+          <StatCard title="مؤكد" value={stats.CONFIRMED || 0} icon={CheckCircle} />
+          <StatCard title="اليوم" value={todayAppointmentsCount} icon={User} />
+        </div>
+
+        {/* Appointments List */}
+        <div className="space-y-4">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
+            </div>
+          ) : appointments.length === 0 ? (
+            <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
+              <CalendarIcon className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 font-medium">لا توجد مواعيد</p>
+            </div>
+          ) : (
+            sortedDates.map((dateStr) => (
+              <div key={dateStr} className="bg-white rounded-lg border border-gray-200 overflow-hidden shadow-md">
+                {/* Date Header */}
+                <div className="bg-green-50 border-b border-green-200 px-6 py-3 flex items-center gap-3">
+                  <div className="bg-green-500 text-white rounded-lg px-3 py-1.5 text-sm font-bold">
+                    {format(parseISO(dateStr), 'dd MMM')}
                   </div>
+                  <div>
+                    <p className="font-bold text-gray-900">{format(parseISO(dateStr), 'EEEE', { locale: ar })}</p>
+                    <p className="text-xs text-gray-500">{format(parseISO(dateStr), 'dd/MM/yyyy')}</p>
+                  </div>
+                </div>
 
-                  <div className="space-y-4 pl-6 rtl:pl-0 rtl:pr-8 border-l-2 rtl:border-l-0 rtl:border-r-2 border-dark-border/60 ml-6 rtl:ml-0 rtl:mr-6 py-2">
-                    {groupedAppointments[dateStr].map((apt, index) => (
-                      <div
-                        key={apt.id}
-                        className="glass-card p-5 relative group border hover:border-primary-500/30 transition-all shadow-sm flex flex-col sm:flex-row gap-5 sm:items-center justify-between"
-                        style={{ animationDelay: `${(dIndex + index) * 0.05}s` }}
-                      >
-                        <div className="absolute top-1/2 -translate-y-1/2 -right-[35px] w-4 h-4 rounded-full bg-dark-bg border-4 border-primary-500/60 shadow-[0_0_12px_rgba(var(--color-primary-500),0.4)] z-10 transition-transform group-hover:scale-125"></div>
-
-                        <div className="flex items-center gap-5 md:w-1/3 shrink-0">
-                          <div className="flex flex-col items-center justify-center bg-dark-bg/60 rounded-xl p-3 border border-dark-border min-w-[85px] group-hover:bg-primary-900/20 group-hover:border-primary-500/20 transition-colors">
-                            <span className="text-lg font-bold text-white font-sans tracking-wide" dir="ltr">
+                {/* Appointments for this date */}
+                <div className="divide-y divide-gray-200">
+                  {groupedAppointments[dateStr].map((apt) => (
+                    <div key={apt.id} className="p-4 hover:bg-gray-50 transition">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="bg-gray-100 rounded px-2 py-1 text-sm font-bold text-gray-900">
                               {format(parseISO(apt.scheduledTime), 'hh:mm')}
                             </span>
-                            <span className="text-xs font-semibold text-primary-400 font-sans mt-0.5">
-                              {format(parseISO(apt.scheduledTime), 'a')}
-                            </span>
+                            <StatusBadge status={apt.status} />
                           </div>
-
-                          <div className="flex flex-col">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-white text-base truncate pr-1">{apt.patient?.name}</span>
-                              {apt.notes && apt.notes.includes('تأجيل') && (
-                                <span
-                                  className="text-[10px] bg-sky-500/20 text-sky-400 border border-sky-500/30 px-1.5 py-0.5 rounded font-bold"
-                                  title="تم تعديل هذا الموعد بواسطة المريض"
-                                >
-                                  معدل
-                                </span>
-                              )}
-                            </div>
-                            <span className="text-sm font-sans text-dark-muted mt-0.5" dir="ltr">
-                              {apt.patient?.phone}
-                            </span>
-                            <span className="text-[10px] inline-block mt-1.5 font-bold text-slate-400 bg-dark-bg/60 px-2.5 py-1 rounded w-max uppercase tracking-wider border border-dark-border">
-                              REF: {apt.bookingRef}
-                            </span>
-
-                            {apt.notes && apt.notes.includes('تأجيل') && (
-                              <div className="mt-2 text-xs font-medium text-sky-400/90 bg-sky-500/10 p-2 rounded-lg border border-sky-500/20 w-fit shrink-0 max-w-full">
-                                {apt.notes}
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex-1 flex flex-col justify-center px-2">
-                          <div className="flex items-center gap-2 mb-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-primary-500 shadow-[0_0_8px_rgba(var(--color-primary-500),0.6)]"></div>
-                            <span className="text-sm font-semibold text-slate-200">{apt.service?.nameAr}</span>
-                          </div>
-                          <p className="text-xs text-dark-muted flex items-center gap-1.5 opacity-80">
-                            <User className="w-3.5 h-3.5" /> د. {apt.doctor?.name}
+                          <p className="font-bold text-gray-900">{apt.patient?.name}</p>
+                          <p className="text-sm text-gray-500 mt-1">
+                            📱 {apt.patient?.phone}
                           </p>
+                          <div className="mt-2 flex items-center gap-2 text-xs text-gray-600">
+                            <User className="h-3.5 w-3.5" />
+                            <span>د. {apt.doctor?.name}</span>
+                          </div>
+                          {apt.service?.nameAr && (
+                            <p className="text-xs text-gray-500 mt-1">{apt.service.nameAr}</p>
+                          )}
                         </div>
 
-                        <div className="flex items-center gap-4 shrink-0 sm:w-1/4 justify-end">
-                          <StatusBadge status={apt.status} />
-
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 flex-shrink-0">
                           {apt.status === 'PENDING' && (
-                            <div className="flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all absolute top-4 left-4 sm:relative sm:top-0 sm:left-0 bg-dark-card/95 sm:bg-transparent p-1.5 sm:p-0 rounded-xl shadow-xl sm:shadow-none border border-dark-border sm:border-0 backdrop-blur-md sm:backdrop-blur-none z-20">
+                            <>
                               <button
                                 onClick={() => handleAction(apt.id, 'confirm')}
-                                className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg hover:shadow-emerald-500/20"
-                                title="تأكيد الموعد وإرسال رسالة"
+                                className="px-3 py-1.5 rounded-lg bg-green-100 text-green-700 text-xs font-medium hover:bg-green-200 transition"
                               >
-                                <CheckCircle className="w-4.5 h-4.5" />
+                                تأكيد
                               </button>
                               <button
                                 onClick={() => handleAction(apt.id, 'reject')}
-                                className="w-9 h-9 rounded-lg bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg hover:shadow-amber-500/20"
-                                title="رفض واقتراح موعد بديل"
+                                className="px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-xs font-medium hover:bg-red-200 transition"
                               >
-                                <XCircle className="w-4.5 h-4.5" />
+                                رفض
                               </button>
-                              <button
-                                onClick={() => handleAction(apt.id, 'block')}
-                                className="w-9 h-9 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg hover:shadow-red-500/20"
-                                title="إغلاق التوقيت لهذا الموعد"
-                              >
-                                <Clock className="w-4.5 h-4.5" />
-                              </button>
-                            </div>
+                            </>
                           )}
-
                           {apt.status === 'CONFIRMED' && (
-                            <div className="flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all absolute top-4 left-4 sm:relative sm:top-0 sm:left-0 bg-dark-card/95 sm:bg-transparent p-1.5 sm:p-0 rounded-xl shadow-xl sm:shadow-none border border-dark-border sm:border-0 backdrop-blur-md sm:backdrop-blur-none z-20">
+                            <>
                               <button
                                 onClick={() => handleAction(apt.id, 'complete')}
-                                className="w-9 h-9 rounded-lg bg-teal-500/10 text-teal-300 hover:bg-teal-500 hover:text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg hover:shadow-teal-500/20"
-                                title="تم الكشف على المريض"
+                                className="px-3 py-1.5 rounded-lg bg-blue-100 text-blue-700 text-xs font-medium hover:bg-blue-200 transition"
                               >
-                                <CheckCheck className="w-4.5 h-4.5" />
+                                تم
                               </button>
                               <button
                                 onClick={() => handleAction(apt.id, 'cancel')}
-                                className="w-9 h-9 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500 hover:text-white flex items-center justify-center transition-all hover:scale-110 hover:shadow-lg hover:shadow-rose-500/20"
-                                title="إلغاء الحجز وإرسال رسالة للمريض"
+                                className="px-3 py-1.5 rounded-lg bg-red-100 text-red-700 text-xs font-medium hover:bg-red-200 transition"
                               >
-                                <Ban className="w-4.5 h-4.5" />
+                                إلغاء
                               </button>
-                            </div>
+                            </>
                           )}
                         </div>
                       </div>
-                    ))}
-                  </div>
+                    </div>
+                  ))}
                 </div>
-              ))
-            )}
-          </div>
-                )}
-              </>
-            )}
-          </div>
-
-          {/* Right Sidebar: Stats */}
-          <div className="w-full xl:w-[300px] space-y-4 xl:sticky xl:top-24">
-            <SummaryCard
-              title={isDoctor ? 'إجمالي مواعيدي' : 'إجمالي المواعيد'}
-              value={stats.ALL || appointments.length}
-              hint={isDoctor ? 'كل الحالات' : 'كل المواعيد'}
-              icon={CalendarIcon}
-              accentClass="border-primary-500/20"
-            />
-            <SummaryCard
-              title="قيد الانتظار"
-              value={stats.PENDING || 0}
-              hint="تحتاج تأكيدًا"
-              icon={Clock}
-              accentClass="border-amber-500/20"
-            />
-            <SummaryCard
-              title="مؤكدة"
-              value={stats.CONFIRMED || 0}
-              hint="جاهزة للتنفيذ"
-              icon={CheckCircle}
-              accentClass="border-emerald-500/20"
-            />
-            <SummaryCard
-              title="تم الكشف"
-              value={stats.COMPLETED || 0}
-              hint="زيارات مكتملة"
-              icon={CheckCheck}
-              accentClass="border-teal-500/20"
-            />
-            <SummaryCard
-              title={isDoctor ? 'مواعيد اليوم' : 'الحركة الحالية'}
-              value={todayAppointmentsCount}
-              hint={
-                nextAppointment
-                  ? `التالي ${format(parseISO(nextAppointment.scheduledTime), 'hh:mm a', { locale: ar })}`
-                  : 'لا يوجد موعد قادم'
-              }
-              icon={User}
-              accentClass="border-sky-500/20"
-            />
-          </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </AppLayout>
