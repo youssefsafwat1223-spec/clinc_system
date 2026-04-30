@@ -52,6 +52,22 @@ const autoTemplateVariables = {
 
 const isAutoTemplateVariable = (variable) => variable.type === 'named' && Boolean(autoTemplateVariables[variable.name]);
 
+const templateVariableLabels = {
+  name: 'اسم المريض',
+  phone: 'رقم الهاتف',
+  service_name: 'اسم الخدمة',
+  before_price: 'السعر قبل الخصم',
+  after_price: 'السعر بعد الخصم',
+  offer_details: 'تفاصيل العرض',
+};
+
+const templateVariablePlaceholders = {
+  service_name: 'مثال: تنظيف الأسنان',
+  before_price: 'مثال: 50000',
+  after_price: 'مثال: 40000',
+  offer_details: 'مثال: العرض متاح لفترة محدودة',
+};
+
 const renderTemplatePreview = (text = '', params = [], samplePatient = null) =>
   String(text || '').replace(/\{\{([a-zA-Z_][\w]*|\d+)\}\}/g, (_, key) => {
     const variable = /^\d+$/.test(key) ? { key, type: 'number', index: Number(key) } : { key, type: 'named', name: key };
@@ -64,11 +80,11 @@ const renderTemplatePreview = (text = '', params = [], samplePatient = null) =>
 
 const CLINIC_OFFER_TEXT_BODY = [
   'مرحباً {{name}}',
-  'يسر عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان تقديم عرض خاص على تنظيف الأسنان.',
+  'يسر عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان تقديم عرض خاص على {{service_name}}.',
   '',
-  'السعر قبل الخصم: 50000 دينار عراقي',
-  'السعر بعد الخصم: 40000 دينار عراقي',
-  'تفاصيل العرض: العرض متاح لفترة محدودة',
+  'السعر قبل الخصم: {{before_price}} دينار عراقي',
+  'السعر بعد الخصم: {{after_price}} دينار عراقي',
+  'تفاصيل العرض: {{offer_details}}',
   '',
   'للحجز أو معرفة التفاصيل تواصل معنا الآن.',
 ].join('\n');
@@ -77,8 +93,8 @@ const templateGuideByName = {
   clinic_offer_text_ar: {
     title: 'قالب العرض النصي',
     where: 'يستخدم من صفحة الحملات لإرسال عرض تسويقي نصي للمرضى المختارين.',
-    how: 'النص ثابت من Meta. لو كتبت الخصم داخل Body في Meta مثل خصم 20% على كل الخدمات، سيصل بنفس النص للمريض.',
-    variables: ['{{name}} اسم كل مريض تلقائياً', 'باقي السعر والتفاصيل مكتوبة ثابتة داخل Meta'],
+    how: 'اكتب الخدمة والسعر قبل الخصم والسعر بعد الخصم وتفاصيل العرض من صفحة الحملات قبل الإرسال.',
+    variables: ['{{name}} اسم كل مريض تلقائياً', '{{service_name}} اسم الخدمة', '{{before_price}} السعر قبل الخصم', '{{after_price}} السعر بعد الخصم', '{{offer_details}} تفاصيل العرض'],
     body: CLINIC_OFFER_TEXT_BODY,
   },
   clinic_offer_image_ar: {
@@ -424,7 +440,7 @@ export default function CampaignsPage() {
                   {templateVariables.length > 0 ? (
                     <div className="grid gap-4 md:grid-cols-2">
                       {templateVariables.map((variable) => (
-                        <Field key={variable.key} label={`قيمة المتغير {{${variable.key}}}`}>
+                        <Field key={variable.key} label={templateVariableLabels[variable.key] || `قيمة المتغير {{${variable.key}}}`}>
                           {isAutoTemplateVariable(variable) ? (
                             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-sm font-bold text-emerald-100">
                               {autoTemplateVariables[variable.name]}
@@ -434,7 +450,7 @@ export default function CampaignsPage() {
                               className={inputClass}
                               value={getParamValue(templateBodyParams, variable) || ''}
                               onChange={(event) => setTemplateBodyParams((current) => ({ ...(current || {}), [variable.key]: event.target.value }))}
-                              placeholder={variable.key === 'name' ? '{{name}} أو نص ثابت' : 'اكتب القيمة التي ستظهر مكان المتغير'}
+                              placeholder={templateVariablePlaceholders[variable.key] || 'اكتب القيمة التي ستظهر مكان المتغير'}
                             />
                           )}
                         </Field>
@@ -693,7 +709,7 @@ function TemplateGuideModal({ templates, onClose }) {
         <div className="overflow-y-auto p-5">
           <div className="mb-5 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4 text-sm leading-7 text-sky-100">
             <p className="font-black text-white">القالب المطلوب الآن: clinic_offer_text_ar</p>
-            <p className="mt-1">استخدمه للعروض النصية العامة. المتغير {'{{name}}'} سيتحول تلقائياً إلى اسم كل مريض عند الإرسال.</p>
+            <p className="mt-1">استخدمه للعروض النصية العامة. اسم المريض تلقائي، وباقي القيم مثل الخدمة والسعر قبل/بعد الخصم تكتبها من صفحة الحملات قبل الإرسال.</p>
             <pre className="mt-3 whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/20 p-3 text-right font-sans text-slate-100">{CLINIC_OFFER_TEXT_BODY}</pre>
           </div>
 
