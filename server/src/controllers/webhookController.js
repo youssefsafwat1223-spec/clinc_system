@@ -22,13 +22,14 @@ const {
   buildAppointmentOptions,
   buildCancelConfirmation,
 } = require('../utils/whatsappButtons');
-const { generateTimeSlots, formatDateAr, formatTimeAr, formatCurrency } = require('../utils/helpers');
+const { generateTimeSlots, formatDateAr, formatTimeAr, formatCurrency, formatDateKey } = require('../utils/helpers');
 
 // In-memory session store for booking flow (per phone number)
 const bookingSessions = new Map();
 const BOOKING_SESSION_TTL_MS = 30 * 60 * 1000;
 const processedWhatsAppMessages = new Map();
 const PROCESSED_WHATSAPP_MESSAGE_TTL_MS = 10 * 60 * 1000;
+const TIME_SLOT_PAGE_SIZE = 9;
 
 const pruneBookingSessions = () => {
   const now = Date.now();
@@ -767,6 +768,11 @@ const handleWhatsAppMessage = async (message, contact) => {
       return await handlePeriodSelection(from, patient, periodType, dateString);
     }
 
+    if (listId && listId.startsWith('more_slots_')) {
+      const offset = Number(listId.replace('more_slots_', '')) || 0;
+      return await handleMoreTimeSlots(from, patient, offset);
+    }
+
     // Time slot selection (in booking flow)
     if (listId && (listId.startsWith('slot_') || listId.startsWith('alt_slot_'))) {
       const parts = listId.split('_');
@@ -837,7 +843,7 @@ const getAvailableDaysForDoctor = async (doctor, service) => {
 
     if (daySlots.length > 0) {
       allDays.push({
-        id: `day_${date.toISOString().split('T')[0]}`,
+        id: `day_${formatDateKey(date)}`,
         title: formatDateAr(date),
         description: `د. ${doctor.name.replace('د. ', '').replace('د.', '').trim()}`,
       });
@@ -877,6 +883,22 @@ const getAvailableDaysForService = async (service) => {
       title: day.title,
       description: `${day.doctors.size} طبيب متاح`,
     }));
+};
+
+const buildTimeSlotPage = (slots, offset = 0) => {
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const page = slots.slice(safeOffset, safeOffset + TIME_SLOT_PAGE_SIZE);
+  const nextOffset = safeOffset + TIME_SLOT_PAGE_SIZE;
+
+  if (slots.length > nextOffset) {
+    page.push({
+      id: `more_slots_${nextOffset}`,
+      label: 'مواعيد أكثر',
+      description: `عرض ${Math.min(TIME_SLOT_PAGE_SIZE, slots.length - nextOffset)} موعد إضافي`,
+    });
+  }
+
+  return page;
 };
 
 const sendDoctorDaySelection = async (from, patient, service, doctor, availableDays = null) => {
@@ -1285,8 +1307,7 @@ const handlePeriodSelection = async (from, patient, periodType, dateString) => {
         if (periodType === 'evening') return hour >= 17;
         return true;
       })
-      .sort((first, second) => new Date(first.time) - new Date(second.time))
-      .slice(0, 10);
+      .sort((first, second) => new Date(first.time) - new Date(second.time));
 
     if (filteredSlots.length === 0) {
       return await whatsappService.sendTextMessage(from, 'عذرًا لا توجد مواعيد متاحة في هذه الفترة. يرجى اختيار فترة أخرى.');
@@ -1295,13 +1316,39 @@ const handlePeriodSelection = async (from, patient, periodType, dateString) => {
     session.step = 'select_time';
     session.selectedPeriod = periodType;
     session.serviceDuration = service.duration;
+    session.availableSlots = filteredSlots.map((slot) => ({ time: slot.time, label: slot.label }));
+    session.slotOffset = 0;
     setBookingSession(from, session);
 
-    await whatsappService.sendInteractiveMessage(buildTimeSlotSelection(from, filteredSlots, formatDateAr(targetDate)));
+    await whatsappService.sendInteractiveMessage(buildTimeSlotSelection(from, buildTimeSlotPage(filteredSlots), formatDateAr(targetDate)));
   } catch (error) {
     console.error('[Booking] handlePeriodSelection ERROR:', error.message);
     await whatsappService.sendTextMessage(from, 'حدث خطأ، يرجى المحاولة لاحقًا.');
   }
+};
+
+const handleMoreTimeSlots = async (from, patient, offset) => {
+  const session = getBookingSession(from);
+  if (!session || !session.serviceId || !Array.isArray(session.availableSlots)) {
+    clearBookingSession(from);
+    return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
+  }
+
+  const minLeadMinutes = Number(process.env.MIN_BOOKING_LEAD_MINUTES || 10);
+  const earliestBookableTime = new Date(Date.now() + minLeadMinutes * 60 * 1000);
+  const futureSlots = session.availableSlots.filter((slot) => new Date(slot.time) >= earliestBookableTime);
+  const pageSlots = buildTimeSlotPage(futureSlots, offset);
+
+  if (pageSlots.length === 0) {
+    return await whatsappService.sendTextMessage(from, 'لا توجد مواعيد إضافية متاحة حالياً. يرجى اختيار فترة أخرى.');
+  }
+
+  session.availableSlots = futureSlots;
+  session.slotOffset = offset;
+  setBookingSession(from, session);
+
+  const dateLabel = session.selectedDate ? formatDateAr(new Date(session.selectedDate)) : '';
+  return await whatsappService.sendInteractiveMessage(buildTimeSlotSelection(from, pageSlots, dateLabel));
 };
 
 const handleTimeSlotSelection = async (from, patient, timeISO) => {
@@ -1312,6 +1359,12 @@ const handleTimeSlotSelection = async (from, patient, timeISO) => {
   }
 
   try {
+    const minLeadMinutes = Number(process.env.MIN_BOOKING_LEAD_MINUTES || 10);
+    if (new Date(timeISO) < new Date(Date.now() + minLeadMinutes * 60 * 1000)) {
+      await whatsappService.sendTextMessage(from, 'هذا الموعد مرّ بالفعل أو قريب جداً من الوقت الحالي. يرجى اختيار موعد لاحق.');
+      return await handleServiceSelection(from, patient, session.serviceId);
+    }
+
     if (!session.doctorId) {
       const availability = await appointmentService.getAvailableDoctorsAt({
         serviceId: session.serviceId,

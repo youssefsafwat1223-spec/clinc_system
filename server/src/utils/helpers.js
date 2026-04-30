@@ -9,6 +9,14 @@ const formatDateAr = (date) => {
   return `${days[d.getDay()]} ${day}/${month}`;
 };
 
+const formatDateKey = (date) => {
+  const d = new Date(date);
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
 /**
  * Format time to Arabic readable format (12-hour)
  */
@@ -45,6 +53,8 @@ const generateTimeSlots = (date, workingHours, duration = 30, bookedSlots = []) 
   if (periods.length === 0) return [];
 
   const slots = [];
+  const minLeadMinutes = Number(process.env.MIN_BOOKING_LEAD_MINUTES || 10);
+  const earliestBookableTime = new Date(Date.now() + minLeadMinutes * 60 * 1000);
 
   periods.forEach((hours) => {
     const [startH, startM] = hours.start.split(':').map(Number);
@@ -67,7 +77,7 @@ const generateTimeSlots = (date, workingHours, duration = 30, bookedSlots = []) 
         return slotTime.getTime() < bookedEnd && slotEnd.getTime() > bookedStart;
       });
 
-      if (!isBooked && slotTime > new Date() && slotEnd <= end) {
+      if (!isBooked && slotTime >= earliestBookableTime && slotEnd <= end) {
         slots.push({
           time: slotTime.toISOString(),
           label: `${formatDateAr(slotTime)} ${formatTimeAr(slotTime)}`,
@@ -114,6 +124,7 @@ const paginate = (page = 1, limit = 20) => {
 module.exports = {
   formatDateAr,
   formatTimeAr,
+  formatDateKey,
   normalizeWorkingPeriods,
   generateTimeSlots,
   hasConflict,

@@ -1,5 +1,7 @@
 require('dotenv').config();
 
+process.env.TZ = process.env.TZ || process.env.CLINIC_TIMEZONE || 'Asia/Baghdad';
+
 module.exports = {
   port: process.env.PORT || 5000,
   nodeEnv: process.env.NODE_ENV || 'development',

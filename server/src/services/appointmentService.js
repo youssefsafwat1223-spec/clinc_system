@@ -44,6 +44,9 @@ const isDoctorAvailableAt = async ({ doctorId, scheduledTime, duration, excludeA
   if (!doctor) return false;
 
   const requested = new Date(scheduledTime);
+  const minLeadMinutes = Number(process.env.MIN_BOOKING_LEAD_MINUTES || 10);
+  if (requested < new Date(Date.now() + minLeadMinutes * 60 * 1000)) return false;
+
   const daySlots = generateTimeSlots(requested, doctor.workingHours || {}, duration, []);
   const inWorkingHours = daySlots.some((slot) => new Date(slot.time).getTime() === requested.getTime());
   if (!inWorkingHours) return false;

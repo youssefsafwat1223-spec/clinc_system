@@ -244,7 +244,7 @@ const buildTimeSlotSelection = (to, slots, dateLabel = '') => ({
             // WhatsApp list row title max is 24 chars
             const title = slot.label.length > 24 ? slot.label.substring(0, 24) : slot.label;
             return {
-              id: `slot_${index}_${slot.time}`,
+              id: slot.id || `slot_${index}_${slot.time}`,
               title,
               description: slot.doctor ? `👨‍⚕️ ${slot.doctor}` : '',
             };

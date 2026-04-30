@@ -277,6 +277,50 @@ export default function AISettingsPage() {
                   </PrimaryButton>
                 }
               />
+              <div className="mb-5 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100">
+                لو أنشأت خصماً عاماً لكل المرضى من صفحة الإعدادات، أضف هنا FAQ باسم الخصم أو العرض حتى يعرفه البوت عندما يسأل المريض عنه. مثال السؤال: "ما تفاصيل خصم العيد؟" والإجابة: "خصم العيد متاح لكل المرضى على كل الخدمات بنسبة 30% حتى نهاية الشهر، وسيظهر السعر بعد الخصم عند اختيار الخدمة أو السؤال عن السعر."
+              </div>
+              <div className="mb-5 grid gap-3 md:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={() => setFaqs((current) => [
+                    ...current,
+                    {
+                      question: 'ما تفاصيل خصم العيد؟',
+                      answer: 'خصم العيد متاح لكل المرضى على كل الخدمات بنسبة 30% خلال فترة العرض. عند سؤال المريض عن السعر أو اختيار الخدمة، سيظهر له السعر بعد الخصم تلقائياً.',
+                    },
+                  ])}
+                  className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-right text-sm font-bold text-slate-200 transition hover:bg-white/[0.06]"
+                >
+                  مثال خصم عام لكل المرضى
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFaqs((current) => [
+                    ...current,
+                    {
+                      question: 'هل الخصم متاح لي؟',
+                      answer: 'إذا كان الخصم عاماً فهو متاح لكل المرضى الحاليين والجدد. وإذا كان الخصم لأرقام محددة فقط، سيظهر للمريض المستحق عند السؤال عن السعر أو اختيار الخدمة.',
+                    },
+                  ])}
+                  className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-right text-sm font-bold text-slate-200 transition hover:bg-white/[0.06]"
+                >
+                  مثال هل الخصم متاح لي؟
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFaqs((current) => [
+                    ...current,
+                    {
+                      question: 'إزاي أستخدم الخصم؟',
+                      answer: 'لا يحتاج المريض لعمل أي خطوة إضافية. عند الحجز أو السؤال عن السعر، النظام يراجع الخصومات النشطة ويعرض السعر بعد الخصم إذا كان المريض مستحقاً له.',
+                    },
+                  ])}
+                  className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-right text-sm font-bold text-slate-200 transition hover:bg-white/[0.06]"
+                >
+                  مثال استخدام الخصم
+                </button>
+              </div>
               <div className="space-y-4">
                 {faqs.length === 0 ? (
                   <div className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-slate-400">
