@@ -259,7 +259,7 @@ const getAlternativeSlots = async (doctorId, aroundTime, workingHours, duration 
   const slots = [];
 
   // Check the next 7 days
-  for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+  for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
     const date = new Date(baseDate);
     date.setDate(date.getDate() + dayOffset);
 
