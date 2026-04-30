@@ -22,6 +22,7 @@ const ReviewsPage = lazy(() => import('./pages/ReviewsPage.jsx'));
 const PrescriptionsPage = lazy(() => import('./pages/PrescriptionsPage.jsx'));
 const PaymentsPage = lazy(() => import('./pages/PaymentsPage.jsx'));
 const RescheduleDoctorPage = lazy(() => import('./pages/RescheduleDoctorPage.jsx'));
+const SystemGuidePage = lazy(() => import('./pages/SystemGuidePage.jsx'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage.jsx'));
 const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage.jsx'));
 const DataDeletionPage = lazy(() => import('./pages/DataDeletionPage.jsx'));
@@ -167,6 +168,15 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['ADMIN']}>
                 <RescheduleDoctorPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/system-guide"
+            element={
+              <ProtectedRoute>
+                <SystemGuidePage />
               </ProtectedRoute>
             }
           />

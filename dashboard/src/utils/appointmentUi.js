@@ -29,6 +29,13 @@ export const formatDateTime = (value) => {
   }).format(new Date(value));
 };
 
+export const formatDate = (value) => {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('ar-EG', {
+    dateStyle: 'medium',
+  }).format(new Date(value));
+};
+
 export const formatTime = (value) => {
   if (!value) return '-';
   return new Intl.DateTimeFormat('ar-EG', {

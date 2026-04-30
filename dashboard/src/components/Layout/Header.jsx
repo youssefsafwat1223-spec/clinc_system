@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, CheckCheck, ExternalLink, Menu, User } from 'lucide-react';
+import { Bell, CheckCheck, ExternalLink, Menu, User, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 
@@ -22,6 +22,7 @@ const routeTitles = {
   '/analytics': 'التحليلات',
   '/ai-settings': 'الذكاء الاصطناعي',
   '/settings': 'الإعدادات',
+  '/system-guide': 'شرح النظام',
 };
 
 const resolveTitle = (pathname) => {
@@ -97,7 +98,7 @@ export default function Header({ onMenuClick }) {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between border-b border-white/5 bg-[#0a0f1e]/90 px-6 py-4 shadow-lg shadow-black/20 backdrop-blur-xl">
+    <header className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-white/5 bg-[#0a0f1e]/90 px-4 py-4 shadow-lg shadow-black/20 backdrop-blur-xl sm:px-6">
       <button
         type="button"
         onClick={onMenuClick}
@@ -132,24 +133,35 @@ export default function Header({ onMenuClick }) {
           </button>
 
           {open ? (
-            <div className="absolute left-0 top-12 z-50 w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-white/10 bg-[#0b1020] shadow-2xl shadow-black/40">
-              <div className="flex items-center justify-between border-b border-white/10 p-4">
-                <div>
+            <div className="fixed inset-x-3 top-20 z-50 max-h-[calc(100vh-6rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0b1020] shadow-2xl shadow-black/50 sm:absolute sm:inset-x-auto sm:left-0 sm:top-12 sm:w-[420px] sm:max-w-[calc(100vw-2rem)]">
+              <div className="flex items-start justify-between gap-3 border-b border-white/10 p-4">
+                <div className="min-w-0">
                   <h3 className="font-black text-white">الإشعارات</h3>
-                  <p className="text-xs text-slate-400">{unreadCount} غير مقروء</p>
+                  <p className="mt-1 text-xs text-slate-400">{unreadCount} غير مقروء</p>
                 </div>
-                <button
-                  type="button"
-                  onClick={markAllAsRead}
-                  disabled={unreadCount === 0}
-                  className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-300 transition hover:bg-white/10 disabled:opacity-50"
-                >
-                  <CheckCheck className="h-3.5 w-3.5" />
-                  تعليم الكل كمقروء
-                </button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={markAllAsRead}
+                    disabled={unreadCount === 0}
+                    className="inline-flex items-center gap-1 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-bold text-slate-300 transition hover:bg-white/10 disabled:opacity-50"
+                  >
+                    <CheckCheck className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">تعليم الكل كمقروء</span>
+                    <span className="sm:hidden">تعليم الكل</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOpen(false)}
+                    className="rounded-lg border border-white/10 bg-white/5 p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
+                    aria-label="إغلاق الإشعارات"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
 
-              <div className="max-h-96 overflow-y-auto">
+              <div className="max-h-[calc(100vh-11rem)] overflow-y-auto sm:max-h-96">
                 {loading ? (
                   <div className="p-5 text-sm text-slate-400">جاري تحميل الإشعارات...</div>
                 ) : recentNotifications.length === 0 ? (
@@ -164,9 +176,9 @@ export default function Header({ onMenuClick }) {
                         notification.read ? 'bg-transparent' : 'bg-sky-500/10'
                       }`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-black text-white">{notification.title}</p>
+                      <div className="flex items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="break-words text-sm font-black leading-6 text-white">{notification.title}</p>
                           <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-400">{notification.message}</p>
                           <p className="mt-2 text-[11px] text-slate-500">{formatNotificationTime(notification.createdAt)}</p>
                         </div>

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCheck, MessageSquare, Pause, Phone, Play, Search, Send, User } from 'lucide-react';
-import { format, isToday, isYesterday, parseISO } from 'date-fns';
-import { ar } from 'date-fns/locale';
+import { Bot, CheckCheck, Inbox, MessageSquare, Pause, Phone, Play, Search, Send, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
+import { DataCard, PageHeader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
 
 const platformTabs = ['ALL', 'HUMAN', 'UNREAD', 'REVIEWED', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
 
@@ -15,7 +15,7 @@ const platformLabels = {
   REVIEWED: 'تمت المراجعة',
   WHATSAPP: 'واتساب',
   FACEBOOK: 'فيسبوك',
-  INSTAGRAM: 'انستجرام',
+  INSTAGRAM: 'إنستجرام',
 };
 
 const chatStateLabels = {
@@ -23,22 +23,44 @@ const chatStateLabels = {
   BOT: 'الرد الآلي',
 };
 
-function PlatformIcon({ platform, className = 'w-4 h-4' }) {
-  if (platform === 'WHATSAPP') return <Phone className={`${className} text-green-500`} />;
-  if (platform === 'FACEBOOK') return <MessageSquare className={`${className} text-blue-500`} />;
-  if (platform === 'INSTAGRAM') return <MessageSquare className={`${className} text-pink-500`} />;
-  return <MessageSquare className={`${className} text-gray-500`} />;
+function PlatformIcon({ platform, className = 'h-4 w-4' }) {
+  if (platform === 'WHATSAPP') return <Phone className={`${className} text-emerald-300`} />;
+  if (platform === 'FACEBOOK') return <MessageSquare className={`${className} text-sky-300`} />;
+  if (platform === 'INSTAGRAM') return <MessageSquare className={`${className} text-pink-300`} />;
+  return <MessageSquare className={`${className} text-slate-400`} />;
 }
 
-function formatMessageDayLabel(value) {
-  const parsed = parseISO(value);
-  if (isToday(parsed)) return 'اليوم';
-  if (isYesterday(parsed)) return 'أمس';
-  return format(parsed, 'EEEE dd MMMM', { locale: ar });
+function formatDay(value) {
+  const date = new Date(value);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+
+  if (date.toDateString() === today.toDateString()) return 'اليوم';
+  if (date.toDateString() === yesterday.toDateString()) return 'أمس';
+
+  return new Intl.DateTimeFormat('ar-EG', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  }).format(date);
 }
 
 function formatTime(value) {
-  return format(parseISO(value), 'hh:mm a', { locale: ar });
+  return new Intl.DateTimeFormat('ar-EG', {
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
+
+function formatRelative(value) {
+  if (!value) return '-';
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
+  if (minutes < 1) return 'الآن';
+  if (minutes < 60) return `منذ ${minutes} دقيقة`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `منذ ${hours} ساعة`;
+  return formatDay(value);
 }
 
 function getMessageSourceLabel(metadata) {
@@ -50,22 +72,17 @@ function getMessageSourceLabel(metadata) {
   return null;
 }
 
-function StatusPill({ chatState }) {
+function ChatStateBadge({ chatState }) {
   const isHuman = chatState === 'HUMAN';
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-bold ${
-        isHuman
-          ? 'bg-red-100 text-red-700'
-          : 'bg-green-100 text-green-700'
-      }`}
-    >
-      {chatStateLabels[chatState] || 'غير معروف'}
-    </span>
+    <StatusBadge tone={isHuman ? 'amber' : 'green'}>
+      {isHuman ? 'تدخل بشري' : 'البوت يعمل'}
+    </StatusBadge>
   );
 }
 
 export default function InboxPage() {
+  const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [conversation, setConversation] = useState([]);
@@ -76,68 +93,35 @@ export default function InboxPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const messagesContainerRef = useRef(null);
 
-  useEffect(() => {
-    fetchPatientsList();
-  }, []);
-
-  useEffect(() => {
-    if (selectedPatientId) {
-      fetchConversation(selectedPatientId);
-    } else {
-      setConversation([]);
-    }
-  }, [selectedPatientId]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetchPatientsList(false);
-      if (selectedPatientId) {
-        fetchConversation(selectedPatientId, false);
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [selectedPatientId]);
-
-  useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
-    container.scrollTo({
-      top: container.scrollHeight,
-      behavior: 'smooth',
-    });
-  }, [conversation.length, selectedPatientId]);
-
   const fetchPatientsList = async (showLoading = true) => {
     try {
       if (showLoading) setLoadingList(true);
       const res = await api.get('/messages', { params: { limit: 500 } });
       const uniquePatientsMap = new Map();
 
-      (res.data.messages || []).forEach((msg) => {
-        const existing = uniquePatientsMap.get(msg.patientId);
+      (res.data.messages || []).forEach((message) => {
+        const existing = uniquePatientsMap.get(message.patientId);
+        const patient = message.patient || {};
         if (!existing) {
-          uniquePatientsMap.set(msg.patientId, {
-            ...msg.patient,
-            id: msg.patientId,
-            platform: msg.platform || msg.patient?.platform,
-            lastMessage: msg.content,
-            lastMessageTime: msg.createdAt,
-            lastMessageType: msg.type,
-            lastMessageSource: getMessageSourceLabel(msg.metadata),
-            chatState: msg.patient?.chatState || 'BOT',
+          uniquePatientsMap.set(message.patientId, {
+            ...patient,
+            id: message.patientId,
+            platform: message.platform || patient.platform,
+            lastMessage: message.content,
+            lastMessageTime: message.createdAt,
+            lastMessageType: message.type,
+            lastMessageSource: getMessageSourceLabel(message.metadata),
+            chatState: patient.chatState || 'BOT',
             messageCount: 1,
-            unreadCount: msg.type === 'INBOUND' && !msg.readAt ? 1 : 0,
-            reviewedCount: msg.reviewedAt ? 1 : 0,
+            unreadCount: message.type === 'INBOUND' && !message.readAt ? 1 : 0,
+            reviewedCount: message.reviewedAt ? 1 : 0,
           });
           return;
         }
+
         existing.messageCount += 1;
-        if (msg.type === 'INBOUND' && !msg.readAt) {
-          existing.unreadCount = (existing.unreadCount || 0) + 1;
-        }
-        if (msg.reviewedAt) {
-          existing.reviewedCount = (existing.reviewedCount || 0) + 1;
-        }
+        if (message.type === 'INBOUND' && !message.readAt) existing.unreadCount = (existing.unreadCount || 0) + 1;
+        if (message.reviewedAt) existing.reviewedCount = (existing.reviewedCount || 0) + 1;
       });
 
       const nextPatients = Array.from(uniquePatientsMap.values()).sort(
@@ -146,13 +130,11 @@ export default function InboxPage() {
 
       setPatients(nextPatients);
       setSelectedPatientId((current) => {
-        if (current && nextPatients.some((patient) => patient.id === current)) {
-          return current;
-        }
+        if (current && nextPatients.some((patient) => patient.id === current)) return current;
         return nextPatients[0]?.id || null;
       });
     } catch (error) {
-      toast.error('فشل في تحميل قائمة الرسائل');
+      toast.error('فشل تحميل قائمة الرسائل');
     } finally {
       if (showLoading) setLoadingList(false);
     }
@@ -173,17 +155,41 @@ export default function InboxPage() {
                   ...res.data.patient,
                   platform: res.data.patient.platform || patient.platform,
                   chatState: res.data.patient.chatState || patient.chatState,
+                  unreadCount: 0,
                 }
               : patient
           )
         );
       }
     } catch (error) {
-      toast.error('فشل في تحميل المحادثة');
+      toast.error('فشل تحميل المحادثة');
     } finally {
       if (showLoading) setLoadingChat(false);
     }
   };
+
+  useEffect(() => {
+    fetchPatientsList();
+  }, []);
+
+  useEffect(() => {
+    if (selectedPatientId) fetchConversation(selectedPatientId);
+    else setConversation([]);
+  }, [selectedPatientId]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchPatientsList(false);
+      if (selectedPatientId) fetchConversation(selectedPatientId, false);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [selectedPatientId]);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+  }, [conversation.length, selectedPatientId]);
 
   const updatePatientSummary = (patientId, content, createdAt) => {
     setPatients((current) =>
@@ -232,7 +238,7 @@ export default function InboxPage() {
       fetchConversation(selectedPatientId, false);
       fetchPatientsList(false);
     } catch (error) {
-      toast.error('فشل في إرسال الرسالة');
+      toast.error('فشل إرسال الرسالة');
       fetchConversation(selectedPatientId, false);
       fetchPatientsList(false);
     }
@@ -242,15 +248,13 @@ export default function InboxPage() {
     if (!selectedPatientId) return;
     try {
       await api.post(`/messages/${selectedPatientId}/end`);
-      toast.success('تم إنهاء المحادثة وسيعود الرد الآلي للعمل الآن.');
+      toast.success('تم إنهاء المتابعة البشرية وسيعود البوت للرد.');
       setPatients((current) =>
-        current.map((patient) =>
-          patient.id === selectedPatientId ? { ...patient, chatState: 'BOT' } : patient
-        )
+        current.map((patient) => (patient.id === selectedPatientId ? { ...patient, chatState: 'BOT' } : patient))
       );
       fetchConversation(selectedPatientId, false);
     } catch (error) {
-      toast.error('فشل في إنهاء المحادثة');
+      toast.error('فشل إنهاء المحادثة');
     }
   };
 
@@ -258,15 +262,13 @@ export default function InboxPage() {
     if (!selectedPatientId) return;
     try {
       await api.post(`/messages/${selectedPatientId}/pause`);
-      toast.success('تم إيقاف الرد الآلي لهذه المحادثة.');
+      toast.success('تم إيقاف البوت لهذه المحادثة.');
       setPatients((current) =>
-        current.map((patient) =>
-          patient.id === selectedPatientId ? { ...patient, chatState: 'HUMAN' } : patient
-        )
+        current.map((patient) => (patient.id === selectedPatientId ? { ...patient, chatState: 'HUMAN' } : patient))
       );
       fetchConversation(selectedPatientId, false);
     } catch (error) {
-      toast.error('فشل في إيقاف الرد الآلي');
+      toast.error('فشل إيقاف البوت');
     }
   };
 
@@ -275,12 +277,10 @@ export default function InboxPage() {
       patients.reduce(
         (accumulator, patient) => {
           accumulator.ALL += 1;
-          if (patient.chatState === 'HUMAN') accumulator.HUMAN = (accumulator.HUMAN || 0) + 1;
-          if ((patient.unreadCount || 0) > 0) accumulator.UNREAD = (accumulator.UNREAD || 0) + 1;
-          if ((patient.reviewedCount || 0) > 0) accumulator.REVIEWED = (accumulator.REVIEWED || 0) + 1;
-          if (patient.platform) {
-            accumulator[patient.platform] = (accumulator[patient.platform] || 0) + 1;
-          }
+          if (patient.chatState === 'HUMAN') accumulator.HUMAN += 1;
+          if ((patient.unreadCount || 0) > 0) accumulator.UNREAD += 1;
+          if ((patient.reviewedCount || 0) > 0) accumulator.REVIEWED += 1;
+          if (patient.platform && accumulator[patient.platform] !== undefined) accumulator[patient.platform] += 1;
           return accumulator;
         },
         { ALL: 0, HUMAN: 0, UNREAD: 0, REVIEWED: 0, WHATSAPP: 0, FACEBOOK: 0, INSTAGRAM: 0 }
@@ -300,10 +300,9 @@ export default function InboxPage() {
             ? (patient.unreadCount || 0) > 0
             : activeTab === 'REVIEWED'
               ? (patient.reviewedCount || 0) > 0
-            : true;
-      const haystack = [patient.name, patient.phone, patient.lastMessage].filter(Boolean).join(' ').toLowerCase();
-      const matchesSearch = !query || haystack.includes(query);
-      return matchesPlatform && matchesState && matchesSearch;
+              : true;
+      const haystack = [patient.name, patient.displayName, patient.phone, patient.lastMessage].filter(Boolean).join(' ').toLowerCase();
+      return matchesPlatform && matchesState && (!query || haystack.includes(query));
     });
   }, [activeTab, patients, searchTerm]);
 
@@ -322,73 +321,57 @@ export default function InboxPage() {
     [patients, selectedPatientId]
   );
 
-  const groupedConversation = useMemo(() => {
-    const groups = [];
-    conversation.forEach((message) => {
-      const key = format(parseISO(message.createdAt), 'yyyy-MM-dd');
-      const label = formatMessageDayLabel(message.createdAt);
-      const lastGroup = groups[groups.length - 1];
-      if (!lastGroup || lastGroup.key !== key) {
-        groups.push({ key, label, messages: [message] });
-        return;
+  const groupedMessages = useMemo(() => {
+    return conversation.reduce((groups, message) => {
+      const key = new Date(message.createdAt).toISOString().slice(0, 10);
+      const last = groups[groups.length - 1];
+      if (!last || last.key !== key) {
+        groups.push({ key, label: formatDay(message.createdAt), messages: [message] });
+      } else {
+        last.messages.push(message);
       }
-      lastGroup.messages.push(message);
-    });
-    return groups;
+      return groups;
+    }, []);
   }, [conversation]);
-
-  const humanThreadsCount = useMemo(
-    () => patients.filter((patient) => patient.chatState === 'HUMAN').length,
-    [patients]
-  );
 
   return (
     <AppLayout>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-200px)]">
-        {/* Patient List */}
-        <div className="lg:col-span-1 bg-white rounded-xl shadow-md border border-gray-200 flex flex-col overflow-hidden">
-          <div className="p-6 border-b border-gray-200 bg-white">
-            <div className="flex items-center justify-between mb-4">
+      <PageHeader
+        title="صندوق الوارد"
+        description="متابعة رسائل واتساب وفيسبوك وإنستجرام، مع فصل المحادثات التي تحتاج تدخل بشري أو لم تتم قراءتها."
+      />
+
+      <div className="grid min-h-[720px] gap-6 xl:grid-cols-[380px_1fr]">
+        <DataCard className="flex min-h-[680px] flex-col p-0">
+          <div className="border-b border-white/10 p-5">
+            <div className="mb-4 flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">💬 المحادثات</h2>
-                <p className="text-sm text-gray-500 mt-1">قائمة الرسائل الأخيرة</p>
+                <h2 className="text-lg font-black text-white">المحادثات</h2>
+                <p className="mt-1 text-xs text-slate-400">{patients.length} محادثة مسجلة</p>
               </div>
-              <div className="bg-gray-100 rounded-lg px-3 py-2">
-                <p className="text-xs font-medium text-gray-600">الإجمالي</p>
-                <p className="text-lg font-bold text-gray-900 mt-1">{patients.length}</p>
-              </div>
+              <StatusBadge tone="blue">{platformCounts.UNREAD} غير مقروء</StatusBadge>
             </div>
 
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-2">
-                <p className="text-xs font-medium text-red-700">متابعة بشرية</p>
-                <p className="text-base font-bold text-red-600 mt-1">{humanThreadsCount}</p>
-              </div>
-              <div className="bg-green-50 border border-green-200 rounded-lg p-2">
-                <p className="text-xs font-medium text-green-700">رد آلي</p>
-                <p className="text-base font-bold text-green-600 mt-1">{patients.length - humanThreadsCount}</p>
-              </div>
-            </div>
-
-            <div className="relative mb-4">
-              <Search className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
+            <div className="relative">
+              <Search className="absolute right-3 top-3 h-4 w-4 text-slate-500" />
               <input
+                className={`${inputClass} pr-10`}
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="ابحث بالاسم أو الرقم..."
-                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                placeholder="ابحث بالاسم أو الرقم أو الرسالة..."
               />
             </div>
 
-            <div className="flex gap-2 overflow-x-auto pb-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               {platformTabs.map((tab) => (
                 <button
                   key={tab}
+                  type="button"
                   onClick={() => setActiveTab(tab)}
-                  className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition ${
+                  className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
                     activeTab === tab
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-sky-500 text-white'
+                      : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
                   }`}
                 >
                   {platformLabels[tab]} ({platformCounts[tab] || 0})
@@ -397,60 +380,56 @@ export default function InboxPage() {
             </div>
           </div>
 
-          {/* Patients List */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto p-3">
             {loadingList ? (
-              <div className="flex justify-center items-center h-40">
-                <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
-              </div>
+              <div className="p-8 text-center text-sm text-slate-400">جاري تحميل المحادثات...</div>
             ) : filteredPatients.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-40 text-gray-500 text-center px-4">
-                <MessageSquare className="h-8 w-8 mb-2 opacity-50" />
-                <p className="text-sm font-medium">لا توجد محادثات</p>
+              <div className="flex h-52 flex-col items-center justify-center text-center text-slate-400">
+                <Inbox className="mb-3 h-10 w-10 text-slate-600" />
+                لا توجد محادثات مطابقة للفلتر.
               </div>
             ) : (
-              <div className="divide-y divide-gray-200">
+              <div className="space-y-2">
                 {filteredPatients.map((patient) => {
-                  const isSelected = selectedPatientId === patient.id;
+                  const selected = patient.id === selectedPatientId;
                   return (
                     <button
                       key={patient.id}
+                      type="button"
                       onClick={() => setSelectedPatientId(patient.id)}
-                      className={`w-full p-4 text-right transition ${
-                        isSelected
-                          ? 'bg-green-50 border-r-4 border-green-500'
-                          : 'hover:bg-gray-50'
+                      className={`w-full rounded-2xl border p-4 text-right transition ${
+                        selected
+                          ? 'border-sky-500/40 bg-sky-500/10 shadow-lg shadow-sky-500/10'
+                          : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
                       }`}
                     >
                       <div className="flex items-start gap-3">
-                        <div className="relative flex-shrink-0">
-                          <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                            <User className="h-5 w-5 text-white" />
-                          </div>
-                          {patient.unreadCount > 0 && (
-                            <span className="absolute -top-1 -right-1 h-5 w-5 rounded-full bg-red-500 text-white text-xs font-bold flex items-center justify-center">
-                              {patient.unreadCount > 9 ? '9+' : patient.unreadCount}
+                        <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-500 text-white">
+                          <User className="h-5 w-5" />
+                          {(patient.unreadCount || 0) > 0 ? (
+                            <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white">
+                              {patient.unreadCount}
                             </span>
-                          )}
+                          ) : null}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-gray-900 truncate text-sm">{patient.name || 'بدون اسم'}</h4>
-                          <p className="text-xs text-gray-500 mt-0.5" dir="ltr">
-                            📱 {patient.phone || 'لا يوجد رقم'}
-                          </p>
-                          <div className="flex items-center gap-1 mt-1.5">
-                            <StatusPill chatState={patient.chatState} />
-                            {patient.unreadCount > 0 && (
-                              <span className="text-xs font-medium bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
-                                {patient.unreadCount} جديد
-                              </span>
-                            )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <h3 className="truncate text-sm font-black text-white">{patient.displayName || patient.name || 'بدون اسم'}</h3>
+                              <p className="mt-0.5 text-xs text-slate-500" dir="ltr">{patient.phone || '-'}</p>
+                            </div>
+                            <span className="shrink-0 text-[11px] text-slate-500">{formatRelative(patient.lastMessageTime)}</span>
                           </div>
-                          <p className="text-xs text-gray-600 mt-1 truncate">{patient.lastMessage || 'لا توجد رسالة'}</p>
+                          <p className="mt-2 truncate text-xs text-slate-400">{patient.lastMessage || 'لا توجد رسالة'}</p>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <ChatStateBadge chatState={patient.chatState} />
+                            <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300">
+                              <PlatformIcon platform={patient.platform} />
+                              {platformLabels[patient.platform] || patient.platform || 'غير محدد'}
+                            </span>
+                            {patient.reviewedCount ? <StatusBadge tone="blue">تمت مراجعة {patient.reviewedCount}</StatusBadge> : null}
+                          </div>
                         </div>
-                        <span className="text-xs text-gray-400 shrink-0" dir="ltr">
-                          {patient.lastMessageTime ? formatTime(patient.lastMessageTime) : '--'}
-                        </span>
                       </div>
                     </button>
                   );
@@ -458,128 +437,116 @@ export default function InboxPage() {
               </div>
             )}
           </div>
-        </div>
+        </DataCard>
 
-        {/* Chat Window */}
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-md border border-gray-200 flex flex-col overflow-hidden">
+        <DataCard className="flex min-h-[680px] flex-col p-0">
           {selectedPatientData ? (
             <>
-              {/* Chat Header */}
-              <div className="p-4 border-b border-gray-200 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                    <User className="h-5 w-5 text-white" />
+              <div className="border-b border-white/10 p-5">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-500 text-white">
+                      <User className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-black text-white">{selectedPatientData.displayName || selectedPatientData.name || 'بدون اسم'}</h2>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
+                        <span dir="ltr">{selectedPatientData.phone || '-'}</span>
+                        <PlatformIcon platform={selectedPatientData.platform} />
+                        <ChatStateBadge chatState={selectedPatientData.chatState} />
+                      </div>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">{selectedPatientData.name || 'بدون اسم'}</h3>
-                    <p className="text-xs text-gray-500 mt-0.5" dir="ltr">
-                      📱 {selectedPatientData.phone || 'لا يوجد رقم'}
-                    </p>
-                  </div>
-                </div>
 
-                <div className="flex items-center gap-2">
-                  {selectedPatientData.chatState === 'HUMAN' ? (
-                    <button
-                      onClick={handleEndConversation}
-                      className="px-4 py-2 rounded-lg bg-green-500 text-white text-sm font-medium hover:bg-green-600 transition flex items-center gap-2"
-                    >
-                      <Play className="h-4 w-4" />
-                      تشغيل البوت
-                    </button>
-                  ) : (
-                    <button
-                      onClick={handlePauseBot}
-                      className="px-4 py-2 rounded-lg bg-red-500 text-white text-sm font-medium hover:bg-red-600 transition flex items-center gap-2"
-                    >
-                      <Pause className="h-4 w-4" />
-                      إيقاف البوت
-                    </button>
-                  )}
+                  <div className="flex flex-wrap gap-2">
+                    <SecondaryButton type="button" onClick={() => navigate(`/patients/${selectedPatientData.id}`)}>
+                      ملف المريض
+                    </SecondaryButton>
+                    {selectedPatientData.chatState === 'HUMAN' ? (
+                      <PrimaryButton type="button" onClick={handleEndConversation}>
+                        <Play className="h-4 w-4" />
+                        إنهاء المتابعة
+                      </PrimaryButton>
+                    ) : (
+                      <SecondaryButton type="button" onClick={handlePauseBot}>
+                        <Pause className="h-4 w-4" />
+                        إيقاف البوت
+                      </SecondaryButton>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Messages Container */}
-              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 bg-gray-50">
+              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-[#080d1f] p-5">
                 {loadingChat ? (
-                  <div className="flex justify-center items-center h-full">
-                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
-                  </div>
-                ) : groupedConversation.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-gray-500 text-center">
-                    <MessageSquare className="h-12 w-12 mb-3 opacity-30" />
-                    <p className="font-medium">لا توجد رسائل</p>
+                  <div className="flex h-full items-center justify-center text-slate-400">جاري تحميل المحادثة...</div>
+                ) : groupedMessages.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
+                    <MessageSquare className="mb-3 h-10 w-10 text-slate-600" />
+                    لا توجد رسائل في هذه المحادثة.
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    {groupedConversation.map((group) => (
-                      <div key={group.key}>
-                        <div className="flex justify-center mb-3">
-                          <span className="text-xs font-medium text-gray-500 bg-white px-3 py-1 rounded-full border border-gray-200">
-                            {group.label}
-                          </span>
+                  <div className="space-y-6">
+                    {groupedMessages.map((group) => (
+                      <div key={group.key} className="space-y-3">
+                        <div className="text-center">
+                          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-bold text-slate-400">{group.label}</span>
                         </div>
-                        <div className="space-y-3">
-                          {group.messages.map((message) => {
-                            const isOutbound = message.type === 'OUTBOUND';
-                            return (
-                              <div key={message.id} className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
-                                <div
-                                  className={`max-w-xs px-4 py-2 rounded-lg ${
-                                    isOutbound
-                                      ? 'bg-green-500 text-white rounded-tr-none'
-                                      : 'bg-gray-300 text-gray-900 rounded-tl-none'
-                                  }`}
-                                >
-                                  <p className="text-sm">{message.content}</p>
-                                  <p className={`text-xs mt-1 ${isOutbound ? 'text-green-100' : 'text-gray-600'}`}>
-                                    {formatTime(message.createdAt)}
-                                  </p>
+                        {group.messages.map((message) => {
+                          const outbound = message.type === 'OUTBOUND';
+                          const source = getMessageSourceLabel(message.metadata);
+                          return (
+                            <div key={message.id} className={`flex ${outbound ? 'justify-start' : 'justify-end'}`}>
+                              <div
+                                className={`max-w-[78%] rounded-2xl px-4 py-3 shadow-lg ${
+                                  outbound
+                                    ? 'rounded-tl-sm bg-sky-500 text-white shadow-sky-500/10'
+                                    : 'rounded-tr-sm border border-white/10 bg-white/10 text-slate-100'
+                                }`}
+                              >
+                                <div className="mb-2 flex items-center gap-2 text-[11px] opacity-80">
+                                  {outbound ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
+                                  <span>{outbound ? 'موظف' : 'مريض'}</span>
+                                  {source ? <span className="rounded-full bg-black/10 px-2 py-0.5">{source}</span> : null}
+                                </div>
+                                <p className="whitespace-pre-wrap break-words text-sm leading-7">{message.content}</p>
+                                <div className={`mt-2 flex items-center gap-1 text-[11px] ${outbound ? 'text-sky-100' : 'text-slate-400'}`}>
+                                  <span>{formatTime(message.createdAt)}</span>
+                                  {outbound ? <CheckCheck className="h-3.5 w-3.5" /> : null}
+                                  {message.reviewedAt ? <span>تمت المراجعة</span> : null}
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Message Input */}
-              <div className="p-4 border-t border-gray-200">
-                <form onSubmit={handleSend} className="flex items-end gap-3">
-                  <textarea
+              <form onSubmit={handleSend} className="border-t border-white/10 p-4">
+                <div className="flex gap-3">
+                  <input
                     value={replyText}
                     onChange={(event) => setReplyText(event.target.value)}
-                    placeholder="اكتب رسالتك..."
-                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 resize-none"
-                    rows={2}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' && !event.shiftKey) {
-                        event.preventDefault();
-                        handleSend(event);
-                      }
-                    }}
+                    className={inputClass}
+                    placeholder="اكتب رسالتك هنا..."
                   />
-                  <button
-                    type="submit"
-                    disabled={!replyText.trim()}
-                    className="px-4 py-2 rounded-lg bg-green-500 text-white font-medium hover:bg-green-600 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                  >
+                  <PrimaryButton type="submit" disabled={!replyText.trim()}>
                     <Send className="h-4 w-4" />
-                  </button>
-                </form>
-              </div>
+                    إرسال
+                  </PrimaryButton>
+                </div>
+              </form>
             </>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-gray-500 text-center">
-              <MessageSquare className="h-16 w-16 mb-4 opacity-30" />
-              <p className="font-medium text-lg">اختر محادثة من القائمة</p>
-              <p className="text-sm mt-2">افتح أي محادثة لعرض الرسائل وإرسال الرد</p>
+            <div className="flex flex-1 flex-col items-center justify-center text-center text-slate-400">
+              <Inbox className="mb-3 h-12 w-12 text-slate-600" />
+              اختر محادثة من القائمة لعرض الرسائل.
             </div>
           )}
-        </div>
+        </DataCard>
       </div>
     </AppLayout>
   );
