@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, CheckCheck, Inbox, MessageSquare, Pause, Phone, Play, Search, Send, User } from 'lucide-react';
+import { Bot, CheckCheck, HelpCircle, Inbox, MessageSquare, Pause, Phone, Play, Search, Send, User, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../api/client';
@@ -91,6 +91,7 @@ export default function InboxPage() {
   const [loadingChat, setLoadingChat] = useState(false);
   const [activeTab, setActiveTab] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showBotGuide, setShowBotGuide] = useState(false);
   const messagesContainerRef = useRef(null);
 
   const fetchPatientsList = async (showLoading = true) => {
@@ -339,10 +340,16 @@ export default function InboxPage() {
       <PageHeader
         title="صندوق الوارد"
         description="متابعة رسائل واتساب وفيسبوك وإنستجرام، مع فصل المحادثات التي تحتاج تدخل بشري أو لم تتم قراءتها."
+        actions={
+          <SecondaryButton type="button" onClick={() => setShowBotGuide(true)}>
+            <HelpCircle className="h-4 w-4" />
+            شرح البوت والمتابعة
+          </SecondaryButton>
+        }
       />
 
       <div className="grid gap-4 lg:h-[calc(100vh-220px)] lg:min-h-[620px] lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)]">
-        <DataCard className="flex min-h-[520px] min-w-0 flex-col overflow-hidden p-0 lg:min-h-0">
+        <DataCard className="flex h-[42vh] min-h-[360px] min-w-0 flex-col overflow-hidden p-0 lg:h-auto lg:min-h-0">
           <div className="border-b border-white/10 p-5">
             <div className="mb-4 flex items-center justify-between">
               <div>
@@ -439,7 +446,7 @@ export default function InboxPage() {
           </div>
         </DataCard>
 
-        <DataCard className="flex min-h-[620px] min-w-0 flex-col overflow-hidden p-0 lg:min-h-0">
+        <DataCard className="flex h-[78vh] min-h-[560px] min-w-0 flex-col overflow-hidden p-0 lg:h-auto lg:min-h-0">
           {selectedPatientData ? (
             <>
               <div className="border-b border-white/10 p-5">
@@ -477,7 +484,7 @@ export default function InboxPage() {
                 </div>
               </div>
 
-              <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-[#080d1f] p-4 sm:p-5">
+              <div ref={messagesContainerRef} className="chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#080d1f] p-4 sm:p-5">
                 {loadingChat ? (
                   <div className="flex h-full items-center justify-center text-slate-400">جاري تحميل المحادثة...</div>
                 ) : groupedMessages.length === 0 ? (
@@ -548,6 +555,83 @@ export default function InboxPage() {
           )}
         </DataCard>
       </div>
+
+      {showBotGuide ? <BotGuideModal onClose={() => setShowBotGuide(false)} /> : null}
     </AppLayout>
+  );
+}
+
+function BotGuideModal({ onClose }) {
+  const items = [
+    {
+      title: 'البوت يعمل',
+      badge: 'أخضر',
+      text: 'معناه أن الرد الآلي شغال على هذه المحادثة. لو المريض كتب رسالة عادية، البوت سيرد حسب إعدادات الذكاء الاصطناعي والحجز.',
+    },
+    {
+      title: 'إيقاف البوت',
+      badge: 'زر إيقاف البوت',
+      text: 'اضغطه لما تحتاج ترد بنفسك أو الحالة محتاجة متابعة بشرية. بعد الضغط، المحادثة تتحول إلى تدخل بشري والبوت لا يرد على هذا المريض.',
+    },
+    {
+      title: 'متابعة بشرية',
+      badge: 'برتقالي',
+      text: 'معناه أن الموظف أو الدكتور ماسك المحادثة. أي رد يدوي من الإنبوكس يوقف البوت تلقائياً لنفس المريض حتى لا يحصل تداخل في الكلام.',
+    },
+    {
+      title: 'إنهاء المتابعة',
+      badge: 'زر إنهاء المتابعة',
+      text: 'بعد ما تخلص مشكلة المريض، اضغط إنهاء المتابعة. هذا يرجع المحادثة لوضع البوت يعمل، ولو المريض كتب لاحقاً سيرد عليه البوت مرة أخرى.',
+    },
+    {
+      title: 'غير مقروء',
+      badge: 'فلتر غير مقروء',
+      text: 'يعرض المحادثات التي فيها رسائل واردة لم يتم فتحها أو قراءتها بعد. استخدمه أول اليوم لمراجعة الرسائل الجديدة بسرعة.',
+    },
+    {
+      title: 'تمت المراجعة',
+      badge: 'فلتر تمت المراجعة',
+      text: 'يعرض الرسائل التي تم التعامل معها أو الرد عليها يدوياً. يساعد الإدارة تعرف مين اتراجع ومين لسه محتاج متابعة.',
+    },
+    {
+      title: 'ملف المريض',
+      badge: 'زر ملف المريض',
+      text: 'يفتح صفحة المريض الكاملة: بياناته، مواعيده، الروشتات، المدفوعات، الاستشارات، الرسائل، والملاحظات.',
+    },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-3xl border border-white/10 bg-[#0b1020] shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
+          <div>
+            <h2 className="text-xl font-black text-white">شرح البوت والمتابعة البشرية</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              استخدم هذا الشرح لمعرفة متى تترك البوت يرد، ومتى توقفه، ومتى ترجع المحادثة للوضع الآلي.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-2xl border border-white/10 bg-white/5 p-2 text-slate-300 hover:text-white" aria-label="إغلاق">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-5">
+          <div className="grid gap-4 md:grid-cols-2">
+            {items.map((item) => (
+              <div key={item.title} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  <h3 className="font-black text-white">{item.title}</h3>
+                  <StatusBadge tone="blue">{item.badge}</StatusBadge>
+                </div>
+                <p className="text-sm leading-7 text-slate-300">{item.text}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-7 text-amber-100">
+            مهم: لا تترك محادثة في وضع متابعة بشرية بعد حل المشكلة. اضغط إنهاء المتابعة حتى يرجع البوت يخدم المريض في الرسائل القادمة.
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
