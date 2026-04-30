@@ -25,6 +25,14 @@ const emptyTemplateForm = {
   active: true,
 };
 
+const extractTemplateVariables = (text = '') => {
+  const matches = [...String(text || '').matchAll(/\{\{(\d+)\}\}/g)];
+  return [...new Set(matches.map((match) => Number(match[1])).filter(Boolean))].sort((first, second) => first - second);
+};
+
+const renderTemplatePreview = (text = '', params = []) =>
+  String(text || '').replace(/\{\{(\d+)\}\}/g, (_, index) => params[Number(index) - 1] || `{{${index}}}`);
+
 export default function CampaignsPage() {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
   const canManageTemplates = currentUser?.role === 'ADMIN';
@@ -34,6 +42,7 @@ export default function CampaignsPage() {
   const [messageText, setMessageText] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const [campaignImageUrl, setCampaignImageUrl] = useState('');
+  const [templateBodyParams, setTemplateBodyParams] = useState([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedPatientIds, setSelectedPatientIds] = useState([]);
   const [allPatients, setAllPatients] = useState([]);
@@ -72,6 +81,8 @@ export default function CampaignsPage() {
   }, []);
 
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
+  const templateVariables = useMemo(() => extractTemplateVariables(selectedTemplate?.bodyText), [selectedTemplate?.bodyText]);
+  const missingTemplateParams = campaignType === 'TEMPLATE' && templateVariables.some((number) => !String(templateBodyParams[number - 1] || '').trim());
   const filteredPatients = allPatients.filter((patient) => {
     const query = patientSearch.trim().toLowerCase();
     if (!query) return true;
@@ -86,7 +97,9 @@ export default function CampaignsPage() {
   const needsImage = campaignType === 'TEMPLATE' && selectedTemplate?.headerType === 'IMAGE';
   const canMoveNext =
     step === 1 ||
-    (step === 2 && (campaignType === 'TEXT' ? messageText.trim() : selectedTemplateId) && (!needsImage || campaignImageUrl || selectedTemplate?.imageUrl)) ||
+    (step === 2 &&
+      (campaignType === 'TEXT' ? messageText.trim() : selectedTemplateId && !missingTemplateParams) &&
+      (!needsImage || campaignImageUrl || selectedTemplate?.imageUrl)) ||
     (step === 3 && selectedPatientIds.length > 0) ||
     step === 4;
 
@@ -122,6 +135,7 @@ export default function CampaignsPage() {
         broadcastType: campaignType,
         messageText: campaignType === 'TEXT' ? messageText : undefined,
         templateId: campaignType === 'TEMPLATE' ? selectedTemplateId : undefined,
+        templateBodyParams: campaignType === 'TEMPLATE' ? templateVariables.map((number) => templateBodyParams[number - 1] || '') : undefined,
         imageUrl: campaignImageUrl || undefined,
         audience: 'SELECTED',
         patientIds: selectedPatientIds,
@@ -129,6 +143,7 @@ export default function CampaignsPage() {
       toast.success(res.data.summary || 'تم إرسال الحملة');
       setMessageText('');
       setSelectedTemplateId('');
+      setTemplateBodyParams([]);
       setCampaignImageUrl('');
       setSelectedPatientIds([]);
       setStep(1);
@@ -219,7 +234,15 @@ export default function CampaignsPage() {
               ) : (
                 <>
                   <Field label="القالب">
-                    <select className={inputClass} value={selectedTemplateId} onChange={(event) => setSelectedTemplateId(event.target.value)} disabled={templatesLoading}>
+                    <select
+                      className={inputClass}
+                      value={selectedTemplateId}
+                      onChange={(event) => {
+                        setSelectedTemplateId(event.target.value);
+                        setTemplateBodyParams([]);
+                      }}
+                      disabled={templatesLoading}
+                    >
                       <option value="">اختر قالباً محفوظاً</option>
                       {templates.filter((template) => template.active).map((template) => (
                         <option key={template.id} value={template.id}>{template.displayName || template.name}</option>
@@ -232,8 +255,36 @@ export default function CampaignsPage() {
                       <StatusBadge tone={selectedTemplate.headerType === 'IMAGE' ? 'blue' : 'slate'}>
                         Header: {selectedTemplate.headerType}
                       </StatusBadge>
-                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">{selectedTemplate.bodyText || 'قالب بدون نص معاينة داخلي.'}</p>
+                      <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">
+                        {renderTemplatePreview(selectedTemplate.bodyText || 'قالب بدون نص معاينة داخلي.', templateBodyParams)}
+                      </p>
+                      <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-100">
+                        نص قالب واتساب نفسه ثابت من Meta. لو عايز تغير جزء داخل الرسالة، لازم يكون القالب في Meta فيه متغيرات مثل {'{{1}}'} و {'{{2}}'}، وتكتب قيمها هنا قبل الإرسال.
+                      </div>
                     </DataCard>
+                  ) : null}
+
+                  {templateVariables.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {templateVariables.map((number) => (
+                        <Field key={number} label={`قيمة المتغير {{${number}}}`}>
+                          <input
+                            className={inputClass}
+                            value={templateBodyParams[number - 1] || ''}
+                            onChange={(event) => {
+                              const next = [...templateBodyParams];
+                              next[number - 1] = event.target.value;
+                              setTemplateBodyParams(next);
+                            }}
+                            placeholder={number === 1 ? '{{name}} أو نص ثابت' : 'اكتب القيمة التي ستظهر مكان المتغير'}
+                          />
+                        </Field>
+                      ))}
+                    </div>
+                  ) : selectedTemplate ? (
+                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-slate-400">
+                      هذا القالب لا يحتوي على متغيرات، لذلك سيصل للمريض بنفس النص المعتمد في Meta بدون إضافة كلام جديد داخله.
+                    </div>
                   ) : null}
 
                   {needsImage ? (
@@ -323,7 +374,7 @@ export default function CampaignsPage() {
             <p className="whitespace-pre-wrap text-sm leading-7 text-white">
               {campaignType === 'TEXT'
                 ? messageText || 'اكتب نص الرسالة لظهور المعاينة.'
-                : selectedTemplate?.bodyText || 'اختر قالباً لظهور المعاينة.'}
+                : renderTemplatePreview(selectedTemplate?.bodyText || 'اختر قالباً لظهور المعاينة.', templateBodyParams)}
             </p>
           </div>
           <div className="mt-4 text-sm text-slate-400">
@@ -424,6 +475,9 @@ function TemplateModal({ form, setForm, saving, onSave, onClose }) {
           <Field label="نص القالب">
             <textarea className={`${inputClass} min-h-[140px] md:col-span-2`} value={form.bodyText || ''} onChange={(event) => setForm({ ...form, bodyText: event.target.value })} />
           </Field>
+          <div className="md:col-span-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-100">
+            مهم: هذا النص للمعاينة داخل النظام فقط. النص الذي يصل فعلياً من واتساب هو النص المعتمد في Meta. لو تريد أجزاء قابلة للتغيير، أنشئ القالب في Meta بمتغيرات مثل {'{{1}}'} ثم املأها وقت الإرسال.
+          </div>
         </div>
         <div className="mt-6 flex justify-end gap-3">
           <SecondaryButton type="button" onClick={onClose}>إلغاء</SecondaryButton>

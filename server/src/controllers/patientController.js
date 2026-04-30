@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const { normalizePhoneDigits } = require('../utils/clinicLinks');
 const { paginate } = require('../utils/helpers');
 
 const parseGroupNames = (value) => {
@@ -7,6 +8,20 @@ const parseGroupNames = (value) => {
     .split(/[\n,،]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+};
+
+const buildPhoneLookupWhere = (phone) => {
+  const raw = String(phone || '').trim();
+  const digits = normalizePhoneDigits(raw);
+  const variants = [...new Set([raw, digits, digits ? `+${digits}` : '', digits.startsWith('0') ? digits.slice(1) : ''].filter(Boolean))];
+  const suffix = digits.length >= 9 ? digits.slice(-10) : null;
+
+  return {
+    OR: [
+      ...variants.flatMap((variant) => [{ phone: variant }, { whatsappId: variant }]),
+      ...(suffix ? [{ phone: { endsWith: suffix } }, { whatsappId: { endsWith: suffix } }] : []),
+    ],
+  };
 };
 
 const getScopedDoctor = async (req) => {
@@ -396,15 +411,20 @@ const saveDiscount = async (req, res, next) => {
       });
 
       for (const phone of phoneNumbers) {
-        const patient = await prisma.patient.upsert({
-          where: { phone },
-          update: {},
-          create: {
-            name: phone,
-            phone,
-            platform: 'WHATSAPP',
-          },
-        });
+        const digits = normalizePhoneDigits(phone);
+        const patient =
+          (await prisma.patient.findFirst({
+            where: buildPhoneLookupWhere(phone),
+            orderBy: { createdAt: 'asc' },
+          })) ||
+          (await prisma.patient.create({
+            data: {
+              name: phone,
+              phone: digits || phone,
+              platform: 'WHATSAPP',
+              ...(digits ? { whatsappId: digits } : {}),
+            },
+          }));
         await prisma.patientGroupMember.create({ data: { patientId: patient.id, groupId: group.id } }).catch(() => null);
       }
 

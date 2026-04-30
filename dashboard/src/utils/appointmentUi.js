@@ -44,4 +44,4 @@ export const formatTime = (value) => {
   }).format(new Date(value));
 };
 
-export const money = (value) => `${Number(value || 0).toLocaleString('ar-EG')} ج.م`;
+export const money = (value) => `${Number(value || 0).toLocaleString('ar-IQ')} د.ع`;

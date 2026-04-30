@@ -55,11 +55,12 @@ const formatServicePriceForPatient = async (service, patientId) => {
   const discount = await getDiscountForService({ patientId, service });
   if (!discount.discountAmount) return formatCurrency(discount.amount);
 
-  const label = discount.rule?.type === 'PERCENT'
+  const discountLabel = discount.rule?.name ? `عرض ${discount.rule.name}` : 'عرض خاص';
+  const valueLabel = discount.rule?.type === 'PERCENT'
     ? `خصم ${Number(discount.rule.value).toLocaleString('ar-EG')}%`
     : `خصم ${formatCurrency(discount.discountAmount)}`;
 
-  return `${formatCurrency(discount.finalAmount)} بعد ${label}`;
+  return `السعر بعد الخصم ${formatCurrency(discount.finalAmount)} بدلاً من ${formatCurrency(discount.amount)} (${discountLabel} - ${valueLabel})`;
 };
 
 const buildServicesInfo = async (patientId = null) => {
@@ -91,6 +92,7 @@ const buildServicePricesReplySuffix = async (patientId = null) => {
       },
       orderBy: { createdAt: 'asc' },
       select: {
+        id: true,
         nameAr: true,
         name: true,
         price: true,
@@ -117,6 +119,7 @@ const buildServicesDirectReply = async (patientId = null) => {
       where: { active: true },
       orderBy: { createdAt: 'asc' },
       select: {
+        id: true,
         nameAr: true,
         name: true,
         description: true,

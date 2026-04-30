@@ -33,7 +33,7 @@ function formatDate(value) {
 }
 
 function discountValue(discount) {
-  return discount.type === 'FIXED' ? `${Number(discount.value || 0).toLocaleString('ar-EG')} ج.م` : `${Number(discount.value || 0).toLocaleString('ar-EG')}%`;
+  return discount.type === 'FIXED' ? `${Number(discount.value || 0).toLocaleString('ar-IQ')} د.ع` : `${Number(discount.value || 0).toLocaleString('ar-IQ')}%`;
 }
 
 export default function SettingsPage() {
