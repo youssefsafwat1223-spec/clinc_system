@@ -230,9 +230,23 @@ const resolve = async (req, res, next) => {
       return res.status(400).json({ error: 'Appointment ID is required' });
     }
 
-    const { appointment } = await getAccessibleAppointmentForPrescription(req, appointmentId);
+    const trimmed = appointmentId.trim();
+
+    // Try bookingRef first (e.g. B-AMM2YT), then fallback to database ID
+    let appointment = await prisma.appointment.findFirst({
+      where: { bookingRef: trimmed },
+      include: { patient: true, doctor: true, service: true },
+    });
+
     if (!appointment) {
-      return res.status(404).json({ error: 'Appointment not found' });
+      appointment = await prisma.appointment.findUnique({
+        where: { id: trimmed },
+        include: { patient: true, doctor: true, service: true },
+      });
+    }
+
+    if (!appointment) {
+      return res.status(404).json({ error: 'لم يتم العثور على حجز بهذا الرقم' });
     }
 
     res.json({ appointment });

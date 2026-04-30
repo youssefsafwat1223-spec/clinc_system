@@ -74,7 +74,7 @@ export default function PrescriptionsPage() {
 
   const resolveAppointment = async () => {
     if (!appointmentId.trim()) {
-      toast.warn('اكتب Appointment ID أولاً');
+      toast.warn('اكتب رقم الحجز أولاً');
       return;
     }
     setLoading(true);
@@ -159,12 +159,12 @@ export default function PrescriptionsPage() {
         <div className="space-y-6">
           <DataCard>
             <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-              <Field label="Appointment ID">
+              <Field label="رقم الحجز (Booking Ref)">
                 <input
                   className={inputClass}
                   value={appointmentId}
                   onChange={(event) => setAppointmentId(event.target.value)}
-                  placeholder="مثال: cm..."
+                  placeholder="مثال: B-AMM2YT"
                   dir="ltr"
                 />
               </Field>
