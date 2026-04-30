@@ -138,7 +138,7 @@ const markAsRead = async (messageId) => {
 
 /**
  * Send an approved Meta Message Template (for broadcasts outside 24h window)
- * @param bodyParams array of strings for variables {{1}}, {{2}}, etc.
+ * @param bodyParams array of strings for variables {{1}}, {{2}}, etc. or objects for named variables { name, text }
  * @param headerMedia optional { type: 'image'|'document'|'video', link, filename? }
  */
 const sendTemplateMessage = async (
@@ -199,7 +199,19 @@ const sendTemplateMessage = async (
   if (bodyParams && bodyParams.length > 0) {
     components.push({
       type: 'body',
-      parameters: bodyParams.map(text => ({ type: 'text', text: String(text) }))
+      parameters: bodyParams.map((param) => {
+        if (param && typeof param === 'object') {
+          const parameterName = param.parameter_name || param.parameterName || param.name;
+          const text = param.text ?? param.value ?? '';
+          return {
+            type: 'text',
+            text: String(text),
+            ...(parameterName ? { parameter_name: String(parameterName) } : {}),
+          };
+        }
+
+        return { type: 'text', text: String(param) };
+      })
     });
   }
 

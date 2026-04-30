@@ -155,6 +155,7 @@ const sendBroadcast = async (req, res, next) => {
       templateId,
       templateName,
       templateBodyParams,
+      templateBodyNamedParams,
       imageUrl,
     } = req.body;
 
@@ -215,10 +216,30 @@ const sendBroadcast = async (req, res, next) => {
       ? templateBodyParams.map((value) => (value === null || value === undefined ? '' : String(value)))
       : [];
 
+    const sanitizedNamedParams = Array.isArray(templateBodyNamedParams)
+      ? templateBodyNamedParams
+          .filter((item) => item?.name)
+          .map((item) => ({
+            name: String(item.name),
+            value: item.value === null || item.value === undefined ? '' : String(item.value),
+          }))
+      : [];
+
     for (const patient of patients) {
       try {
         if (broadcastType === 'TEMPLATE') {
-          const params = sanitizedBodyParams.map((value) => personalizeParam(value, patient));
+          const params = [
+            ...sanitizedBodyParams.map((value) => personalizeParam(value, patient)),
+            ...sanitizedNamedParams.map((item) => ({
+              name: item.name,
+              text: personalizeParam(item.value, patient),
+            })),
+          ];
+
+          if (resolvedTemplateName === 'clinic_offer_text_ar' && params.length === 0) {
+            params.push({ name: 'name', text: patient.name || 'عميلنا' });
+          }
+
           await whatsappService.sendTemplateMessage(
             patient.phone,
             resolvedTemplateName,

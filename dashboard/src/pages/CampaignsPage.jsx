@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Image, Megaphone, Plus, Save, Search, Send, Trash2, Upload } from 'lucide-react';
+import { BookOpen, Image, Megaphone, Plus, Save, Search, Send, Trash2, Upload, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
@@ -26,12 +26,129 @@ const emptyTemplateForm = {
 };
 
 const extractTemplateVariables = (text = '') => {
-  const matches = [...String(text || '').matchAll(/\{\{(\d+)\}\}/g)];
-  return [...new Set(matches.map((match) => Number(match[1])).filter(Boolean))].sort((first, second) => first - second);
+  const matches = [...String(text || '').matchAll(/\{\{([a-zA-Z_][\w]*|\d+)\}\}/g)];
+  const seen = new Set();
+  return matches
+    .map((match) => match[1])
+    .filter((key) => {
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .map((key) => (/^\d+$/.test(key) ? { key, type: 'number', index: Number(key) } : { key, type: 'named', name: key }));
 };
 
-const renderTemplatePreview = (text = '', params = []) =>
-  String(text || '').replace(/\{\{(\d+)\}\}/g, (_, index) => params[Number(index) - 1] || `{{${index}}}`);
+const getParamValue = (params, variable) => {
+  if (!variable) return '';
+  if (params && typeof params === 'object' && !Array.isArray(params) && params[variable.key] !== undefined) return params[variable.key];
+  if (Array.isArray(params) && variable.type === 'number') return params[variable.index - 1];
+  return '';
+};
+
+const autoTemplateVariables = {
+  name: 'اسم كل مريض تلقائياً',
+  phone: 'رقم هاتف كل مريض تلقائياً',
+};
+
+const isAutoTemplateVariable = (variable) => variable.type === 'named' && Boolean(autoTemplateVariables[variable.name]);
+
+const renderTemplatePreview = (text = '', params = [], samplePatient = null) =>
+  String(text || '').replace(/\{\{([a-zA-Z_][\w]*|\d+)\}\}/g, (_, key) => {
+    const variable = /^\d+$/.test(key) ? { key, type: 'number', index: Number(key) } : { key, type: 'named', name: key };
+    const value = getParamValue(params, variable);
+    if (value) return value;
+    if (key === 'name') return samplePatient?.displayName || samplePatient?.name || 'اسم المريض';
+    if (key === 'phone') return samplePatient?.phone || 'رقم الهاتف';
+    return `{{${key}}}`;
+  });
+
+const CLINIC_OFFER_TEXT_BODY = [
+  'مرحباً {{name}}',
+  'يسر عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان تقديم عرض خاص على تنظيف الأسنان.',
+  '',
+  'السعر قبل الخصم: 50000 دينار عراقي',
+  'السعر بعد الخصم: 40000 دينار عراقي',
+  'تفاصيل العرض: العرض متاح لفترة محدودة',
+  '',
+  'للحجز أو معرفة التفاصيل تواصل معنا الآن.',
+].join('\n');
+
+const templateGuideByName = {
+  clinic_offer_text_ar: {
+    title: 'قالب العرض النصي',
+    where: 'يستخدم من صفحة الحملات لإرسال عرض تسويقي نصي للمرضى المختارين.',
+    how: 'النص ثابت من Meta. لو كتبت الخصم داخل Body في Meta مثل خصم 20% على كل الخدمات، سيصل بنفس النص للمريض.',
+    variables: ['{{name}} اسم كل مريض تلقائياً', 'باقي السعر والتفاصيل مكتوبة ثابتة داخل Meta'],
+    body: CLINIC_OFFER_TEXT_BODY,
+  },
+  clinic_offer_image_ar: {
+    title: 'قالب عرض بصورة',
+    where: 'يستخدم من صفحة الحملات عند إرسال عرض يحتوي على صورة.',
+    how: 'اختر القالب ثم ارفع صورة الحملة من نفس الخطوة قبل الإرسال.',
+    variables: ['الصورة تضاف من Header', 'النص ثابت حسب Meta إلا إذا كان القالب يحتوي على متغيرات'],
+  },
+  booking_confirmed_ar_v2: {
+    title: 'تأكيد الحجز',
+    where: 'يرسله النظام تلقائياً عند قبول طلب حجز من صفحة قبول الطلبات والكشف.',
+    how: 'يبلغ المريض برقم الحجز والخدمة والطبيب والتاريخ والوقت.',
+    variables: ['{{1}} رقم الحجز', '{{2}} الخدمة', '{{3}} الطبيب', '{{4}} التاريخ', '{{5}} الوقت'],
+  },
+  booking_cancelled_ar_v2: {
+    title: 'إلغاء الحجز',
+    where: 'يرسله النظام عند إلغاء موعد مؤكد.',
+    how: 'يبلغ المريض أن الحجز اتلغى مع ملخص الموعد.',
+    variables: ['{{1}} رقم الحجز', '{{2}} ملخص الموعد'],
+  },
+  booking_rejected_ar_v2: {
+    title: 'رفض طلب الحجز',
+    where: 'يرسله النظام عند رفض طلب حجز بدون بدائل.',
+    how: 'يشرح للمريض أن الموعد غير متاح ويطلب التواصل لتحديد موعد بديل.',
+    variables: ['{{1}} الخدمة', '{{2}} سبب الرفض'],
+  },
+  booking_rejected_with_alternatives_ar_v2: {
+    title: 'رفض الحجز مع بدائل',
+    where: 'يرسله النظام عند رفض طلب حجز مع اقتراح 3 مواعيد بديلة.',
+    how: 'يعرض البدائل المقترحة داخل الرسالة.',
+    variables: ['{{1}} الخدمة', '{{2}} السبب', '{{3}} البديل الأول', '{{4}} البديل الثاني', '{{5}} البديل الثالث'],
+  },
+  appointment_reminder_ar_v2: {
+    title: 'تذكير الموعد',
+    where: 'يرسله النظام تلقائياً قبل الموعد حسب إعدادات التذكير.',
+    how: 'يذكر المريض بتاريخ ووقت الموعد والطبيب والخدمة.',
+    variables: ['{{1}} اسم المريض', '{{2}} التاريخ', '{{3}} الوقت', '{{4}} الطبيب', '{{5}} الخدمة'],
+  },
+  doctor_reschedule_ar_v1: {
+    title: 'إعادة جدولة الطبيب',
+    where: 'يرسله النظام عند نقل مواعيد طبيب إلى طبيب بديل، خصوصاً خارج نافذة واتساب 24 ساعة.',
+    how: 'يبلغ المريض أن الطبيب تغير فقط وأن وقت الموعد والخدمة كما هما.',
+    variables: ['{{1}} اسم المريض', '{{2}} رقم الحجز', '{{3}} الخدمة', '{{4}} الطبيب الجديد', '{{5}} الطبيب القديم', '{{6}} التاريخ', '{{7}} الوقت'],
+  },
+  clinic_review_ar: {
+    title: 'طلب تقييم الزيارة',
+    where: 'يرسله النظام تلقائياً بعد الموعد بثلاث ساعات تقريباً.',
+    how: 'يطلب من المريض تقييم تجربته بعد الزيارة.',
+    variables: ['{{1}} اسم المريض', '{{2}} اسم الطبيب'],
+  },
+  prescription_ready_ar_v1: {
+    title: 'إشعار الروشتة',
+    where: 'يرسله النظام عند إرسال روشتة للمريض.',
+    how: 'يبلغ المريض أن الروشتة الطبية جاهزة ومرفقة/مرسلة من العيادة.',
+    variables: ['قد يستخدم Header مستند حسب إعداد Meta'],
+  },
+};
+
+const getTemplateGuide = (templateName) => templateGuideByName[templateName] || {
+  title: 'قالب محفوظ',
+  where: 'قالب محفوظ داخل النظام ويستخدم عند اختياره من صفحة الحملات.',
+  how: 'تأكد أن الاسم مطابق تماماً لاسم القالب المعتمد في Meta.',
+  variables: ['لو القالب في Meta يحتوي على متغيرات، اكتبها في Body داخل النظام بنفس صيغة {{1}} و{{2}}'],
+};
+
+const getTemplateBodyPreview = (template) => {
+  if (!template) return '';
+  if (template.name === 'clinic_offer_text_ar') return CLINIC_OFFER_TEXT_BODY;
+  return template.bodyText || '';
+};
 
 export default function CampaignsPage() {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
@@ -51,6 +168,7 @@ export default function CampaignsPage() {
   const [templates, setTemplates] = useState([]);
   const [templatesLoading, setTemplatesLoading] = useState(true);
   const [showTemplateForm, setShowTemplateForm] = useState(false);
+  const [showTemplateGuide, setShowTemplateGuide] = useState(false);
   const [templateForm, setTemplateForm] = useState(emptyTemplateForm);
   const [templateSaving, setTemplateSaving] = useState(false);
 
@@ -81,8 +199,12 @@ export default function CampaignsPage() {
   }, []);
 
   const selectedTemplate = templates.find((template) => template.id === selectedTemplateId);
-  const templateVariables = useMemo(() => extractTemplateVariables(selectedTemplate?.bodyText), [selectedTemplate?.bodyText]);
-  const missingTemplateParams = campaignType === 'TEMPLATE' && templateVariables.some((number) => !String(templateBodyParams[number - 1] || '').trim());
+  const selectedTemplateBody = getTemplateBodyPreview(selectedTemplate);
+  const selectedTemplateGuide = selectedTemplate ? getTemplateGuide(selectedTemplate.name) : null;
+  const templateVariables = useMemo(() => extractTemplateVariables(selectedTemplateBody), [selectedTemplateBody]);
+  const missingTemplateParams =
+    campaignType === 'TEMPLATE' &&
+    templateVariables.some((variable) => !isAutoTemplateVariable(variable) && !String(getParamValue(templateBodyParams, variable) || '').trim());
   const filteredPatients = allPatients.filter((patient) => {
     const query = patientSearch.trim().toLowerCase();
     if (!query) return true;
@@ -135,7 +257,21 @@ export default function CampaignsPage() {
         broadcastType: campaignType,
         messageText: campaignType === 'TEXT' ? messageText : undefined,
         templateId: campaignType === 'TEMPLATE' ? selectedTemplateId : undefined,
-        templateBodyParams: campaignType === 'TEMPLATE' ? templateVariables.map((number) => templateBodyParams[number - 1] || '') : undefined,
+        templateBodyParams:
+          campaignType === 'TEMPLATE'
+            ? templateVariables
+                .filter((variable) => variable.type === 'number')
+                .map((variable) => getParamValue(templateBodyParams, variable) || '')
+            : undefined,
+        templateBodyNamedParams:
+          campaignType === 'TEMPLATE'
+            ? templateVariables
+                .filter((variable) => variable.type === 'named')
+                .map((variable) => ({
+                  name: variable.name,
+                  value: isAutoTemplateVariable(variable) ? `{{${variable.name}}}` : getParamValue(templateBodyParams, variable) || '',
+                }))
+            : undefined,
         imageUrl: campaignImageUrl || undefined,
         audience: 'SELECTED',
         patientIds: selectedPatientIds,
@@ -187,12 +323,20 @@ export default function CampaignsPage() {
       <PageHeader
         title="الحملات"
         description="إرسال رسائل جماعية بخطوات واضحة: نوع الرسالة، القالب أو النص، الجمهور، ثم المراجعة."
-        actions={canManageTemplates ? (
-          <PrimaryButton type="button" onClick={() => setShowTemplateForm(true)}>
-            <Plus className="h-4 w-4" />
-            قالب جديد
-          </PrimaryButton>
-        ) : null}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <SecondaryButton type="button" onClick={() => setShowTemplateGuide(true)}>
+              <BookOpen className="h-4 w-4" />
+              شرح القوالب
+            </SecondaryButton>
+            {canManageTemplates ? (
+              <PrimaryButton type="button" onClick={() => setShowTemplateForm(true)}>
+                <Plus className="h-4 w-4" />
+                قالب جديد
+              </PrimaryButton>
+            ) : null}
+          </div>
+        }
       />
 
       <DataCard className="mb-6">
@@ -256,36 +400,47 @@ export default function CampaignsPage() {
                         Header: {selectedTemplate.headerType}
                       </StatusBadge>
                       <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">
-                        {renderTemplatePreview(selectedTemplate.bodyText || 'قالب بدون نص معاينة داخلي.', templateBodyParams)}
+                        {renderTemplatePreview(selectedTemplateBody || 'قالب بدون نص معاينة داخلي.', templateBodyParams, selectedPatients[0])}
                       </p>
-                      <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-100">
-                        نص قالب واتساب نفسه ثابت من Meta. لو عايز تغير جزء داخل الرسالة، لازم يكون القالب في Meta فيه متغيرات مثل {'{{1}}'} و {'{{2}}'}، وتكتب قيمها هنا قبل الإرسال.
-                      </div>
+                      {selectedTemplateGuide ? (
+                        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-slate-200">
+                          <p className="font-black text-white">{selectedTemplateGuide.title}</p>
+                          <p className="mt-1 text-slate-300">{selectedTemplateGuide.where}</p>
+                          <p className="mt-1 text-slate-400">{selectedTemplateGuide.how}</p>
+                        </div>
+                      ) : null}
+                      {templateVariables.length > 0 ? (
+                        <div className="mt-4 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-3 text-sm leading-6 text-sky-100">
+                          هذا القالب يحتوي على متغيرات. اكتب قيم المتغيرات تحت، وسيتم إرسالها داخل الـ Body مكان {'{{1}}'} و {'{{2}}'}.
+                        </div>
+                      ) : (
+                        <div className="mt-4 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm leading-6 text-emerald-100">
+                          القالب ثابت وجاهز للإرسال كما هو. لو العرض مكتوب داخل Meta مثل "خصم 20% على كل الخدمات"، فسيصل للمريض بهذا النص. تحتاج متغيرات فقط لو تريد تغيير الاسم أو السعر أو الخدمة وقت الإرسال.
+                        </div>
+                      )}
                     </DataCard>
                   ) : null}
 
                   {templateVariables.length > 0 ? (
                     <div className="grid gap-4 md:grid-cols-2">
-                      {templateVariables.map((number) => (
-                        <Field key={number} label={`قيمة المتغير {{${number}}}`}>
-                          <input
-                            className={inputClass}
-                            value={templateBodyParams[number - 1] || ''}
-                            onChange={(event) => {
-                              const next = [...templateBodyParams];
-                              next[number - 1] = event.target.value;
-                              setTemplateBodyParams(next);
-                            }}
-                            placeholder={number === 1 ? '{{name}} أو نص ثابت' : 'اكتب القيمة التي ستظهر مكان المتغير'}
-                          />
+                      {templateVariables.map((variable) => (
+                        <Field key={variable.key} label={`قيمة المتغير {{${variable.key}}}`}>
+                          {isAutoTemplateVariable(variable) ? (
+                            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-sm font-bold text-emerald-100">
+                              {autoTemplateVariables[variable.name]}
+                            </div>
+                          ) : (
+                            <input
+                              className={inputClass}
+                              value={getParamValue(templateBodyParams, variable) || ''}
+                              onChange={(event) => setTemplateBodyParams((current) => ({ ...(current || {}), [variable.key]: event.target.value }))}
+                              placeholder={variable.key === 'name' ? '{{name}} أو نص ثابت' : 'اكتب القيمة التي ستظهر مكان المتغير'}
+                            />
+                          )}
                         </Field>
                       ))}
                     </div>
-                  ) : selectedTemplate ? (
-                    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-slate-400">
-                      هذا القالب لا يحتوي على متغيرات، لذلك سيصل للمريض بنفس النص المعتمد في Meta بدون إضافة كلام جديد داخله.
-                    </div>
-                  ) : null}
+                  ) : selectedTemplate ? null : null}
 
                   {needsImage ? (
                     <Field label="صورة القالب لهذه الحملة">
@@ -374,7 +529,7 @@ export default function CampaignsPage() {
             <p className="whitespace-pre-wrap text-sm leading-7 text-white">
               {campaignType === 'TEXT'
                 ? messageText || 'اكتب نص الرسالة لظهور المعاينة.'
-                : renderTemplatePreview(selectedTemplate?.bodyText || 'اختر قالباً لظهور المعاينة.', templateBodyParams)}
+                : renderTemplatePreview(selectedTemplateBody || 'اختر قالباً لظهور المعاينة.', templateBodyParams, selectedPatients[0])}
             </p>
           </div>
           <div className="mt-4 text-sm text-slate-400">
@@ -402,7 +557,7 @@ export default function CampaignsPage() {
                       <Trash2 className="h-4 w-4" />
                     </button>
                   </div>
-                  <p className="mt-3 line-clamp-3 text-sm text-slate-300">{template.bodyText}</p>
+                  <p className="mt-3 line-clamp-3 text-sm text-slate-300">{getTemplateBodyPreview(template)}</p>
                   <SecondaryButton type="button" onClick={() => { setTemplateForm(template); setShowTemplateForm(true); }} className="mt-3 w-full">تعديل</SecondaryButton>
                 </div>
               ))}
@@ -419,6 +574,10 @@ export default function CampaignsPage() {
           onSave={saveTemplate}
           onClose={() => { setShowTemplateForm(false); setTemplateForm(emptyTemplateForm); }}
         />
+      ) : null}
+
+      {showTemplateGuide ? (
+        <TemplateGuideModal templates={templates} onClose={() => setShowTemplateGuide(false)} />
       ) : null}
     </AppLayout>
   );
@@ -485,6 +644,95 @@ function TemplateModal({ form, setForm, saving, onSave, onClose }) {
             <Save className="h-4 w-4" />
             حفظ
           </PrimaryButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TemplateGuideModal({ templates, onClose }) {
+  const savedNames = new Set(templates.map((template) => template.name));
+  const savedExtraTemplates = templates
+    .filter((template) => !templateGuideByName[template.name])
+    .map((template) => ({
+      name: template.name,
+      title: template.displayName || template.name,
+      where: 'قالب محفوظ داخل النظام ويظهر في صفحة الحملات عند اختياره.',
+      how: 'تأكد أن اسم القالب في النظام مطابق لاسمه المعتمد في Meta، وأن المتغيرات مكتوبة بنفس الترتيب.',
+      variables: extractTemplateVariables(template.bodyText).map((variable) =>
+        variable.type === 'named' ? `{{${variable.name}}} متغير باسم ${variable.name}` : `{{${variable.index}}} متغير رقم ${variable.index}`
+      ),
+      body: template.bodyText,
+      saved: true,
+    }));
+
+  const guideItems = [
+    ...Object.entries(templateGuideByName).map(([name, guide]) => ({
+      name,
+      ...guide,
+      saved: savedNames.has(name),
+    })),
+    ...savedExtraTemplates,
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-5xl flex-col rounded-3xl border border-white/10 bg-[#0b1020] shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
+          <div>
+            <h2 className="text-xl font-black text-white">شرح قوالب واتساب داخل النظام</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              هذه القوالب لازم تكون معتمدة في Meta بنفس الاسم. النظام يختار القالب تلقائياً في التشغيل، أو تختاره أنت من صفحة الحملات.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-2xl border border-white/10 bg-white/5 p-2 text-slate-300 hover:text-white" aria-label="إغلاق">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto p-5">
+          <div className="mb-5 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4 text-sm leading-7 text-sky-100">
+            <p className="font-black text-white">القالب المطلوب الآن: clinic_offer_text_ar</p>
+            <p className="mt-1">استخدمه للعروض النصية العامة. المتغير {'{{name}}'} سيتحول تلقائياً إلى اسم كل مريض عند الإرسال.</p>
+            <pre className="mt-3 whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/20 p-3 text-right font-sans text-slate-100">{CLINIC_OFFER_TEXT_BODY}</pre>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {guideItems.map((item) => (
+              <div key={item.name} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-black text-white">{item.title}</h3>
+                    <p className="mt-1 text-xs text-slate-500" dir="ltr">{item.name}</p>
+                  </div>
+                  <StatusBadge tone={item.saved ? 'green' : 'slate'}>
+                    {item.saved ? 'محفوظ' : 'نظامي'}
+                  </StatusBadge>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-slate-300">{item.where}</p>
+                <p className="mt-2 text-sm leading-6 text-slate-400">{item.how}</p>
+
+                {item.variables?.length ? (
+                  <div className="mt-3 rounded-2xl border border-white/10 bg-black/15 p-3">
+                    <p className="mb-2 text-xs font-black text-slate-300">المتغيرات:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {item.variables.map((variable) => (
+                        <span key={variable} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">
+                          {variable}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {item.body ? (
+                  <pre className="mt-3 max-h-36 overflow-y-auto whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/20 p-3 text-right font-sans text-xs leading-6 text-slate-300">
+                    {item.body}
+                  </pre>
+                ) : null}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
