@@ -341,8 +341,8 @@ export default function InboxPage() {
         description="متابعة رسائل واتساب وفيسبوك وإنستجرام، مع فصل المحادثات التي تحتاج تدخل بشري أو لم تتم قراءتها."
       />
 
-      <div className="grid min-h-[720px] gap-6 xl:grid-cols-[380px_1fr]">
-        <DataCard className="flex min-h-[680px] flex-col p-0">
+      <div className="grid gap-4 lg:h-[calc(100vh-220px)] lg:min-h-[620px] lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)]">
+        <DataCard className="flex min-h-[520px] min-w-0 flex-col overflow-hidden p-0 lg:min-h-0">
           <div className="border-b border-white/10 p-5">
             <div className="mb-4 flex items-center justify-between">
               <div>
@@ -362,13 +362,13 @@ export default function InboxPage() {
               />
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-4 flex gap-2 overflow-x-auto pb-1">
               {platformTabs.map((tab) => (
                 <button
                   key={tab}
                   type="button"
                   onClick={() => setActiveTab(tab)}
-                  className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                  className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${
                     activeTab === tab
                       ? 'bg-sky-500 text-white'
                       : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
@@ -380,7 +380,7 @@ export default function InboxPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3">
+          <div className="min-h-0 flex-1 overflow-y-auto p-3">
             {loadingList ? (
               <div className="p-8 text-center text-sm text-slate-400">جاري تحميل المحادثات...</div>
             ) : filteredPatients.length === 0 ? (
@@ -439,7 +439,7 @@ export default function InboxPage() {
           </div>
         </DataCard>
 
-        <DataCard className="flex min-h-[680px] flex-col p-0">
+        <DataCard className="flex min-h-[620px] min-w-0 flex-col overflow-hidden p-0 lg:min-h-0">
           {selectedPatientData ? (
             <>
               <div className="border-b border-white/10 p-5">
@@ -477,7 +477,7 @@ export default function InboxPage() {
                 </div>
               </div>
 
-              <div ref={messagesContainerRef} className="flex-1 overflow-y-auto bg-[#080d1f] p-5">
+              <div ref={messagesContainerRef} className="min-h-0 flex-1 overflow-y-auto bg-[#080d1f] p-4 sm:p-5">
                 {loadingChat ? (
                   <div className="flex h-full items-center justify-center text-slate-400">جاري تحميل المحادثة...</div>
                 ) : groupedMessages.length === 0 ? (
@@ -498,7 +498,7 @@ export default function InboxPage() {
                           return (
                             <div key={message.id} className={`flex ${outbound ? 'justify-start' : 'justify-end'}`}>
                               <div
-                                className={`max-w-[78%] rounded-2xl px-4 py-3 shadow-lg ${
+                                className={`max-w-[88%] rounded-2xl px-4 py-3 shadow-lg sm:max-w-[78%] ${
                                   outbound
                                     ? 'rounded-tl-sm bg-sky-500 text-white shadow-sky-500/10'
                                     : 'rounded-tr-sm border border-white/10 bg-white/10 text-slate-100'
@@ -526,14 +526,14 @@ export default function InboxPage() {
               </div>
 
               <form onSubmit={handleSend} className="border-t border-white/10 p-4">
-                <div className="flex gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row">
                   <input
                     value={replyText}
                     onChange={(event) => setReplyText(event.target.value)}
                     className={inputClass}
                     placeholder="اكتب رسالتك هنا..."
                   />
-                  <PrimaryButton type="submit" disabled={!replyText.trim()}>
+                  <PrimaryButton type="submit" disabled={!replyText.trim()} className="w-full sm:w-auto">
                     <Send className="h-4 w-4" />
                     إرسال
                   </PrimaryButton>
