@@ -156,6 +156,7 @@ export default function PaymentsPage() {
             const appointment = payment.appointment || {};
             const remaining = Math.max(0, Number(payment.finalAmount || 0) - Number(payment.paidAmount || 0));
             const paymentKey = payment.id || payment.appointmentId;
+            const examNumber = appointment.bookingRef || payment.appointmentId || appointment.id || '-';
 
             return (
               <DataCard key={paymentKey}>
@@ -163,7 +164,12 @@ export default function PaymentsPage() {
                   <div>
                     <div className="mb-2 flex flex-wrap items-center gap-2">
                       <StatusBadge tone={statusTone[payment.status]}>{statusLabels[payment.status] || payment.status}</StatusBadge>
-                      <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-mono text-slate-300" dir="ltr">{payment.appointmentId}</span>
+                      <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-bold text-sky-200">
+                        رقم الكشف: <span className="font-mono" dir="ltr">{examNumber}</span>
+                      </span>
+                      {payment.appointmentId && payment.appointmentId !== examNumber ? (
+                        <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-mono text-slate-300" dir="ltr">{payment.appointmentId}</span>
+                      ) : null}
                     </div>
                     <h2 className="text-lg font-bold text-white">{appointment.patient?.displayName || appointment.patient?.name || '-'}</h2>
                     <p className="text-sm text-slate-400">{appointment.patient?.phone || '-'} - {formatDateTime(appointment.scheduledTime)}</p>
