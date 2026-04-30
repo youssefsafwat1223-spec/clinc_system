@@ -415,12 +415,12 @@ export default function InboxPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <h3 className="truncate text-sm font-black text-white">{patient.displayName || patient.name || 'بدون اسم'}</h3>
+                              <h3 className="text-sm font-black leading-6 text-white sm:truncate">{patient.displayName || patient.name || 'بدون اسم'}</h3>
                               <p className="mt-0.5 text-xs text-slate-500" dir="ltr">{patient.phone || '-'}</p>
                             </div>
                             <span className="shrink-0 text-[11px] text-slate-500">{formatRelative(patient.lastMessageTime)}</span>
                           </div>
-                          <p className="mt-2 truncate text-xs text-slate-400">{patient.lastMessage || 'لا توجد رسالة'}</p>
+                          <p className="mt-2 text-xs leading-5 text-slate-400 sm:truncate">{patient.lastMessage || 'لا توجد رسالة'}</p>
                           <div className="mt-3 flex flex-wrap items-center gap-2">
                             <ChatStateBadge chatState={patient.chatState} />
                             <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300">
@@ -458,17 +458,17 @@ export default function InboxPage() {
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    <SecondaryButton type="button" onClick={() => navigate(`/patients/${selectedPatientData.id}`)}>
+                  <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+                    <SecondaryButton type="button" onClick={() => navigate(`/patients/${selectedPatientData.id}`)} className="w-full sm:w-auto">
                       ملف المريض
                     </SecondaryButton>
                     {selectedPatientData.chatState === 'HUMAN' ? (
-                      <PrimaryButton type="button" onClick={handleEndConversation}>
+                      <PrimaryButton type="button" onClick={handleEndConversation} className="w-full sm:w-auto">
                         <Play className="h-4 w-4" />
                         إنهاء المتابعة
                       </PrimaryButton>
                     ) : (
-                      <SecondaryButton type="button" onClick={handlePauseBot}>
+                      <SecondaryButton type="button" onClick={handlePauseBot} className="w-full sm:w-auto">
                         <Pause className="h-4 w-4" />
                         إيقاف البوت
                       </SecondaryButton>
