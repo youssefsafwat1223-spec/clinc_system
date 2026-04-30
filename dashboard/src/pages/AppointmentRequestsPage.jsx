@@ -4,8 +4,53 @@ import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 import AppointmentCard from '../components/appointments/AppointmentCard';
-import { DataCard, Field, PageHeader, PrimaryButton, StatCard, inputClass } from '../components/ui';
-import { appointmentStatusLabels } from '../utils/appointmentUi';
+import { DataCard, Field, PageHeader, PrimaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import { appointmentStatusLabels, appointmentStatusTone } from '../utils/appointmentUi';
+
+const statusGuide = [
+  {
+    status: 'PENDING',
+    title: 'قيد الانتظار',
+    description: 'طلب حجز وصل من واتساب أو من النظام ولم يتم قبوله بعد. من هنا يتم قبوله أو رفضه.',
+    action: 'لو قبلته يتحول إلى مؤكد، ولو رفضته يتحول إلى مرفوض ويتم إبلاغ المريض.',
+  },
+  {
+    status: 'CONFIRMED',
+    title: 'مؤكد',
+    description: 'موعد تم قبوله وتثبيته في جدول الطبيب.',
+    action: 'بعد حضور المريض والكشف عليه اضغط تم الكشف، أو ألغ الموعد لو حصل ظرف.',
+  },
+  {
+    status: 'COMPLETED',
+    title: 'تم الكشف',
+    description: 'المريض حضر وتم الكشف عليه فعلاً.',
+    action: 'هذه الحالة لا تتحول تلقائياً. لازم موظف أو طبيب يضغط تم الكشف.',
+  },
+  {
+    status: 'CANCELLED',
+    title: 'ملغي',
+    description: 'موعد مؤكد تم إلغاؤه بعد التثبيت.',
+    action: 'يفضل كتابة سبب الإلغاء عشان يظهر في السجل ويتم إبلاغ المريض.',
+  },
+  {
+    status: 'REJECTED',
+    title: 'مرفوض',
+    description: 'طلب حجز لم يتم قبوله من الأساس.',
+    action: 'استخدمها لو الموعد أو الخدمة غير مناسبين أو لا يوجد توفر.',
+  },
+  {
+    status: 'EXPIRED',
+    title: 'منتهي',
+    description: 'طلب حجز ظل قيد الانتظار ولم يتم تأكيده قبل انتهاء مدة القفل.',
+    action: 'يتحول تلقائياً بواسطة السيرفر لطلبات PENDING فقط، وليس للمواعيد المؤكدة.',
+  },
+  {
+    status: 'BLOCKED',
+    title: 'مغلق',
+    description: 'وقت مغلق في جدول الطبيب وليس موعد مريض.',
+    action: 'يستخدم لحجب وقت من الجدول حتى لا يتم الحجز فيه.',
+  },
+];
 
 export default function AppointmentRequestsPage() {
   const [appointments, setAppointments] = useState([]);
@@ -93,9 +138,30 @@ export default function AppointmentRequestsPage() {
       </div>
 
       <DataCard className="mb-6">
+        <div className="mb-4">
+          <h2 className="text-lg font-black text-white">شرح حالات الطلبات والمواعيد</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            هذه الصفحة مخصصة لتشغيل اليوم: قبول طلبات الحجز، رفضها، إلغاء المواعيد المؤكدة، وتسجيل أن الكشف تم بعد حضور المريض.
+          </p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {statusGuide.map((item) => (
+            <div key={item.status} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h3 className="font-black text-white">{item.title}</h3>
+                <StatusBadge tone={appointmentStatusTone[item.status]}>{appointmentStatusLabels[item.status]}</StatusBadge>
+              </div>
+              <p className="text-sm leading-6 text-slate-300">{item.description}</p>
+              <p className="mt-2 text-xs leading-6 text-slate-500">{item.action}</p>
+            </div>
+          ))}
+        </div>
+      </DataCard>
+
+      <DataCard className="mb-6">
         <Field label="عرض حسب الحالة">
           <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}>
-            {['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'ALL'].map((item) => (
+            {['PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'EXPIRED', 'BLOCKED', 'ALL'].map((item) => (
               <option key={item} value={item}>{appointmentStatusLabels[item]}</option>
             ))}
           </select>

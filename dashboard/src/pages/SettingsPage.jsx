@@ -20,6 +20,7 @@ const emptyDiscountForm = {
   name: '',
   type: 'PERCENT',
   value: '',
+  targetMode: 'ALL',
   serviceId: '',
   startsAt: '',
   endsAt: '',
@@ -153,10 +154,13 @@ export default function SettingsPage() {
         ...discountForm,
         value: Number(discountForm.value),
         serviceName: service?.nameAr || service?.name || null,
-        phoneNumbers: discountForm.phoneNumbers
-          .split(/[\n,،]+/)
-          .map((item) => item.trim())
-          .filter(Boolean),
+        phoneNumbers:
+          discountForm.targetMode === 'ALL'
+            ? []
+            : discountForm.phoneNumbers
+                .split(/[\n,،]+/)
+                .map((item) => item.trim())
+                .filter(Boolean),
       });
       setDiscounts((current) => [res.data.discount, ...current]);
       setDiscountForm(emptyDiscountForm);
@@ -341,10 +345,13 @@ export default function SettingsPage() {
       {activeTab === 'discounts' ? (
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <DataCard>
-            <h2 className="mb-2 text-lg font-black text-white">إضافة خصم لمجموعة أرقام</h2>
+            <h2 className="mb-2 text-lg font-black text-white">إضافة خصم</h2>
             <p className="mb-5 text-sm leading-6 text-slate-400">
-              اكتب أرقام المرضى، وسيتم تكوين مجموعة لهم. عند الحجز لاحقاً يظهر الخصم في المدفوعات وردود الأسعار على واتساب.
+              اختر كل المرضى أو أرقام محددة. عند الحجز لاحقاً يظهر الخصم في المدفوعات وردود الأسعار على واتساب.
             </p>
+            <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-7 text-amber-100">
+              لو هتعمل خصم عام جديد على نفس الخدمة، احذف الخصم القديم الأول من قائمة الخصومات الحالية حتى لا تتداخل الخصومات. النظام يختار أعلى خصم مناسب، لكن حذف القديم أوضح للإدارة والحسابات.
+            </div>
             <div className="space-y-4">
               <Field label="اسم الخصم">
                 <input className={inputClass} value={discountForm.name} onChange={(event) => setDiscountForm((current) => ({ ...current, name: event.target.value }))} />
@@ -368,6 +375,12 @@ export default function SettingsPage() {
                   ))}
                 </select>
               </Field>
+              <Field label="المستفيدين من الخصم">
+                <select className={inputClass} value={discountForm.targetMode} onChange={(event) => setDiscountForm((current) => ({ ...current, targetMode: event.target.value }))}>
+                  <option value="ALL">كل المرضى الحاليين والجدد</option>
+                  <option value="PHONES">أرقام محددة فقط</option>
+                </select>
+              </Field>
               <div className="grid gap-4 md:grid-cols-2">
                 <Field label="يبدأ من">
                   <input className={inputClass} type="date" value={discountForm.startsAt} onChange={(event) => setDiscountForm((current) => ({ ...current, startsAt: event.target.value }))} />
@@ -376,15 +389,21 @@ export default function SettingsPage() {
                   <input className={inputClass} type="date" value={discountForm.endsAt} onChange={(event) => setDiscountForm((current) => ({ ...current, endsAt: event.target.value }))} />
                 </Field>
               </div>
-              <Field label="أرقام المرضى">
-                <textarea
-                  className={`${inputClass} min-h-32`}
-                  value={discountForm.phoneNumbers}
-                  onChange={(event) => setDiscountForm((current) => ({ ...current, phoneNumbers: event.target.value }))}
-                  placeholder="رقم في كل سطر أو افصل بفاصلة"
-                  dir="ltr"
-                />
-              </Field>
+              {discountForm.targetMode === 'PHONES' ? (
+                <Field label="أرقام المرضى">
+                  <textarea
+                    className={`${inputClass} min-h-32`}
+                    value={discountForm.phoneNumbers}
+                    onChange={(event) => setDiscountForm((current) => ({ ...current, phoneNumbers: event.target.value }))}
+                    placeholder="رقم في كل سطر أو افصل بفاصلة"
+                    dir="ltr"
+                  />
+                </Field>
+              ) : (
+                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100">
+                  اختيار كل المرضى يعني أن الخصم سيطبق على أي مريض موجود حالياً، وأي مريض جديد يتكلم على واتساب أو يتم إضافته لاحقاً.
+                </div>
+              )}
               <label className="flex items-center gap-2 text-sm font-bold text-slate-300">
                 <input
                   type="checkbox"

@@ -116,9 +116,10 @@ const buildServiceSelection = (to, services, doctorNames = '') => ({
         {
           title: 'الخدمات المتاحة',
           rows: services.map((s) => {
-            let desc = s.price ? formatCurrency(s.price) : '';
+            let desc = s.whatsappPriceDescription || (s.price ? formatCurrency(s.price) : '');
             if (doctorNames) {
-              desc = desc ? `${desc} - د. ${doctorNames}` : `د. ${doctorNames}`;
+              const doctorDesc = `د. ${doctorNames}`;
+              desc = desc ? `${desc} - ${doctorDesc}` : doctorDesc;
             }
             return {
               id: `service_${s.id}`,

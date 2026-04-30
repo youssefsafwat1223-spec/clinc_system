@@ -8,6 +8,7 @@ const messengerService = require('../services/messengerService');
 const instagramService = require('../services/instagramService');
 const openaiService = require('../services/openaiService');
 const appointmentService = require('../services/appointmentService');
+const { getDiscountForService } = require('../services/discountService');
 const {
   buildWelcomeMessage,
   buildServiceSelection,
@@ -21,7 +22,7 @@ const {
   buildAppointmentOptions,
   buildCancelConfirmation,
 } = require('../utils/whatsappButtons');
-const { generateTimeSlots, formatDateAr, formatTimeAr } = require('../utils/helpers');
+const { generateTimeSlots, formatDateAr, formatTimeAr, formatCurrency } = require('../utils/helpers');
 
 // In-memory session store for booking flow (per phone number)
 const bookingSessions = new Map();
@@ -56,6 +57,21 @@ const setBookingSession = (key, data) => {
 const clearBookingSession = (key) => {
   bookingSessions.delete(key);
 };
+
+const attachServiceDiscounts = async (services, patientId) =>
+  Promise.all(
+    services.map(async (service) => {
+      const discount = await getDiscountForService({ patientId, service });
+      if (!discount.discountAmount) {
+        return service;
+      }
+
+      return {
+        ...service,
+        whatsappPriceDescription: `بعد الخصم ${formatCurrency(discount.finalAmount)} بدل ${formatCurrency(discount.amount)}`,
+      };
+    })
+  );
 
 const hasProcessedWhatsAppMessage = (messageId) => {
   if (!messageId) {
@@ -679,11 +695,12 @@ const handleWhatsAppMessage = async (message, contact) => {
 
       // Start standard booking flow
       const services = await prisma.service.findMany({ where: { active: true } });
+      const pricedServices = await attachServiceDiscounts(services, patient.id);
       const doctors = await prisma.doctor.findMany({ where: { active: true }, select: { name: true } });
       const doctorNames = doctors.map(d => d.name).join(' و ');
 
       return await whatsappService.sendInteractiveMessage(
-        buildServiceSelection(from, services, doctorNames)
+        buildServiceSelection(from, pricedServices, doctorNames)
       );
     }
 
@@ -891,9 +908,11 @@ const startBookingFlow = async (from, patient) => {
   const doctors = await prisma.doctor.findMany({ where: { active: true }, select: { name: true } });
   const doctorNames = doctors.map((doctor) => doctor.name).join(' و ');
 
+  const pricedServices = await attachServiceDiscounts(services, patient.id);
+
   setBookingSession(from, { step: 'select_service', patientId: patient.id });
 
-  await whatsappService.sendInteractiveMessage(buildServiceSelection(from, services, doctorNames));
+  await whatsappService.sendInteractiveMessage(buildServiceSelection(from, pricedServices, doctorNames));
 };
 
 const handleServiceSelectionLegacy = async (from, patient, serviceId) => {
