@@ -84,6 +84,7 @@ const list = async (req, res, next) => {
     if (search) {
       filters.push({
         OR: [
+          { bookingRef: { contains: search, mode: 'insensitive' } },
           { id: { contains: search, mode: 'insensitive' } },
           { patient: { name: { contains: search, mode: 'insensitive' } } },
           { patient: { phone: { contains: search } } },

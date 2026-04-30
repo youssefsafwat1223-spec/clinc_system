@@ -129,7 +129,7 @@ export default function PaymentsPage() {
       <DataCard className="mb-6">
         <div className="grid gap-4 lg:grid-cols-[1fr_220px_auto]">
           <Field label="بحث">
-            <input className={inputClass} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Appointment ID أو اسم أو رقم المريض" />
+            <input className={inputClass} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="رقم الكشف أو اسم أو رقم المريض" />
           </Field>
           <Field label="حالة الدفع">
             <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}>
@@ -167,9 +167,6 @@ export default function PaymentsPage() {
                       <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-bold text-sky-200">
                         رقم الكشف: <span className="font-mono" dir="ltr">{examNumber}</span>
                       </span>
-                      {payment.appointmentId && payment.appointmentId !== examNumber ? (
-                        <span className="rounded-full bg-white/5 px-3 py-1 text-xs font-mono text-slate-300" dir="ltr">{payment.appointmentId}</span>
-                      ) : null}
                     </div>
                     <h2 className="text-lg font-bold text-white">{appointment.patient?.displayName || appointment.patient?.name || '-'}</h2>
                     <p className="text-sm text-slate-400">{appointment.patient?.phone || '-'} - {formatDateTime(appointment.scheduledTime)}</p>
@@ -206,7 +203,9 @@ export default function PaymentsPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
           <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#0b1020] p-6 shadow-2xl">
             <h2 className="text-xl font-black text-white">تعديل الدفع</h2>
-            <p className="mt-1 text-sm text-slate-400">{editing.appointment?.patient?.name} - {editing.appointmentId}</p>
+            <p className="mt-1 text-sm text-slate-400">
+              {editing.appointment?.patient?.name} - رقم الكشف: <span dir="ltr">{editing.appointment?.bookingRef || editing.appointmentId}</span>
+            </p>
             <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm leading-6 text-amber-100">
               الخصم يقلل إجمالي الفاتورة، أما المبلغ المدفوع فهو الذي يحدد حالة الدفع: غير مدفوع، جزئي، أو مدفوع بالكامل.
             </div>
