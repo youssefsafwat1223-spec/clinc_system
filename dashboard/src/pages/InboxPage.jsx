@@ -6,7 +6,7 @@ import api from '../api/client';
 import AppLayout from '../components/Layout';
 import { DataCard, PageHeader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
 
-const platformTabs = ['ALL', 'HUMAN', 'UNREAD', 'REVIEWED', 'WHATSAPP', 'FACEBOOK'];
+const platformTabs = ['ALL', 'HUMAN', 'UNREAD', 'REVIEWED', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
 
 const platformLabels = {
   ALL: 'الكل',
@@ -15,6 +15,7 @@ const platformLabels = {
   REVIEWED: 'تمت المراجعة',
   WHATSAPP: 'واتساب',
   FACEBOOK: 'فيسبوك',
+  INSTAGRAM: 'إنستجرام',
 };
 
 const chatStateLabels = {
@@ -25,6 +26,7 @@ const chatStateLabels = {
 function PlatformIcon({ platform, className = 'h-4 w-4' }) {
   if (platform === 'WHATSAPP') return <Phone className={`${className} text-emerald-300`} />;
   if (platform === 'FACEBOOK') return <MessageSquare className={`${className} text-sky-300`} />;
+  if (platform === 'INSTAGRAM') return <MessageSquare className={`${className} text-pink-400`} />;
   return <MessageSquare className={`${className} text-slate-400`} />;
 }
 
@@ -142,7 +144,6 @@ export default function InboxPage() {
       const uniquePatientsMap = new Map();
 
       (res.data.messages || [])
-        .filter((message) => (message.platform || message.patient?.platform) !== 'INSTAGRAM')
         .forEach((message) => {
         const existing = uniquePatientsMap.get(message.patientId);
         const patient = message.patient || {};
