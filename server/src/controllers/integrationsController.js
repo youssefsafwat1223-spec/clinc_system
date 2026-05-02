@@ -33,9 +33,10 @@ const PLATFORM_MAP = {
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 const normalizePlatform = (value) => PLATFORM_MAP[String(value || '').trim().toLowerCase()] || 'FACEBOOK';
+const isTemplatePlaceholder = (value) => /^\{\{[^}]+\}\}$/.test(String(value || '').trim());
 const pickFirstString = (...values) => {
   for (const value of values) {
-    if (typeof value === 'string' && value.trim()) {
+    if (typeof value === 'string' && value.trim() && !isTemplatePlaceholder(value)) {
       return value.trim();
     }
   }
@@ -110,7 +111,7 @@ const isPlaceholderName = (value) => {
     return true;
   }
 
-  return /^\{\{[^}]+\}\}$/.test(normalized) || normalized.toLowerCase() === 'full name';
+  return isTemplatePlaceholder(normalized) || normalized.toLowerCase() === 'full name';
 };
 
 const findOrCreateSocialPatient = async ({ platform, senderId, fallbackName }) => {

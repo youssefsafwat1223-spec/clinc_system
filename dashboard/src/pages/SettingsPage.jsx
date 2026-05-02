@@ -28,6 +28,19 @@ const emptyDiscountForm = {
   active: true,
 };
 
+const discountPatientPeriods = [
+  { value: '', label: 'كل المرضى' },
+  { value: 'last7', label: 'مرضى آخر أسبوع' },
+  { value: 'last30', label: 'مرضى آخر شهر' },
+  { value: 'thisMonth', label: 'مرضى هذا الشهر' },
+];
+
+const discountPatientSortOptions = [
+  { value: 'createdAt', label: 'الأحدث إضافة' },
+  { value: 'mostBooked', label: 'الأكثر حجزاً' },
+  { value: 'leastBooked', label: 'الأقل حجزاً' },
+];
+
 function formatDate(value) {
   if (!value) return 'بدون تاريخ';
   return new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium' }).format(new Date(value));
@@ -43,6 +56,10 @@ export default function SettingsPage() {
   const [contacts, setContacts] = useState([]);
   const [discounts, setDiscounts] = useState([]);
   const [services, setServices] = useState([]);
+  const [discountPatients, setDiscountPatients] = useState([]);
+  const [discountPatientSearch, setDiscountPatientSearch] = useState('');
+  const [discountPatientPeriod, setDiscountPatientPeriod] = useState('');
+  const [discountPatientSort, setDiscountPatientSort] = useState('createdAt');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [contactForm, setContactForm] = useState(emptyContactForm);
@@ -63,10 +80,30 @@ export default function SettingsPage() {
       setContacts(contactsRes.data.contacts || []);
       setDiscounts(discountsRes.data.discounts || []);
       setServices(servicesRes.data.services || []);
+      await loadDiscountPatients();
     } catch (error) {
       toast.error('فشل تحميل الإعدادات');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadDiscountPatients = async (overrides = {}) => {
+    const search = overrides.search ?? discountPatientSearch;
+    const period = overrides.period ?? discountPatientPeriod;
+    const sortBy = overrides.sortBy ?? discountPatientSort;
+    try {
+      const res = await api.get('/patients', {
+        params: {
+          limit: 500,
+          search: search || undefined,
+          period: period || undefined,
+          sortBy: sortBy || undefined,
+        },
+      });
+      setDiscountPatients((res.data.patients || []).filter((patient) => patient.platform === 'WHATSAPP' && patient.phone));
+    } catch (error) {
+      toast.error('فشل تحميل المرضى لاختيار الخصم');
     }
   };
 
@@ -149,6 +186,11 @@ export default function SettingsPage() {
     }
 
     const service = services.find((item) => item.id === discountForm.serviceId);
+    const filteredPhones = discountPatients.map((patient) => patient.phone).filter(Boolean);
+    if (discountForm.targetMode === 'FILTERED' && filteredPhones.length === 0) {
+      toast.warn('لا يوجد مرضى مطابقين للفلاتر الحالية');
+      return;
+    }
     try {
       const res = await api.post('/discounts', {
         ...discountForm,
@@ -157,6 +199,8 @@ export default function SettingsPage() {
         phoneNumbers:
           discountForm.targetMode === 'ALL'
             ? []
+            : discountForm.targetMode === 'FILTERED'
+              ? filteredPhones
             : discountForm.phoneNumbers
                 .split(/[\n,،]+/)
                 .map((item) => item.trim())
@@ -378,6 +422,7 @@ export default function SettingsPage() {
               <Field label="المستفيدين من الخصم">
                 <select className={inputClass} value={discountForm.targetMode} onChange={(event) => setDiscountForm((current) => ({ ...current, targetMode: event.target.value }))}>
                   <option value="ALL">كل المرضى الحاليين والجدد</option>
+                  <option value="FILTERED">مرضى حسب الفلاتر</option>
                   <option value="PHONES">أرقام محددة فقط</option>
                 </select>
               </Field>
@@ -389,7 +434,58 @@ export default function SettingsPage() {
                   <input className={inputClass} type="date" value={discountForm.endsAt} onChange={(event) => setDiscountForm((current) => ({ ...current, endsAt: event.target.value }))} />
                 </Field>
               </div>
-              {discountForm.targetMode === 'PHONES' ? (
+              {discountForm.targetMode === 'FILTERED' ? (
+                <div className="space-y-3 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <Field label="بحث">
+                      <input
+                        className={inputClass}
+                        value={discountPatientSearch}
+                        onChange={(event) => setDiscountPatientSearch(event.target.value)}
+                        placeholder="اسم أو رقم المريض"
+                      />
+                    </Field>
+                    <Field label="الفترة">
+                      <select className={inputClass} value={discountPatientPeriod} onChange={(event) => setDiscountPatientPeriod(event.target.value)}>
+                        {discountPatientPeriods.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="الترتيب">
+                      <select className={inputClass} value={discountPatientSort} onChange={(event) => setDiscountPatientSort(event.target.value)}>
+                        {discountPatientSortOptions.map((option) => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm font-bold text-sky-100">سيتم تطبيق الخصم على {discountPatients.length} مريض مطابق للفلاتر.</p>
+                    <SecondaryButton
+                      type="button"
+                      onClick={() => loadDiscountPatients({ search: discountPatientSearch, period: discountPatientPeriod, sortBy: discountPatientSort })}
+                    >
+                      تطبيق الفلاتر
+                    </SecondaryButton>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-black/10 p-3 text-sm text-slate-200">
+                    {discountPatients.length === 0 ? (
+                      <p className="text-slate-400">لا يوجد مرضى مطابقين حالياً.</p>
+                    ) : (
+                      <div className="grid gap-2">
+                        {discountPatients.slice(0, 40).map((patient) => (
+                          <div key={patient.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/5 px-3 py-2">
+                            <span className="font-bold text-white">{patient.displayName || patient.name || 'مريض'}</span>
+                            <span dir="ltr" className="text-slate-300">{patient.phone}</span>
+                          </div>
+                        ))}
+                        {discountPatients.length > 40 ? <p className="text-xs text-slate-400">و {discountPatients.length - 40} مريض آخر...</p> : null}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : discountForm.targetMode === 'PHONES' ? (
                 <Field label="أرقام المرضى">
                   <textarea
                     className={`${inputClass} min-h-32`}

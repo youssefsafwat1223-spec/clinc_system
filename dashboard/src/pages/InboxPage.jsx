@@ -6,7 +6,7 @@ import api from '../api/client';
 import AppLayout from '../components/Layout';
 import { DataCard, PageHeader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
 
-const platformTabs = ['ALL', 'HUMAN', 'UNREAD', 'REVIEWED', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
+const platformTabs = ['ALL', 'HUMAN', 'UNREAD', 'REVIEWED', 'WHATSAPP', 'FACEBOOK'];
 
 const platformLabels = {
   ALL: 'الكل',
@@ -15,7 +15,6 @@ const platformLabels = {
   REVIEWED: 'تمت المراجعة',
   WHATSAPP: 'واتساب',
   FACEBOOK: 'فيسبوك',
-  INSTAGRAM: 'إنستجرام',
 };
 
 const chatStateLabels = {
@@ -26,7 +25,6 @@ const chatStateLabels = {
 function PlatformIcon({ platform, className = 'h-4 w-4' }) {
   if (platform === 'WHATSAPP') return <Phone className={`${className} text-emerald-300`} />;
   if (platform === 'FACEBOOK') return <MessageSquare className={`${className} text-sky-300`} />;
-  if (platform === 'INSTAGRAM') return <MessageSquare className={`${className} text-pink-300`} />;
   return <MessageSquare className={`${className} text-slate-400`} />;
 }
 
@@ -72,6 +70,49 @@ function getMessageSourceLabel(metadata) {
   return null;
 }
 
+const isPlaceholderValue = (value) => /^\{\{[^}]+\}\}$/.test(String(value || '').trim());
+
+const pickReadableText = (...values) => {
+  for (const value of values) {
+    const text = String(value || '').trim();
+    if (text && !isPlaceholderValue(text)) return text;
+  }
+  return '';
+};
+
+function getPatientName(patient = {}, metadata = null) {
+  const raw = metadata?.raw || {};
+  return pickReadableText(
+    patient.displayName,
+    patient.name,
+    metadata?.fullName,
+    raw.full_name,
+    raw.name,
+    raw.full_contact_data?.full_name
+  ) || (patient.platform === 'INSTAGRAM' ? 'مريض إنستجرام' : patient.platform === 'FACEBOOK' ? 'مريض فيسبوك' : 'بدون اسم');
+}
+
+function getMessageText(content, metadata = null) {
+  const raw = metadata?.raw || {};
+  return pickReadableText(
+    content,
+    raw.message_text,
+    raw.comment_text,
+    raw.comment_message,
+    raw.last_comment_text,
+    raw.last_text_input,
+    raw.text,
+    raw.message,
+    raw.input,
+    raw.content,
+    raw.comment?.text,
+    raw.comment?.message,
+    raw.data?.comment_text,
+    raw.data?.text,
+    raw.full_contact_data?.last_text_input
+  ) || (metadata?.source === 'COMMENT' ? 'تعليق جديد بدون نص واضح' : 'رسالة بدون نص واضح');
+}
+
 function ChatStateBadge({ chatState }) {
   const isHuman = chatState === 'HUMAN';
   return (
@@ -100,7 +141,9 @@ export default function InboxPage() {
       const res = await api.get('/messages', { params: { limit: 500 } });
       const uniquePatientsMap = new Map();
 
-      (res.data.messages || []).forEach((message) => {
+      (res.data.messages || [])
+        .filter((message) => (message.platform || message.patient?.platform) !== 'INSTAGRAM')
+        .forEach((message) => {
         const existing = uniquePatientsMap.get(message.patientId);
         const patient = message.patient || {};
         if (!existing) {
@@ -108,10 +151,13 @@ export default function InboxPage() {
             ...patient,
             id: message.patientId,
             platform: message.platform || patient.platform,
-            lastMessage: message.content,
+            displayName: getPatientName(patient, message.metadata),
+            name: getPatientName(patient, message.metadata),
+            lastMessage: getMessageText(message.content, message.metadata),
             lastMessageTime: message.createdAt,
             lastMessageType: message.type,
             lastMessageSource: getMessageSourceLabel(message.metadata),
+            lastMessageMetadata: message.metadata,
             chatState: patient.chatState || 'BOT',
             messageCount: 1,
             unreadCount: message.type === 'INBOUND' && !message.readAt ? 1 : 0,
@@ -123,7 +169,7 @@ export default function InboxPage() {
         existing.messageCount += 1;
         if (message.type === 'INBOUND' && !message.readAt) existing.unreadCount = (existing.unreadCount || 0) + 1;
         if (message.reviewedAt) existing.reviewedCount = (existing.reviewedCount || 0) + 1;
-      });
+        });
 
       const nextPatients = Array.from(uniquePatientsMap.values()).sort(
         (first, second) => new Date(second.lastMessageTime).getTime() - new Date(first.lastMessageTime).getTime()
@@ -284,7 +330,7 @@ export default function InboxPage() {
           if (patient.platform && accumulator[patient.platform] !== undefined) accumulator[patient.platform] += 1;
           return accumulator;
         },
-        { ALL: 0, HUMAN: 0, UNREAD: 0, REVIEWED: 0, WHATSAPP: 0, FACEBOOK: 0, INSTAGRAM: 0 }
+        { ALL: 0, HUMAN: 0, UNREAD: 0, REVIEWED: 0, WHATSAPP: 0, FACEBOOK: 0 }
       ),
     [patients]
   );
@@ -302,7 +348,7 @@ export default function InboxPage() {
             : activeTab === 'REVIEWED'
               ? (patient.reviewedCount || 0) > 0
               : true;
-      const haystack = [patient.name, patient.displayName, patient.phone, patient.lastMessage].filter(Boolean).join(' ').toLowerCase();
+      const haystack = [getPatientName(patient, patient.lastMessageMetadata), patient.phone, getMessageText(patient.lastMessage, patient.lastMessageMetadata)].filter(Boolean).join(' ').toLowerCase();
       return matchesPlatform && matchesState && (!query || haystack.includes(query));
     });
   }, [activeTab, patients, searchTerm]);
@@ -339,7 +385,7 @@ export default function InboxPage() {
     <AppLayout>
       <PageHeader
         title="صندوق الوارد"
-        description="متابعة رسائل واتساب وفيسبوك وإنستجرام، مع فصل المحادثات التي تحتاج تدخل بشري أو لم تتم قراءتها."
+        description="متابعة رسائل واتساب وفيسبوك، مع فصل المحادثات التي تحتاج تدخل بشري أو لم تتم قراءتها."
         actions={
           <SecondaryButton type="button" onClick={() => setShowBotGuide(true)}>
             <HelpCircle className="h-4 w-4" />
@@ -422,12 +468,12 @@ export default function InboxPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <h3 className="text-sm font-black leading-6 text-white sm:truncate">{patient.displayName || patient.name || 'بدون اسم'}</h3>
+                              <h3 className="text-sm font-black leading-6 text-white sm:truncate">{getPatientName(patient, patient.lastMessageMetadata)}</h3>
                               <p className="mt-0.5 text-xs text-slate-500" dir="ltr">{patient.phone || '-'}</p>
                             </div>
                             <span className="shrink-0 text-[11px] text-slate-500">{formatRelative(patient.lastMessageTime)}</span>
                           </div>
-                          <p className="mt-2 text-xs leading-5 text-slate-400 sm:truncate">{patient.lastMessage || 'لا توجد رسالة'}</p>
+                          <p className="mt-2 text-xs leading-5 text-slate-400 sm:truncate">{getMessageText(patient.lastMessage, patient.lastMessageMetadata)}</p>
                           <div className="mt-3 flex flex-wrap items-center gap-2">
                             <ChatStateBadge chatState={patient.chatState} />
                             <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300">
@@ -456,7 +502,7 @@ export default function InboxPage() {
                       <User className="h-6 w-6" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-black text-white">{selectedPatientData.displayName || selectedPatientData.name || 'بدون اسم'}</h2>
+                      <h2 className="text-lg font-black text-white">{getPatientName(selectedPatientData, selectedPatientData.lastMessageMetadata || conversation[0]?.metadata)}</h2>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                         <span dir="ltr">{selectedPatientData.phone || '-'}</span>
                         <PlatformIcon platform={selectedPatientData.platform} />
@@ -516,7 +562,7 @@ export default function InboxPage() {
                                   <span>{outbound ? 'موظف' : 'مريض'}</span>
                                   {source ? <span className="rounded-full bg-black/10 px-2 py-0.5">{source}</span> : null}
                                 </div>
-                                <p className="whitespace-pre-wrap break-words text-sm leading-7">{message.content}</p>
+                                <p className="whitespace-pre-wrap break-words text-sm leading-7">{getMessageText(message.content, message.metadata)}</p>
                                 <div className={`mt-2 flex items-center gap-1 text-[11px] ${outbound ? 'text-sky-100' : 'text-slate-400'}`}>
                                   <span>{formatTime(message.createdAt)}</span>
                                   {outbound ? <CheckCheck className="h-3.5 w-3.5" /> : null}
