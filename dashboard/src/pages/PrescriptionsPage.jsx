@@ -18,6 +18,11 @@ const emptyMedication = () => ({
   notes: '',
 });
 
+const emptyToothNote = () => ({
+  toothNumber: '',
+  note: '',
+});
+
 const formatDate = (value) => {
   if (!value) return '-';
   return new Date(value).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' });
@@ -33,6 +38,7 @@ export default function PrescriptionsPage() {
   const [doctorId, setDoctorId] = useState('');
   const [diagnosis, setDiagnosis] = useState('');
   const [notes, setNotes] = useState('');
+  const [toothNotes, setToothNotes] = useState([emptyToothNote()]);
   const [medications, setMedications] = useState([emptyMedication()]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -97,6 +103,22 @@ export default function PrescriptionsPage() {
 
   const addMedication = () => setMedications((current) => [...current, emptyMedication()]);
   const removeMedication = (index) => setMedications((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  const updateToothNote = (index, key, value) => {
+    setToothNotes((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)));
+  };
+  const addToothNote = () => setToothNotes((current) => [...current, emptyToothNote()]);
+  const removeToothNote = (index) => setToothNotes((current) => current.filter((_, itemIndex) => itemIndex !== index));
+
+  const cleanToothNotes = toothNotes
+    .map((item) => ({ toothNumber: String(item.toothNumber || '').trim(), note: String(item.note || '').trim() }))
+    .filter((item) => item.toothNumber && item.note);
+
+  const composedNotes = [
+    notes.trim(),
+    cleanToothNotes.length
+      ? ['ملاحظات الأسنان:', ...cleanToothNotes.map((item) => `سن ${item.toothNumber}: ${item.note}`)].join('\n')
+      : '',
+  ].filter(Boolean).join('\n\n');
 
   const savePrescription = async (sendAfterSave = false) => {
     const cleanMedications = medications.filter((medication) => medication.name.trim());
@@ -113,7 +135,7 @@ export default function PrescriptionsPage() {
         doctorId: selectedDoctor?.id || doctorId || undefined,
         diagnosis,
         medications: cleanMedications,
-        notes,
+        notes: composedNotes,
       });
       setCreatedPrescription(res.data.prescription);
 
@@ -157,6 +179,49 @@ export default function PrescriptionsPage() {
 
       <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="space-y-6">
+          <DataCard>
+            <div className="grid gap-5 lg:grid-cols-[320px_1fr] lg:items-start">
+              <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">
+                <img src="/images/teeth-chart.jpg" alt="خريطة ترقيم الأسنان من 1 إلى 32" className="w-full object-contain" />
+              </div>
+              <div>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-bold text-gray-900">ملاحظات الأسنان</h2>
+                    <p className="mt-1 text-sm text-gray-500">اكتب رقم السن من الصورة ثم الملاحظة الخاصة به، وسيتم حفظها داخل الروشتة وملف المريض.</p>
+                  </div>
+                  <SecondaryButton type="button" onClick={addToothNote}>
+                    <Plus className="h-4 w-4" />
+                    إضافة سن
+                  </SecondaryButton>
+                </div>
+                <div className="space-y-3">
+                  {toothNotes.map((item, index) => (
+                    <div key={index} className="grid gap-3 md:grid-cols-[130px_1fr_auto]">
+                      <Field label="رقم السن">
+                        <select className={inputClass} value={item.toothNumber} onChange={(event) => updateToothNote(index, 'toothNumber', event.target.value)}>
+                          <option value="">اختر</option>
+                          {Array.from({ length: 32 }, (_, toothIndex) => toothIndex + 1).map((number) => (
+                            <option key={number} value={number}>سن {number}</option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="الملاحظة">
+                        <input className={inputClass} value={item.note} onChange={(event) => updateToothNote(index, 'note', event.target.value)} placeholder="مثال: تسوس، حشو، خلع، ألم عند الضغط..." />
+                      </Field>
+                      {toothNotes.length > 1 && (
+                        <SecondaryButton type="button" onClick={() => removeToothNote(index)} className="self-end text-red-600">
+                          <Trash2 className="h-4 w-4" />
+                          حذف
+                        </SecondaryButton>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </DataCard>
+
           <DataCard>
             <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
               <Field label="رقم الحجز (Booking Ref)">
@@ -319,6 +384,14 @@ export default function PrescriptionsPage() {
               ))}
               {!medications.some((medication) => medication.name) && <p className="text-sm text-gray-400">لم يتم إدخال أدوية بعد.</p>}
             </div>
+            {cleanToothNotes.length > 0 && (
+              <div className="mt-5 rounded-lg bg-blue-50 p-3 text-sm text-gray-700">
+                <p className="mb-2 font-bold text-blue-700">ملاحظات الأسنان</p>
+                {cleanToothNotes.map((item) => (
+                  <p key={`${item.toothNumber}-${item.note}`}>سن {item.toothNumber}: {item.note}</p>
+                ))}
+              </div>
+            )}
             {notes && <p className="mt-5 rounded-lg bg-gray-50 p-3 text-sm text-gray-600">{notes}</p>}
           </div>
         </DataCard>

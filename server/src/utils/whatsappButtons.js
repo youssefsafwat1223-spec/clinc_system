@@ -448,6 +448,35 @@ const buildCancelConfirmation = (to, appointmentId) => ({
   },
 });
 
+const buildTextBookingConfirmation = (to, summary) => ({
+  messaging_product: 'whatsapp',
+  recipient_type: 'individual',
+  to,
+  type: 'interactive',
+  interactive: {
+    type: 'button',
+    body: {
+      text: [
+        'تأكيد بيانات الحجز:',
+        '',
+        `الخدمة: ${summary.serviceName}`,
+        `الدكتور: ${summary.doctorName}`,
+        `اليوم: ${summary.dayLabel}`,
+        `التاريخ: ${summary.dateLabel}`,
+        `الوقت: ${summary.timeLabel}`,
+        '',
+        'هل تريد تأكيد طلب الحجز؟',
+      ].join('\n'),
+    },
+    action: {
+      buttons: [
+        { type: 'reply', reply: { id: 'confirm_text_booking', title: 'موافق' } },
+        { type: 'reply', reply: { id: 'cancel_text_booking', title: 'لا / تعديل' } },
+      ],
+    },
+  },
+});
+
 module.exports = {
   buildWelcomeMessage,
   buildServiceSelection,
@@ -464,4 +493,5 @@ module.exports = {
   buildAppointmentsList,
   buildAppointmentOptions,
   buildCancelConfirmation,
+  buildTextBookingConfirmation,
 };

@@ -70,7 +70,7 @@ const serializeAppointmentPayment = async (appointment) => {
 
 const list = async (req, res, next) => {
   try {
-    const { status, search, limit = 100 } = req.query;
+    const { status, search, month, limit = 100 } = req.query;
     const filters = [];
 
     if (status && status !== 'ALL') {
@@ -90,6 +90,15 @@ const list = async (req, res, next) => {
           { patient: { phone: { contains: search } } },
         ],
       });
+    }
+
+    if (month) {
+      const monthStart = new Date(`${month}-01T00:00:00`);
+      if (!Number.isNaN(monthStart.getTime())) {
+        const monthEnd = new Date(monthStart);
+        monthEnd.setMonth(monthEnd.getMonth() + 1);
+        filters.push({ scheduledTime: { gte: monthStart, lt: monthEnd } });
+      }
     }
 
     const where = filters.length ? { AND: filters } : {};

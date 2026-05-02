@@ -90,7 +90,7 @@ const syncPatientGroups = async (tx, patientId, { groupIds, groupNames }, replac
 
 const getAll = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, search, groupId } = req.query;
+    const { page = 1, limit = 20, search, groupId, period, sortBy } = req.query;
     const { skip, take } = paginate(Number(page), Number(limit));
     const scopedDoctor = await getScopedDoctor(req);
 
@@ -106,14 +106,32 @@ const getAll = async (req, res, next) => {
 
     const accessWhere = scopedDoctor ? buildDoctorPatientAccessWhere(scopedDoctor.id) : null;
     const groupWhere = groupId ? { groups: { some: { groupId } } } : null;
-    const where = combineWhere(accessWhere, searchWhere, groupWhere);
+    let periodWhere = null;
+    if (period === 'last7' || period === 'last30') {
+      const days = period === 'last7' ? 7 : 30;
+      periodWhere = { appointments: { some: { scheduledTime: { gte: new Date(Date.now() - days * 24 * 60 * 60 * 1000) } } } };
+    }
+    if (period === 'thisMonth') {
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      periodWhere = { appointments: { some: { scheduledTime: { gte: monthStart } } } };
+    }
+
+    const where = combineWhere(accessWhere, searchWhere, groupWhere, periodWhere);
+    const orderBy =
+      sortBy === 'mostBooked'
+        ? { appointments: { _count: 'desc' } }
+        : sortBy === 'leastBooked'
+          ? { appointments: { _count: 'asc' } }
+          : { createdAt: 'desc' };
 
     const [patients, total] = await Promise.all([
       prisma.patient.findMany({
         where,
         skip,
         take,
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         include: {
           groups: { include: { group: true } },
           _count: { select: { appointments: true, messages: true } },

@@ -2,6 +2,22 @@ const prisma = require('./prisma');
 
 const SYSTEM_TEMPLATES = [
   {
+    name: 'clinic_custom_message_ar',
+    displayName: 'رسالة مخصصة مرنة',
+    category: 'MARKETING',
+    languageCode: 'ar',
+    headerType: 'NONE',
+    bodyText:
+      `مرحباً {{1}}
+
+يسر عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان أن تشاركك هذا التحديث المهم:
+
+{{2}}
+
+للحجز أو معرفة التفاصيل تواصل معنا الآن، وسيقوم فريق الاستقبال بمساعدتك في أقرب وقت.`,
+    footerText: 'عيادة د. إبراهيم',
+  },
+  {
     name: 'clinic_review_ar',
     displayName: 'تقييم الزيارة (تلقائي)',
     category: 'UTILITY',
@@ -68,7 +84,7 @@ const seedSystemTemplates = async () => {
   for (const template of SYSTEM_TEMPLATES) {
     const result = await prisma.campaignTemplate.upsert({
       where: { name: template.name },
-      update: {},
+      update: { ...template, active: true },
       create: { ...template, active: true },
     });
     if (result.createdAt.getTime() === result.updatedAt.getTime()) {

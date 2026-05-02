@@ -223,6 +223,7 @@ const previewRescheduleByDoctor = async (req, res, next) => {
         doctorId: toDoctorId,
         scheduledTime: appointment.scheduledTime,
         duration: appointment.service?.duration || 30,
+        ignoreLeadTime: true,
       });
       if (!available) unavailableAppointmentIds.push(appointment.id);
       checkedAppointments.push({ ...appointment, targetDoctorAvailable: available });
@@ -274,6 +275,7 @@ const rescheduleByDoctor = async (req, res, next) => {
         doctorId: toDoctorId,
         scheduledTime: appointment.scheduledTime,
         duration: appointment.service?.duration || 30,
+        ignoreLeadTime: true,
       });
       if (!available) unavailableAppointmentIds.push(appointment.id);
     }

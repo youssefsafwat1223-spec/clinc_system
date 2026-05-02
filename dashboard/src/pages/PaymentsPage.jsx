@@ -24,6 +24,7 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
+  const [month, setMonth] = useState('');
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ paidAmount: 0, discountAmount: 0, method: 'cash', notes: '' });
   const [saving, setSaving] = useState(false);
@@ -32,7 +33,7 @@ export default function PaymentsPage() {
   const loadPayments = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/payments', { params: { status, search, limit: 200 } });
+      const res = await api.get('/payments', { params: { status, search, month: month || undefined, limit: 200 } });
       setPayments(res.data.payments || []);
       setSummary(res.data.summary || {});
     } catch (error) {
@@ -44,7 +45,7 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     loadPayments();
-  }, [status]);
+  }, [status, month]);
 
   const filteredPayments = useMemo(() => payments, [payments]);
 
@@ -127,9 +128,12 @@ export default function PaymentsPage() {
       </div>
 
       <DataCard className="mb-6">
-        <div className="grid gap-4 lg:grid-cols-[1fr_220px_auto]">
+        <div className="grid gap-4 lg:grid-cols-[1fr_180px_220px_auto]">
           <Field label="بحث">
             <input className={inputClass} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="رقم الكشف أو اسم أو رقم المريض" />
+          </Field>
+          <Field label="الشهر">
+            <input className={inputClass} type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
           </Field>
           <Field label="حالة الدفع">
             <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}>

@@ -41,6 +41,8 @@ export default function PatientsPage() {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [periodFilter, setPeriodFilter] = useState('ALL');
+  const [sortBy, setSortBy] = useState('recent');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalPatients, setTotalPatients] = useState(0);
@@ -59,7 +61,13 @@ export default function PatientsPage() {
     try {
       setLoading(true);
       const res = await api.get('/patients', {
-        params: { page: currentPage, limit: 12, search: currentSearch || undefined },
+        params: {
+          page: currentPage,
+          limit: 12,
+          search: currentSearch || undefined,
+          period: periodFilter === 'ALL' ? undefined : periodFilter,
+          sortBy,
+        },
       });
       setPatients(res.data.patients || []);
       setTotalPages(res.data.pagination?.pages || 1);
@@ -94,7 +102,7 @@ export default function PatientsPage() {
 
   useEffect(() => {
     fetchPatients(page, searchTerm);
-  }, [page, searchTerm]);
+  }, [page, searchTerm, periodFilter, sortBy]);
 
   const openPatientModal = (patient) => {
     navigate(`/patients/${patient.id}`);
@@ -160,6 +168,54 @@ export default function PatientsPage() {
               }}
               className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
             />
+          </div>
+        </div>
+
+        <div className="grid gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm md:grid-cols-3">
+          <label className="text-sm font-bold text-gray-700">
+            الفترة
+            <select
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={periodFilter}
+              onChange={(event) => {
+                setPage(1);
+                setPeriodFilter(event.target.value);
+              }}
+            >
+              <option value="ALL">كل المرضى</option>
+              <option value="last7">مرضى آخر أسبوع</option>
+              <option value="last30">مرضى آخر شهر</option>
+              <option value="thisMonth">مرضى هذا الشهر</option>
+            </select>
+          </label>
+          <label className="text-sm font-bold text-gray-700">
+            الترتيب
+            <select
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={sortBy}
+              onChange={(event) => {
+                setPage(1);
+                setSortBy(event.target.value);
+              }}
+            >
+              <option value="recent">الأحدث إضافة</option>
+              <option value="mostBooked">الأكثر حجزاً</option>
+              <option value="leastBooked">الأقل حجزاً</option>
+            </select>
+          </label>
+          <div className="flex items-end">
+            <button
+              type="button"
+              onClick={() => {
+                setSearchTerm('');
+                setPeriodFilter('ALL');
+                setSortBy('recent');
+                setPage(1);
+              }}
+              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-bold text-gray-700 hover:bg-gray-50"
+            >
+              إعادة ضبط الفلاتر
+            </button>
           </div>
         </div>
 

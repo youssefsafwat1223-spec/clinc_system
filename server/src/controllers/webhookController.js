@@ -21,6 +21,7 @@ const {
   buildAppointmentsList,
   buildAppointmentOptions,
   buildCancelConfirmation,
+  buildTextBookingConfirmation,
 } = require('../utils/whatsappButtons');
 const { generateTimeSlots, formatDateAr, formatTimeAr, formatCurrency, formatDateKey } = require('../utils/helpers');
 
@@ -607,6 +608,28 @@ const handleWhatsAppMessage = async (message, contact) => {
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
 
+    if (selectedId === 'cancel_text_booking') {
+      const session = getBookingSession(from);
+      if (session?.serviceId) {
+        session.step = 'text_booking_request';
+        session.selectedTime = null;
+        session.doctorId = null;
+        setBookingSession(from, session);
+        return await whatsappService.sendTextMessage(from, 'اكتب موعداً آخر بنفس الشكل:\nالخميس 9 مساء 28/6');
+      }
+      clearBookingSession(from);
+      return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
+    }
+
+    if (selectedId === 'confirm_text_booking') {
+      const session = getBookingSession(from);
+      if (!session?.serviceId || !session?.doctorId || !session?.selectedTime) {
+        clearBookingSession(from);
+        return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
+      }
+      return await handleTimeSlotSelection(from, patient, session.selectedTime);
+    }
+
     if (selectedId === 'book_appointment') {
       if (session?.step === 'select_service') {
         return await whatsappService.sendTextMessage(from, 'أنت بالفعل داخل خطوات الحجز. اختر الخدمة من القائمة الظاهرة فوق.');
@@ -901,6 +924,73 @@ const buildTimeSlotPage = (slots, offset = 0) => {
   return page;
 };
 
+const ARABIC_DAY_NAMES = {
+  الاحد: 0,
+  الأحد: 0,
+  الاتنين: 1,
+  الاثنين: 1,
+  الإثنين: 1,
+  الثلاثاء: 2,
+  الاربعاء: 3,
+  الأربعاء: 3,
+  الخميس: 4,
+  الجمعة: 5,
+  الجمعه: 5,
+  السبت: 6,
+};
+
+const parseTextBookingRequest = (content) => {
+  const text = String(content || '').trim();
+  if (!text) return null;
+
+  const dateMatch = text.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
+  const timeMatch =
+    text.match(/(\d{1,2})(?::(\d{2}))?\s*(ص|صباحا|صباحًا|am|a\.m\.|م|مساء|مساءا|مساءً|pm|p\.m\.)/i) ||
+    text.match(/(\d{1,2}):(\d{2})/);
+  if (!dateMatch || !timeMatch) return null;
+
+  const now = new Date();
+  const day = Number(dateMatch[1]);
+  const month = Number(dateMatch[2]);
+  let year = dateMatch[3] ? Number(dateMatch[3]) : now.getFullYear();
+  if (year < 100) year += 2000;
+
+  let hour = Number(timeMatch[1]);
+  const minute = Number(timeMatch[2] || 0);
+  const period = String(timeMatch[3] || '').toLowerCase();
+  if (/(م|pm|p\.m\.)/.test(period) && hour < 12) hour += 12;
+  if (/(ص|am|a\.m\.)/.test(period) && hour === 12) hour = 0;
+
+  let scheduledTime = new Date(year, month - 1, day, hour, minute, 0, 0);
+  if (!dateMatch[3] && scheduledTime < now) {
+    scheduledTime = new Date(year + 1, month - 1, day, hour, minute, 0, 0);
+  }
+
+  const lowerText = text.toLowerCase();
+  const mentionedDayEntry = Object.entries(ARABIC_DAY_NAMES).find(([name]) => lowerText.includes(name));
+  const mentionedDay = mentionedDayEntry ? mentionedDayEntry[1] : null;
+
+  return { scheduledTime, mentionedDay };
+};
+
+const sendTextBookingSummary = async (from, session, availability) => {
+  const doctor = availability.doctors[0];
+  session.doctorId = doctor.id;
+  session.step = 'confirm_text_booking';
+  setBookingSession(from, session);
+
+  const scheduledTime = new Date(session.selectedTime);
+  return whatsappService.sendInteractiveMessage(
+    buildTextBookingConfirmation(from, {
+      serviceName: availability.service.nameAr || availability.service.name,
+      doctorName: doctor.name,
+      dayLabel: formatDateAr(scheduledTime).split(' ')[0],
+      dateLabel: formatDateAr(scheduledTime),
+      timeLabel: formatTimeAr(scheduledTime),
+    })
+  );
+};
+
 const sendDoctorDaySelection = async (from, patient, service, doctor, availableDays = null) => {
   const allDays = availableDays || await getAvailableDaysForDoctor(doctor, service);
   if (allDays.length === 0) {
@@ -1013,6 +1103,20 @@ const handleServiceSelection = async (from, patient, serviceId) => {
       return await whatsappService.sendTextMessage(from, 'عذرًا، الخدمة غير موجودة.');
     }
 
+    const textBookingSession = getBookingSession(from) || {};
+    setBookingSession(from, {
+      ...textBookingSession,
+      step: 'text_booking_request',
+      patientId: patient.id,
+      serviceId: service.id,
+      serviceDuration: service.duration,
+    });
+
+    return await whatsappService.sendTextMessage(
+      from,
+      'اكتب الموعد المطلوب في رسالة واحدة بهذا الشكل:\nالخميس 9 مساء 28/6\n\nسيتم فحص مواعيد الأطباء المتاحة في نفس الوقت ثم نرسل لك ملخص الحجز للتأكيد.'
+    );
+
     const availableDays = await getAvailableDaysForService(service);
     if (availableDays.length === 0) {
       clearBookingSession(from);
@@ -1056,8 +1160,23 @@ const handleDoctorSelection = async (from, patient, doctorId) => {
       }
 
       session.doctorId = doctorId;
+      session.step = 'confirm_text_booking';
       setBookingSession(from, session);
-      return await handleTimeSlotSelection(from, patient, session.selectedTime);
+
+      const [service, doctor] = await Promise.all([
+        prisma.service.findUnique({ where: { id: session.serviceId } }),
+        prisma.doctor.findUnique({ where: { id: doctorId } }),
+      ]);
+      const scheduledTime = new Date(session.selectedTime);
+      return await whatsappService.sendInteractiveMessage(
+        buildTextBookingConfirmation(from, {
+          serviceName: service?.nameAr || service?.name || '-',
+          doctorName: doctor?.name || '-',
+          dayLabel: formatDateAr(scheduledTime).split(' ')[0],
+          dateLabel: formatDateAr(scheduledTime),
+          timeLabel: formatTimeAr(scheduledTime),
+        })
+      );
     }
 
     const [service, doctor] = await Promise.all([
@@ -1459,11 +1578,60 @@ const handleInquiry = async (from, patient, content) => {
   }
 };
 
+const handleTextBookingRequest = async (from, patient, content, session) => {
+  const parsed = parseTextBookingRequest(content);
+  if (!parsed) {
+    return await whatsappService.sendTextMessage(from, 'لم أفهم الموعد. اكتب اليوم والساعة والتاريخ بهذا الشكل:\nالخميس 9 مساء 28/6');
+  }
+
+  const minLeadMinutes = Number(process.env.MIN_BOOKING_LEAD_MINUTES || 10);
+  if (parsed.scheduledTime < new Date(Date.now() + minLeadMinutes * 60 * 1000)) {
+    return await whatsappService.sendTextMessage(from, 'هذا الموعد مرّ بالفعل أو قريب جداً من الوقت الحالي. اكتب موعداً لاحقاً.');
+  }
+
+  if (parsed.mentionedDay !== null && parsed.mentionedDay !== parsed.scheduledTime.getDay()) {
+    return await whatsappService.sendTextMessage(from, 'اليوم المكتوب لا يطابق التاريخ. تأكد من اليوم والتاريخ واكتبهم مرة أخرى.');
+  }
+
+  const availability = await appointmentService.getAvailableDoctorsAt({
+    serviceId: session.serviceId,
+    scheduledTime: parsed.scheduledTime.toISOString(),
+  });
+
+  if (!availability.doctors.length) {
+    return await whatsappService.sendTextMessage(from, 'لا يوجد طبيب متاح في هذا الموعد حسب جدول العيادة. اكتب موعداً آخر.');
+  }
+
+  session.selectedTime = parsed.scheduledTime.toISOString();
+  session.serviceDuration = availability.service.duration;
+
+  if (availability.doctors.length === 1) {
+    return await sendTextBookingSummary(from, session, availability);
+  }
+
+  session.step = 'select_doctor_after_time';
+  setBookingSession(from, session);
+
+  return await whatsappService.sendInteractiveMessage(
+    buildDoctorSelection(
+      from,
+      availability.doctors.map((doctor) => ({
+        ...doctor,
+        description: doctor.specialization || 'متاح في الموعد المطلوب',
+      })),
+      availability.service.nameAr || availability.service.name
+    )
+  );
+};
+
 const handleSessionInput = async (from, patient, content, session) => {
   // Generic session handler for text input during booking
   if (session.step === 'select_service') {
     // Re-show service list
     return await startBookingFlow(from, patient);
+  }
+  if (session.step === 'text_booking_request') {
+    return await handleTextBookingRequest(from, patient, content, session);
   }
   if (session.step === 'ask_consultation') {
     clearBookingSession(from);

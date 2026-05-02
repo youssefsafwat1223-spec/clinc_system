@@ -50,9 +50,32 @@ const autoTemplateVariables = {
   phone: 'رقم هاتف كل مريض تلقائياً',
 };
 
-const isAutoTemplateVariable = (variable) => variable.type === 'named' && Boolean(autoTemplateVariables[variable.name]);
+const numberedAutoTemplateVariablesByTemplate = {
+  clinic_custom_message_ar: { 1: autoTemplateVariables.name },
+  clinic_offer_text_ar: { 1: autoTemplateVariables.name },
+};
+
+const getAutoTemplateVariableLabel = (variable, templateName) => {
+  if (!variable) return null;
+  if (variable.type === 'named') return autoTemplateVariables[variable.name] || null;
+  return numberedAutoTemplateVariablesByTemplate[templateName]?.[variable.key] || null;
+};
+
+const getAutoTemplateVariableValue = (variable, templateName) => {
+  if (!getAutoTemplateVariableLabel(variable, templateName)) return '';
+  if (variable.type === 'named') return `{{${variable.name}}}`;
+  if (variable.key === '1') return '{{name}}';
+  return '';
+};
+
+const isAutoTemplateVariable = (variable, templateName) => Boolean(getAutoTemplateVariableLabel(variable, templateName));
 
 const templateVariableLabels = {
+  1: 'اسم المريض',
+  2: 'نص الرسالة أو تفاصيل العرض',
+  3: 'نص الرسالة أو السعر قبل الخصم',
+  4: 'تفاصيل الرسالة أو السعر بعد الخصم',
+  5: 'تفاصيل العرض',
   name: 'اسم المريض',
   phone: 'رقم الهاتف',
   service_name: 'اسم الخدمة',
@@ -62,39 +85,80 @@ const templateVariableLabels = {
 };
 
 const templateVariablePlaceholders = {
+  2: 'مثال: خصم 20% على تنظيف الأسنان. السعر قبل الخصم 50000 دينار عراقي، والسعر بعد الخصم 40000 دينار عراقي.',
+  3: 'مثال: خصم 20% لفترة محدودة أو 50000',
+  4: 'مثال: العرض متاح حتى نهاية الشهر أو 40000',
+  5: 'مثال: العرض متاح لفترة محدودة',
   service_name: 'مثال: تنظيف الأسنان',
   before_price: 'مثال: 50000',
   after_price: 'مثال: 40000',
   offer_details: 'مثال: العرض متاح لفترة محدودة',
 };
 
-const renderTemplatePreview = (text = '', params = [], samplePatient = null) =>
+const renderTemplatePreview = (text = '', params = [], samplePatient = null, templateName = null) =>
   String(text || '').replace(/\{\{([a-zA-Z_][\w]*|\d+)\}\}/g, (_, key) => {
     const variable = /^\d+$/.test(key) ? { key, type: 'number', index: Number(key) } : { key, type: 'named', name: key };
     const value = getParamValue(params, variable);
     if (value) return value;
+    if (getAutoTemplateVariableLabel(variable, templateName)) return samplePatient?.displayName || samplePatient?.name || 'اسم المريض';
     if (key === 'name') return samplePatient?.displayName || samplePatient?.name || 'اسم المريض';
     if (key === 'phone') return samplePatient?.phone || 'رقم الهاتف';
     return `{{${key}}}`;
   });
 
+const parseAudienceSheet = (text = '') => {
+  const lines = String(text || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const rows = lines.map((line) => line.split(line.includes('\t') ? '\t' : ',').map((cell) => cell.trim()));
+  const firstRow = rows[0] || [];
+  const hasHeader = firstRow.some((cell) => /phone|mobile|رقم|هاتف|name|اسم/i.test(cell));
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+  const seen = new Set();
+
+  return dataRows
+    .map(([phone, name]) => ({
+      phone: String(phone || '').replace(/[^\d+]/g, ''),
+      name: String(name || '').trim(),
+    }))
+    .filter((item) => {
+      if (!item.phone || item.phone.length < 8 || seen.has(item.phone)) return false;
+      seen.add(item.phone);
+      return true;
+    });
+};
+
 const CLINIC_OFFER_TEXT_BODY = [
-  'مرحباً {{name}}',
-  'يسر عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان تقديم عرض خاص على {{service_name}}.',
+  'مرحباً {{1}}',
+  'يسر عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان تقديم عرض خاص لفترة محدودة.',
   '',
-  'السعر قبل الخصم: {{before_price}} دينار عراقي',
-  'السعر بعد الخصم: {{after_price}} دينار عراقي',
-  'تفاصيل العرض: {{offer_details}}',
+  'تفاصيل العرض:',
+  '{{2}}',
   '',
-  'للحجز أو معرفة التفاصيل تواصل معنا الآن.',
+  'للحجز أو معرفة التفاصيل تواصل معنا الآن، وسيقوم فريق الاستقبال بمساعدتك في أقرب وقت.',
+].join('\n');
+
+const CLINIC_CUSTOM_MESSAGE_BODY = [
+  'مرحباً {{1}}',
+  '',
+  'يسر عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان أن تشاركك هذا التحديث المهم:',
+  '',
+  '{{2}}',
+  '',
+  'للحجز أو معرفة التفاصيل تواصل معنا الآن، وسيقوم فريق الاستقبال بمساعدتك في أقرب وقت.',
 ].join('\n');
 
 const templateGuideByName = {
+  clinic_custom_message_ar: {
+    title: 'قالب رسالة مخصصة مرنة',
+    where: 'يستخدم من صفحة الحملات عندما تريد إرسال رسالة تسويقية عامة وتغيير العنوان والنص والتفاصيل من داخل السيستم بدون تعديل Meta كل مرة.',
+    how: 'اكتب نص الرسالة الكامل في المتغير {{2}}. اسم المريض يتم ملؤه تلقائياً في {{1}}.',
+    variables: ['{{1}} اسم كل مريض تلقائياً', '{{2}} نص الرسالة الكامل'],
+    body: CLINIC_CUSTOM_MESSAGE_BODY,
+  },
   clinic_offer_text_ar: {
     title: 'قالب العرض النصي',
     where: 'يستخدم من صفحة الحملات لإرسال عرض تسويقي نصي للمرضى المختارين.',
-    how: 'اكتب الخدمة والسعر قبل الخصم والسعر بعد الخصم وتفاصيل العرض من صفحة الحملات قبل الإرسال.',
-    variables: ['{{name}} اسم كل مريض تلقائياً', '{{service_name}} اسم الخدمة', '{{before_price}} السعر قبل الخصم', '{{after_price}} السعر بعد الخصم', '{{offer_details}} تفاصيل العرض'],
+    how: 'اكتب تفاصيل العرض كاملة في المتغير {{2}} مثل الخدمة، نسبة الخصم، السعر قبل الخصم، والسعر بعد الخصم. اسم المريض يتم ملؤه تلقائياً في {{1}}.',
+    variables: ['{{1}} اسم كل مريض تلقائياً', '{{2}} تفاصيل العرض كاملة'],
     body: CLINIC_OFFER_TEXT_BODY,
   },
   clinic_offer_image_ar: {
@@ -163,6 +227,7 @@ const getTemplateGuide = (templateName) => templateGuideByName[templateName] || 
 const getTemplateBodyPreview = (template) => {
   if (!template) return '';
   if (template.name === 'clinic_offer_text_ar') return CLINIC_OFFER_TEXT_BODY;
+  if (template.name === 'clinic_custom_message_ar') return CLINIC_CUSTOM_MESSAGE_BODY;
   return template.bodyText || '';
 };
 
@@ -178,6 +243,7 @@ export default function CampaignsPage() {
   const [templateBodyParams, setTemplateBodyParams] = useState([]);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedPatientIds, setSelectedPatientIds] = useState([]);
+  const [importedRecipients, setImportedRecipients] = useState([]);
   const [allPatients, setAllPatients] = useState([]);
   const [patientSearch, setPatientSearch] = useState('');
   const [sending, setSending] = useState(false);
@@ -220,12 +286,14 @@ export default function CampaignsPage() {
   const templateVariables = useMemo(() => extractTemplateVariables(selectedTemplateBody), [selectedTemplateBody]);
   const missingTemplateParams =
     campaignType === 'TEMPLATE' &&
-    templateVariables.some((variable) => !isAutoTemplateVariable(variable) && !String(getParamValue(templateBodyParams, variable) || '').trim());
+    templateVariables.some((variable) => !isAutoTemplateVariable(variable, selectedTemplate?.name) && !String(getParamValue(templateBodyParams, variable) || '').trim());
   const filteredPatients = allPatients.filter((patient) => {
     const query = patientSearch.trim().toLowerCase();
     if (!query) return true;
     return `${patient.name || ''} ${patient.displayName || ''} ${patient.phone || ''}`.toLowerCase().includes(query);
   });
+
+  const totalAudienceCount = selectedPatientIds.length + importedRecipients.length;
 
   const selectedPatients = useMemo(
     () => allPatients.filter((patient) => selectedPatientIds.includes(patient.id)),
@@ -238,7 +306,7 @@ export default function CampaignsPage() {
     (step === 2 &&
       (campaignType === 'TEXT' ? messageText.trim() : selectedTemplateId && !missingTemplateParams) &&
       (!needsImage || campaignImageUrl || selectedTemplate?.imageUrl)) ||
-    (step === 3 && selectedPatientIds.length > 0) ||
+    (step === 3 && totalAudienceCount > 0) ||
     step === 4;
 
   const handleImageUpload = async (event) => {
@@ -262,8 +330,24 @@ export default function CampaignsPage() {
     }
   };
 
+  const handleAudienceSheetUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (/\.xlsx$/i.test(file.name)) {
+      toast.warn('احفظ الشيت من Excel بصيغة CSV ثم ارفعه هنا حتى تتم قراءة الأرقام.');
+      event.target.value = '';
+      return;
+    }
+
+    const text = await file.text();
+    const recipients = parseAudienceSheet(text);
+    setImportedRecipients(recipients);
+    toast.success(`تم تحميل ${recipients.length} رقم من الشيت`);
+  };
+
   const handleSendCampaign = async () => {
-    if (selectedPatientIds.length === 0) return toast.error('اختر مرضى أولاً');
+    if (totalAudienceCount === 0) return toast.error('اختر مرضى أولاً');
     if (campaignType === 'TEXT' && !messageText.trim()) return toast.error('أدخل نص الرسالة');
     if (campaignType === 'TEMPLATE' && !selectedTemplateId) return toast.error('اختر قالباً');
 
@@ -277,7 +361,7 @@ export default function CampaignsPage() {
           campaignType === 'TEMPLATE'
             ? templateVariables
                 .filter((variable) => variable.type === 'number')
-                .map((variable) => getParamValue(templateBodyParams, variable) || '')
+                .map((variable) => getAutoTemplateVariableValue(variable, selectedTemplate?.name) || getParamValue(templateBodyParams, variable) || '')
             : undefined,
         templateBodyNamedParams:
           campaignType === 'TEMPLATE'
@@ -285,12 +369,13 @@ export default function CampaignsPage() {
                 .filter((variable) => variable.type === 'named')
                 .map((variable) => ({
                   name: variable.name,
-                  value: isAutoTemplateVariable(variable) ? `{{${variable.name}}}` : getParamValue(templateBodyParams, variable) || '',
+                  value: getAutoTemplateVariableValue(variable, selectedTemplate?.name) || getParamValue(templateBodyParams, variable) || '',
                 }))
             : undefined,
         imageUrl: campaignImageUrl || undefined,
         audience: 'SELECTED',
         patientIds: selectedPatientIds,
+        externalRecipients: importedRecipients,
       });
       toast.success(res.data.summary || 'تم إرسال الحملة');
       setMessageText('');
@@ -298,6 +383,7 @@ export default function CampaignsPage() {
       setTemplateBodyParams([]);
       setCampaignImageUrl('');
       setSelectedPatientIds([]);
+      setImportedRecipients([]);
       setStep(1);
     } catch (error) {
       toast.error(error.message || 'فشل إرسال الحملة');
@@ -416,7 +502,7 @@ export default function CampaignsPage() {
                         Header: {selectedTemplate.headerType}
                       </StatusBadge>
                       <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-slate-300">
-                        {renderTemplatePreview(selectedTemplateBody || 'قالب بدون نص معاينة داخلي.', templateBodyParams, selectedPatients[0])}
+                        {renderTemplatePreview(selectedTemplateBody || 'قالب بدون نص معاينة داخلي.', templateBodyParams, selectedPatients[0], selectedTemplate.name)}
                       </p>
                       {selectedTemplateGuide ? (
                         <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-slate-200">
@@ -441,9 +527,9 @@ export default function CampaignsPage() {
                     <div className="grid gap-4 md:grid-cols-2">
                       {templateVariables.map((variable) => (
                         <Field key={variable.key} label={templateVariableLabels[variable.key] || `قيمة المتغير {{${variable.key}}}`}>
-                          {isAutoTemplateVariable(variable) ? (
+                          {isAutoTemplateVariable(variable, selectedTemplate?.name) ? (
                             <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2.5 text-sm font-bold text-emerald-100">
-                              {autoTemplateVariables[variable.name]}
+                              {getAutoTemplateVariableLabel(variable, selectedTemplate?.name)}
                             </div>
                           ) : (
                             <input
@@ -483,6 +569,23 @@ export default function CampaignsPage() {
                   <input className={`${inputClass} pr-10`} value={patientSearch} onChange={(event) => setPatientSearch(event.target.value)} placeholder="اسم أو رقم المريض" />
                 </div>
               </Field>
+              <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <p className="font-black text-white">رفع شيت أرقام من Excel</p>
+                    <p className="mt-1 text-sm leading-6 text-slate-300">احفظ الشيت بصيغة CSV. العمود الأول للأرقام، والعمود الثاني للأسماء اختياري.</p>
+                    {importedRecipients.length > 0 ? <p className="mt-2 text-sm font-bold text-sky-100">تم تحميل {importedRecipients.length} رقم من الشيت.</p> : null}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold text-slate-200 transition hover:bg-white/10">
+                      <Upload className="h-4 w-4" />
+                      رفع CSV
+                      <input type="file" accept=".csv,.txt,.tsv" className="hidden" onChange={handleAudienceSheetUpload} />
+                    </label>
+                    {importedRecipients.length > 0 ? <SecondaryButton type="button" onClick={() => setImportedRecipients([])}>مسح الشيت</SecondaryButton> : null}
+                  </div>
+                </div>
+              </div>
               <div className="flex flex-wrap gap-2">
                 <SecondaryButton type="button" onClick={() => setSelectedPatientIds(filteredPatients.map((patient) => patient.id))}>تحديد الكل ({filteredPatients.length})</SecondaryButton>
                 <SecondaryButton type="button" onClick={() => setSelectedPatientIds([])}>إلغاء التحديد</SecondaryButton>
@@ -514,7 +617,7 @@ export default function CampaignsPage() {
               <h2 className="text-xl font-black text-white">مراجعة الحملة</h2>
               <div className="grid gap-3 md:grid-cols-3">
                 <Info label="النوع" value={campaignType === 'TEXT' ? 'رسالة نصية' : 'قالب واتساب'} />
-                <Info label="المرضى" value={selectedPatientIds.length} />
+                <Info label="المرضى" value={totalAudienceCount} />
                 <Info label="الصورة" value={campaignImageUrl || selectedTemplate?.imageUrl ? 'موجودة' : 'بدون'} />
               </div>
               <PrimaryButton type="button" onClick={handleSendCampaign} disabled={sending} className="w-full">
@@ -545,7 +648,7 @@ export default function CampaignsPage() {
             <p className="whitespace-pre-wrap text-sm leading-7 text-white">
               {campaignType === 'TEXT'
                 ? messageText || 'اكتب نص الرسالة لظهور المعاينة.'
-                : renderTemplatePreview(selectedTemplateBody || 'اختر قالباً لظهور المعاينة.', templateBodyParams, selectedPatients[0])}
+                : renderTemplatePreview(selectedTemplateBody || 'اختر قالباً لظهور المعاينة.', templateBodyParams, selectedPatients[0], selectedTemplate?.name)}
             </p>
           </div>
           <div className="mt-4 text-sm text-slate-400">

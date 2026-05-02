@@ -143,6 +143,22 @@ const buildAudienceWhere = async ({ audience, patientIds, filters }) => {
   return baseWhere;
 };
 
+const normalizeExternalRecipients = (recipients) => {
+  if (!Array.isArray(recipients)) return [];
+
+  const seen = new Set();
+  return recipients
+    .map((item) => ({
+      phone: String(item?.phone || '').replace(/[^\d+]/g, '').trim(),
+      name: String(item?.name || '').trim(),
+    }))
+    .filter((item) => {
+      if (!item.phone || item.phone.length < 8 || seen.has(item.phone)) return false;
+      seen.add(item.phone);
+      return true;
+    });
+};
+
 const sendBroadcast = async (req, res, next) => {
   try {
     const {
@@ -157,6 +173,7 @@ const sendBroadcast = async (req, res, next) => {
       templateBodyParams,
       templateBodyNamedParams,
       imageUrl,
+      externalRecipients,
     } = req.body;
 
     if (broadcastType === 'TEXT' && !messageText?.trim()) {
@@ -184,15 +201,23 @@ const sendBroadcast = async (req, res, next) => {
       }
     }
 
-    const audienceWhere = await buildAudienceWhere({ audience, patientIds, filters });
-    if (!audienceWhere) {
+    const importedRecipients = normalizeExternalRecipients(externalRecipients);
+    let audienceWhere = null;
+    let patients = importedRecipients;
+
+    if (!patients.length) {
+      audienceWhere = await buildAudienceWhere({ audience, patientIds, filters });
+    }
+    if (!patients.length && !audienceWhere) {
       return res.status(400).json({ error: 'لا يوجد مرضى مطابقين للفلاتر المحددة' });
     }
 
-    const patients = await prisma.patient.findMany({
-      where: audienceWhere,
-      select: { id: true, phone: true, name: true },
-    });
+    if (!patients.length) {
+      patients = await prisma.patient.findMany({
+        where: audienceWhere,
+        select: { id: true, phone: true, name: true },
+      });
+    }
 
     if (patients.length === 0) {
       return res.status(400).json({ error: 'لا يوجد مرضى متطابقين في قاعدة البيانات' });
@@ -237,7 +262,7 @@ const sendBroadcast = async (req, res, next) => {
           ];
 
           if (resolvedTemplateName === 'clinic_offer_text_ar' && params.length === 0) {
-            params.push({ name: 'name', text: patient.name || 'عميلنا' });
+            params.push(patient.name || 'عميلنا');
           }
 
           await whatsappService.sendTemplateMessage(
