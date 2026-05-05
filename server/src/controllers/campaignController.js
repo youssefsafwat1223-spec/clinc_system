@@ -1,4 +1,4 @@
-const prisma = require('../lib/prisma');
+﻿const prisma = require('../lib/prisma');
 const config = require('../config/env');
 const whatsappService = require('../services/whatsappService');
 
@@ -39,11 +39,11 @@ const createTemplate = async (req, res, next) => {
     const data = normalizeTemplatePayload(req.body);
 
     if (!data.name || !data.displayName) {
-      return res.status(400).json({ error: 'اسم القالب واسم العرض مطلوبان' });
+      return res.status(400).json({ error: 'ط§ط³ظ… ط§ظ„ظ‚ط§ظ„ط¨ ظˆط§ط³ظ… ط§ظ„ط¹ط±ط¶ ظ…ط·ظ„ظˆط¨ط§ظ†' });
     }
 
     if (data.headerType === 'IMAGE' && !data.imageUrl) {
-      return res.status(400).json({ error: 'ارفع صورة للقالب الذي يحتوي على Header Image' });
+      return res.status(400).json({ error: 'ط§ط±ظپط¹ طµظˆط±ط© ظ„ظ„ظ‚ط§ظ„ط¨ ط§ظ„ط°ظٹ ظٹط­طھظˆظٹ ط¹ظ„ظ‰ Header Image' });
     }
 
     const template = await prisma.campaignTemplate.create({ data });
@@ -58,11 +58,11 @@ const updateTemplate = async (req, res, next) => {
     const data = normalizeTemplatePayload(req.body);
 
     if (!data.name || !data.displayName) {
-      return res.status(400).json({ error: 'اسم القالب واسم العرض مطلوبان' });
+      return res.status(400).json({ error: 'ط§ط³ظ… ط§ظ„ظ‚ط§ظ„ط¨ ظˆط§ط³ظ… ط§ظ„ط¹ط±ط¶ ظ…ط·ظ„ظˆط¨ط§ظ†' });
     }
 
     if (data.headerType === 'IMAGE' && !data.imageUrl) {
-      return res.status(400).json({ error: 'ارفع صورة للقالب الذي يحتوي على Header Image' });
+      return res.status(400).json({ error: 'ط§ط±ظپط¹ طµظˆط±ط© ظ„ظ„ظ‚ط§ظ„ط¨ ط§ظ„ط°ظٹ ظٹط­طھظˆظٹ ط¹ظ„ظ‰ Header Image' });
     }
 
     const template = await prisma.campaignTemplate.update({
@@ -79,7 +79,7 @@ const updateTemplate = async (req, res, next) => {
 const removeTemplate = async (req, res, next) => {
   try {
     await prisma.campaignTemplate.delete({ where: { id: req.params.id } });
-    res.json({ message: 'تم حذف القالب بنجاح' });
+    res.json({ message: 'طھظ… ط­ط°ظپ ط§ظ„ظ‚ط§ظ„ط¨ ط¨ظ†ط¬ط§ط­' });
   } catch (error) {
     next(error);
   }
@@ -177,15 +177,15 @@ const sendBroadcast = async (req, res, next) => {
     } = req.body;
 
     if (broadcastType === 'TEXT' && !messageText?.trim()) {
-      return res.status(400).json({ error: 'يرجى إدخال نص الرسالة' });
+      return res.status(400).json({ error: 'ظٹط±ط¬ظ‰ ط¥ط¯ط®ط§ظ„ ظ†طµ ط§ظ„ط±ط³ط§ظ„ط©' });
     }
 
     if (platform !== 'WHATSAPP') {
-      return res.status(400).json({ error: 'الحملات متاحة للواتساب فقط حالياً' });
+      return res.status(400).json({ error: 'ط§ظ„ط­ظ…ظ„ط§طھ ظ…طھط§ط­ط© ظ„ظ„ظˆط§طھط³ط§ط¨ ظپظ‚ط· ط­ط§ظ„ظٹط§ظ‹' });
     }
 
     if (!['ALL', 'SELECTED', 'FILTERED'].includes(audience)) {
-      return res.status(400).json({ error: 'نوع الجمهور غير مدعوم' });
+      return res.status(400).json({ error: 'ظ†ظˆط¹ ط§ظ„ط¬ظ…ظ‡ظˆط± ط؛ظٹط± ظ…ط¯ط¹ظˆظ…' });
     }
 
     let selectedTemplate = null;
@@ -197,7 +197,7 @@ const sendBroadcast = async (req, res, next) => {
       }
 
       if (!selectedTemplate && !templateName?.trim()) {
-        return res.status(400).json({ error: 'اختر قالباً محفوظاً قبل الإرسال' });
+        return res.status(400).json({ error: 'ط§ط®طھط± ظ‚ط§ظ„ط¨ط§ظ‹ ظ…ط­ظپظˆط¸ط§ظ‹ ظ‚ط¨ظ„ ط§ظ„ط¥ط±ط³ط§ظ„' });
       }
     }
 
@@ -209,7 +209,7 @@ const sendBroadcast = async (req, res, next) => {
       audienceWhere = await buildAudienceWhere({ audience, patientIds, filters });
     }
     if (!patients.length && !audienceWhere) {
-      return res.status(400).json({ error: 'لا يوجد مرضى مطابقين للفلاتر المحددة' });
+      return res.status(400).json({ error: 'ظ„ط§ ظٹظˆط¬ط¯ ظ…ط±ط¶ظ‰ ظ…ط·ط§ط¨ظ‚ظٹظ† ظ„ظ„ظپظ„ط§طھط± ط§ظ„ظ…ط­ط¯ط¯ط©' });
     }
 
     if (!patients.length) {
@@ -220,7 +220,7 @@ const sendBroadcast = async (req, res, next) => {
     }
 
     if (patients.length === 0) {
-      return res.status(400).json({ error: 'لا يوجد مرضى متطابقين في قاعدة البيانات' });
+      return res.status(400).json({ error: 'ظ„ط§ ظٹظˆط¬ط¯ ظ…ط±ط¶ظ‰ ظ…طھط·ط§ط¨ظ‚ظٹظ† ظپظٹ ظ‚ط§ط¹ط¯ط© ط§ظ„ط¨ظٹط§ظ†ط§طھ' });
     }
 
     const resolvedTemplateName = selectedTemplate?.name || templateName?.trim();
@@ -233,7 +233,7 @@ const sendBroadcast = async (req, res, next) => {
     const personalizeParam = (value, patient) => {
       if (typeof value !== 'string') return value;
       return value
-        .replace(/\{\{name\}\}/gi, patient.name || 'عميلنا')
+        .replace(/\{\{name\}\}/gi, patient.name || 'ط¹ظ…ظٹظ„ظ†ط§')
         .replace(/\{\{phone\}\}/gi, patient.phone || '');
     };
 
@@ -262,7 +262,7 @@ const sendBroadcast = async (req, res, next) => {
           ];
 
           if (resolvedTemplateName === 'clinic_offer_text_ar' && params.length === 0) {
-            params.push(patient.name || 'عميلنا');
+            params.push(patient.name || 'ط¹ظ…ظٹظ„ظ†ط§');
           }
 
           await whatsappService.sendTemplateMessage(
@@ -287,7 +287,7 @@ const sendBroadcast = async (req, res, next) => {
 
     res.json({
       success: true,
-      summary: `تم الإرسال لعدد ${successCount} مريض، وفشل ${failCount}.`,
+      summary: `طھظ… ط§ظ„ط¥ط±ط³ط§ظ„ ظ„ط¹ط¯ط¯ ${successCount} ظ…ط±ظٹط¶طŒ ظˆظپط´ظ„ ${failCount}.`,
     });
   } catch (error) {
     next(error);
@@ -298,12 +298,17 @@ const sendOffers = async (req, res, next) => {
   try {
     const reviewerIds = Array.isArray(req.body.reviewerIds) ? req.body.reviewerIds.filter(Boolean) : [];
     const message = String(req.body.message || '').trim();
+    const templateName = String(req.body.templateName || 'clinic_custom_message_ar').trim();
+    const imageUrl = toAbsoluteUrl(req, String(req.body.imageUrl || '').trim());
+    const allowedTemplates = ['clinic_custom_message_ar', 'clinic_offer_text_ar', 'clinic_offer_image_ar'];
 
     if (!reviewerIds.length) return res.status(400).json({ error: 'اختر مراجعين للإرسال' });
     if (!message) return res.status(400).json({ error: 'نص العرض مطلوب' });
+    if (!allowedTemplates.includes(templateName)) return res.status(400).json({ error: 'قالب العرض غير مدعوم' });
+    if (templateName === 'clinic_offer_image_ar' && !imageUrl) return res.status(400).json({ error: 'رابط الصورة مطلوب لقالب العرض بصورة' });
 
     const patients = await prisma.patient.findMany({
-      where: { id: { in: reviewerIds }, phone: { not: '' } },
+      where: { id: { in: reviewerIds }, platform: 'WHATSAPP', phone: { not: '' } },
       select: { id: true, name: true, displayName: true, phone: true, platform: true },
     });
 
@@ -313,10 +318,18 @@ const sendOffers = async (req, res, next) => {
 
     for (const patient of patients) {
       try {
+        const patientName = patient.displayName || patient.name || 'عميلنا';
         const body = message
-          .replace(/\{\{name\}\}/g, patient.displayName || patient.name || 'عميلنا')
+          .replace(/\{\{name\}\}/g, patientName)
           .replace(/\{\{phone\}\}/g, patient.phone || '');
-        await whatsappService.sendTextMessage(patient.phone, body);
+
+        await whatsappService.sendTemplateMessage(
+          patient.phone,
+          templateName,
+          'ar',
+          templateName === 'clinic_offer_image_ar' ? imageUrl : null,
+          [patientName, body]
+        );
         successCount++;
         await new Promise((resolve) => setTimeout(resolve, 250));
       } catch (error) {
@@ -325,12 +338,11 @@ const sendOffers = async (req, res, next) => {
       }
     }
 
-    res.json({ success: true, successCount, failCount, failures });
+    res.json({ success: true, successCount, failCount, failures, skippedNonWhatsApp: reviewerIds.length - patients.length });
   } catch (error) {
     next(error);
   }
 };
-
 module.exports = {
   listTemplates,
   createTemplate,
@@ -339,3 +351,4 @@ module.exports = {
   sendBroadcast,
   sendOffers,
 };
+

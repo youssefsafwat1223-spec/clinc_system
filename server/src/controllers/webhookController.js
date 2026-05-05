@@ -631,9 +631,7 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     if (selectedId === 'book_appointment') {
-      if (session?.step === 'select_service') {
-        return await whatsappService.sendTextMessage(from, 'أنت بالفعل داخل خطوات الحجز. اختر الخدمة من القائمة الظاهرة فوق.');
-      }
+      clearBookingSession(from);
       return await startBookingFlow(from, patient);
     }
 
@@ -803,18 +801,25 @@ const handleWhatsAppMessage = async (message, contact) => {
       return await handleTimeSlotSelection(from, patient, timeISO);
     }
 
+    // Handle greetings explicitly to show the Welcome Menu
+    if (content && /مرحبا|سلام|السلام|أهلا|اهلا|هاي|hello|hi|start/i.test(content)) {
+      clearBookingSession(from);
+      return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
+    }
+
+    if (session && content && /رجوع|عودة|القائمة|بداية|إلغاء|الغاء|cancel/i.test(content)) {
+      clearBookingSession(from);
+      return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
+    }
+
     // If in a session, handle session flow
     if (session) {
       return await handleSessionInput(from, patient, content, session);
     }
 
-    // Handle greetings explicitly to show the Welcome Menu
-    if (content && /مرحبا|سلام|السلام|أهلا|اهلا|هاي|hello|hi|start/i.test(content)) {
-      return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
-    }
-
     // Text message keywords for returning patients
     if (content && /حجز|موعد|احجز/i.test(content)) {
+      clearBookingSession(from);
       return await startBookingFlow(from, patient);
     }
 

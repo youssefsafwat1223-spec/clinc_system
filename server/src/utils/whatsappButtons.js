@@ -178,14 +178,14 @@ const buildDaySelection = (to, days) => ({
       text: 'اختر اليوم المناسب للحجز:',
     },
     action: {
-      button: 'عرض الأيام المتاحة',
+      button: 'عرض الأيام',
       sections: [
         {
           title: 'الأيام المتاحة',
           rows: days.map((day) => ({
             id: day.id,
             title: day.title.length > 24 ? day.title.substring(0, 24) : day.title,
-            description: day.description || '',
+            description: (day.description || '').substring(0, 72),
           })),
         },
       ],
@@ -207,14 +207,14 @@ const buildPeriodSelection = (to, dateLabel, periods) => ({
       text: `اختر الفترة المناسبة ليوم ${dateLabel}:`,
     },
     action: {
-      button: 'عرض الفترات المتاحة',
+      button: 'عرض الفترات',
       sections: [
         {
           title: 'الفترات المتاحة',
           rows: periods.map((p) => ({
             id: p.id,
-            title: p.title,
-            description: p.description,
+            title: String(p.title || '').substring(0, 24),
+            description: String(p.description || '').substring(0, 72),
           })),
         },
       ],
