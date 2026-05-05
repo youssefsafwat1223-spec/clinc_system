@@ -1,6 +1,8 @@
 const config = require('../config/env');
 const { formatCurrency } = require('./helpers');
 
+const WHATSAPP_LIST_ROW_LIMIT = 10;
+
 /**
  * Build WhatsApp welcome message with quick reply buttons
  */
@@ -115,7 +117,7 @@ const buildServiceSelection = (to, services, doctorNames = '') => ({
       sections: [
         {
           title: 'الخدمات المتاحة',
-          rows: services.map((s) => {
+          rows: services.slice(0, WHATSAPP_LIST_ROW_LIMIT).map((s) => {
             let desc = s.whatsappPriceDescription || (s.price ? formatCurrency(s.price) : '');
             if (doctorNames) {
               const doctorDesc = `د. ${doctorNames}`;
@@ -153,7 +155,7 @@ const buildDoctorSelection = (to, doctors, serviceName = '') => ({
       sections: [
         {
           title: 'الأطباء المتاحون',
-          rows: doctors.map((doctor) => ({
+          rows: doctors.slice(0, WHATSAPP_LIST_ROW_LIMIT).map((doctor) => ({
             id: `doctor_${doctor.id}`,
             title: doctor.name.substring(0, 24),
             description: (doctor.description || doctor.specialization || '').substring(0, 72),
@@ -182,7 +184,7 @@ const buildDaySelection = (to, days) => ({
       sections: [
         {
           title: 'الأيام المتاحة',
-          rows: days.map((day) => ({
+          rows: days.slice(0, WHATSAPP_LIST_ROW_LIMIT).map((day) => ({
             id: day.id,
             title: day.title.length > 24 ? day.title.substring(0, 24) : day.title,
             description: (day.description || '').substring(0, 72),
@@ -211,7 +213,7 @@ const buildPeriodSelection = (to, dateLabel, periods) => ({
       sections: [
         {
           title: 'الفترات المتاحة',
-          rows: periods.map((p) => ({
+          rows: periods.slice(0, WHATSAPP_LIST_ROW_LIMIT).map((p) => ({
             id: p.id,
             title: String(p.title || '').substring(0, 24),
             description: String(p.description || '').substring(0, 72),
@@ -240,7 +242,7 @@ const buildTimeSlotSelection = (to, slots, dateLabel = '') => ({
       sections: [
         {
           title: 'الأوقات المتاحة',
-          rows: slots.map((slot, index) => {
+          rows: slots.slice(0, WHATSAPP_LIST_ROW_LIMIT).map((slot, index) => {
             // WhatsApp list row title max is 24 chars
             const title = slot.label.length > 24 ? slot.label.substring(0, 24) : slot.label;
             return {
@@ -286,7 +288,7 @@ const buildBookingRejection = (to, alternativeSlots) => ({
       sections: [
         {
           title: 'المواعيد البديلة',
-          rows: alternativeSlots.map((slot, index) => ({
+          rows: alternativeSlots.slice(0, WHATSAPP_LIST_ROW_LIMIT).map((slot, index) => ({
             id: `alt_slot_${index}_${slot.time}`,
             title: slot.label,
             description: slot.doctor || '',
@@ -389,7 +391,7 @@ const buildAppointmentsList = (to, appointments) => ({
       sections: [
         {
           title: 'مواعيدي',
-          rows: appointments.map((apt) => {
+          rows: appointments.slice(0, WHATSAPP_LIST_ROW_LIMIT).map((apt) => {
             const dateStr = apt.scheduledTime ? (apt.scheduledTime.toISOString().split('T')[0]) : '';
             return {
               id: `manage_apt_${apt.id}`,
