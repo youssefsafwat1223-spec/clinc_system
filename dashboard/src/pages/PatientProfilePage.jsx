@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { Calendar, CreditCard, FileText, MessageSquare, Save, Stethoscope, Users } from 'lucide-react';
+import { Calendar, CreditCard, FileText, MessageSquare, Save, Stethoscope, Trash2, Users } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
@@ -8,6 +8,8 @@ import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatCard, 
 import { formatDateTime, money } from '../utils/appointmentUi';
 
 const tabs = [
+  { id: 'teeth', label: 'ملاحظات الأسنان' },
+  { id: 'booking', label: 'حجز موعد' },
   { id: 'overview', label: 'الملف' },
   { id: 'appointments', label: 'المواعيد' },
   { id: 'prescriptions', label: 'الروشتات' },
@@ -29,6 +31,58 @@ const medicationLine = (medication, index) => {
   return `${index + 1}. ${parts.join(' - ')}${medication?.notes ? ` (${medication.notes})` : ''}`;
 };
 
+const emptyToothNote = () => ({ toothNumber: '', note: '' });
+
+const notesObjectToRows = (notes = {}) => {
+  const rows = Object.entries(notes || {})
+    .map(([toothNumber, note]) => ({ toothNumber: String(toothNumber), note: String(note || '') }))
+    .filter((item) => item.toothNumber && item.note);
+  return rows.length ? rows : [emptyToothNote()];
+};
+
+const rowsToNotesObject = (rows = []) =>
+  rows.reduce((acc, item) => {
+    const toothNumber = String(item.toothNumber || '').trim();
+    const note = String(item.note || '').trim();
+    if (toothNumber && note) acc[toothNumber] = note;
+    return acc;
+  }, {});
+
+const buildNext14Days = () =>
+  Array.from({ length: 14 }, (_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() + index);
+    return date.toISOString().slice(0, 10);
+  });
+
+const timeOptions = [
+  '09:00',
+  '09:30',
+  '10:00',
+  '10:30',
+  '11:00',
+  '11:30',
+  '12:00',
+  '12:30',
+  '13:00',
+  '13:30',
+  '14:00',
+  '14:30',
+  '15:00',
+  '15:30',
+  '16:00',
+  '16:30',
+  '17:00',
+  '17:30',
+  '18:00',
+  '18:30',
+  '19:00',
+  '19:30',
+  '20:00',
+  '20:30',
+  '21:00',
+];
+
 export default function PatientProfilePage() {
   const { id } = useParams();
   const [patient, setPatient] = useState(null);
@@ -36,6 +90,13 @@ export default function PatientProfilePage() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const [draft, setDraft] = useState({ displayName: '', notes: '', accountingNotes: '', creditBalance: 0 });
+  const [savingTeeth, setSavingTeeth] = useState(false);
+  const [bookingLoading, setBookingLoading] = useState(false);
+  const [teethNotes, setTeethNotes] = useState({});
+  const [toothRows, setToothRows] = useState([emptyToothNote()]);
+  const [services, setServices] = useState([]);
+  const [availableDoctors, setAvailableDoctors] = useState([]);
+  const [booking, setBooking] = useState({ date: buildNext14Days()[0], time: '09:00', doctorId: '', serviceId: '' });
 
   const loadPatient = async () => {
     setLoading(true);
@@ -49,6 +110,8 @@ export default function PatientProfilePage() {
         accountingNotes: nextPatient.accountingNotes || nextPatient.accountNotes || '',
         creditBalance: nextPatient.creditBalance ?? nextPatient.accountBalance ?? 0,
       });
+      setTeethNotes(nextPatient.teethNotes || {});
+      setToothRows(notesObjectToRows(nextPatient.teethNotes || {}));
     } catch (error) {
       toast.error(error.message || 'فشل تحميل ملف المريض');
     } finally {
@@ -59,6 +122,106 @@ export default function PatientProfilePage() {
   useEffect(() => {
     loadPatient();
   }, [id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadServices = async () => {
+      try {
+        const res = await api.get('/services');
+        const nextServices = res.data.services || [];
+        if (cancelled) return;
+        setServices(nextServices);
+        setBooking((current) => ({ ...current, serviceId: current.serviceId || nextServices[0]?.id || '' }));
+      } catch {
+        if (!cancelled) setServices([]);
+      }
+    };
+    loadServices();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!booking.date || !booking.time || !booking.serviceId) {
+      setAvailableDoctors([]);
+      return;
+    }
+
+    let cancelled = false;
+    const loadDoctors = async () => {
+      try {
+        const scheduledTime = `${booking.date}T${booking.time}`;
+        const res = await api.get('/appointments/availability/doctors', {
+          params: { serviceId: booking.serviceId, scheduledTime },
+        });
+        if (cancelled) return;
+        const doctors = res.data.doctors || [];
+        setAvailableDoctors(doctors);
+        setBooking((current) => ({
+          ...current,
+          doctorId: doctors.some((doctor) => doctor.id === current.doctorId) ? current.doctorId : doctors[0]?.id || '',
+        }));
+      } catch {
+        if (!cancelled) setAvailableDoctors([]);
+      }
+    };
+    loadDoctors();
+    return () => {
+      cancelled = true;
+    };
+  }, [booking.date, booking.time, booking.serviceId]);
+
+  const saveTeethNotes = async (nextTeeth = teethNotes, quiet = false) => {
+    setSavingTeeth(true);
+    try {
+      const res = await api.put(`/patients/${id}/teeth-notes`, { teeth: nextTeeth });
+      const savedTeeth = res.data.teeth || res.data.patient?.teethNotes || {};
+      setTeethNotes(savedTeeth);
+      setToothRows(notesObjectToRows(savedTeeth));
+      setPatient((current) => (current ? { ...current, teethNotes: savedTeeth } : current));
+      if (!quiet) toast.success('تم حفظ ملاحظات الأسنان');
+    } catch (error) {
+      toast.error(error.message || 'فشل حفظ ملاحظات الأسنان');
+    } finally {
+      setSavingTeeth(false);
+    }
+  };
+
+  const saveToothRows = (rows = toothRows, quiet = false) => saveTeethNotes(rowsToNotesObject(rows), quiet);
+  const addToothRow = () => setToothRows((current) => [...current, emptyToothNote()]);
+  const updateToothRow = (index, key, value) => {
+    setToothRows((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)));
+  };
+  const removeToothRow = (index) => {
+    const next = toothRows.filter((_, itemIndex) => itemIndex !== index);
+    const safeNext = next.length ? next : [emptyToothNote()];
+    setToothRows(safeNext);
+    saveToothRows(safeNext, true);
+  };
+
+  const bookAppointment = async () => {
+    if (!booking.date || !booking.time || !booking.doctorId) {
+      toast.warn('اختر التاريخ والوقت والطبيب أولاً');
+      return;
+    }
+
+    setBookingLoading(true);
+    try {
+      await api.post('/appointments', {
+        patientId: id,
+        date: booking.date,
+        time: booking.time,
+        doctorId: booking.doctorId,
+      });
+      toast.success('تم إنشاء الموعد');
+      await loadPatient();
+    } catch (error) {
+      toast.error(error.message || 'فشل إنشاء الموعد');
+    } finally {
+      setBookingLoading(false);
+    }
+  };
 
   const savePatient = async () => {
     setSaving(true);
@@ -177,6 +340,142 @@ export default function PatientProfilePage() {
             </div>
           </DataCard>
         </div>
+      ) : null}
+
+      {activeTab === 'teeth' ? (
+        <DataCard>
+          <div className="grid gap-5 lg:grid-cols-[320px_1fr] lg:items-start">
+            <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
+              <img src="/images/teeth-chart.jpg" alt="خريطة ترقيم الأسنان من 1 إلى 32" className="w-full object-contain" />
+            </div>
+            <div>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-black text-white">ملاحظات الأسنان</h2>
+                  <p className="mt-1 text-sm text-slate-400">اكتب رقم السن من الصورة ثم الملاحظة. نفس طريقة صفحة الروشتة، والحفظ هنا داخل ملف المريض.</p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <SecondaryButton type="button" onClick={addToothRow}>إضافة سن</SecondaryButton>
+                  <PrimaryButton type="button" onClick={() => saveToothRows()} disabled={savingTeeth}>
+                    <Save className="h-4 w-4" />
+                    {savingTeeth ? 'جاري الحفظ...' : 'حفظ الملاحظات'}
+                  </PrimaryButton>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {toothRows.map((item, index) => (
+                  <div key={index} className="grid gap-3 md:grid-cols-[130px_1fr_auto]">
+                    <Field label="رقم السن">
+                      <select
+                        className={inputClass}
+                        value={item.toothNumber}
+                        onChange={(event) => updateToothRow(index, 'toothNumber', event.target.value)}
+                        onBlur={() => saveToothRows(toothRows, true)}
+                      >
+                        <option value="">اختر</option>
+                        {Array.from({ length: 32 }, (_, toothIndex) => toothIndex + 1).map((number) => (
+                          <option key={number} value={number}>سن {number}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="الملاحظة">
+                      <input
+                        className={inputClass}
+                        value={item.note}
+                        onChange={(event) => updateToothRow(index, 'note', event.target.value)}
+                        onBlur={() => saveToothRows(toothRows, true)}
+                        placeholder="مثال: تسوس، حشو، خلع، ألم عند الضغط..."
+                      />
+                    </Field>
+                    {toothRows.length > 1 || item.toothNumber || item.note ? (
+                      <SecondaryButton type="button" onClick={() => removeToothRow(index)} className="self-end text-red-300">
+                        <Trash2 className="h-4 w-4" />
+                        حذف
+                      </SecondaryButton>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </DataCard>
+      ) : null}
+
+      {false && activeTab === 'teeth' ? (
+        <DataCard>
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-black text-white">ملاحظات كل سن</h2>
+              <p className="mt-1 text-sm text-slate-400">اكتب ملاحظة لكل سن. يتم الحفظ تلقائياً عند الخروج من الخانة.</p>
+            </div>
+            <PrimaryButton type="button" onClick={() => saveTeethNotes()} disabled={savingTeeth}>
+              <Save className="h-4 w-4" />
+              {savingTeeth ? 'جاري الحفظ...' : 'حفظ الملاحظات'}
+            </PrimaryButton>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {toothNumbers.map((tooth) => (
+              <div key={tooth} className="rounded-2xl border border-white/10 bg-[#0d1225] p-3">
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <span className="rounded-full bg-sky-500/10 px-3 py-1 text-sm font-black text-sky-300">سن {tooth}</span>
+                  {teethNotes[tooth] ? (
+                    <button
+                      type="button"
+                      className="rounded-lg border border-rose-500/20 p-1.5 text-rose-300 hover:bg-rose-500/10"
+                      onClick={() => {
+                        const next = { ...teethNotes };
+                        delete next[tooth];
+                        setTeethNotes(next);
+                        saveTeethNotes(next, true);
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+                <textarea
+                  className={`${inputClass} min-h-[88px] resize-none`}
+                  value={teethNotes[tooth] || ''}
+                  placeholder="ملاحظة اختيارية"
+                  onChange={(event) => setTeethNotes((current) => ({ ...current, [tooth]: event.target.value }))}
+                  onBlur={() => saveTeethNotes(teethNotes, true)}
+                />
+              </div>
+            ))}
+          </div>
+        </DataCard>
+      ) : null}
+
+      {activeTab === 'booking' ? (
+        <DataCard>
+          <div className="mb-5">
+            <h2 className="text-lg font-black text-white">حجز موعد سريع</h2>
+            <p className="mt-1 text-sm text-slate-400">اختر التاريخ والوقت والطبيب فقط. لا توجد خانة ملاحظات.</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            <Field label="التاريخ">
+              <select className={inputClass} value={booking.date} onChange={(event) => setBooking((current) => ({ ...current, date: event.target.value }))}>
+                {buildNext14Days().map((date) => <option key={date} value={date}>{date}</option>)}
+              </select>
+            </Field>
+            <Field label="الوقت">
+              <select className={inputClass} value={booking.time} onChange={(event) => setBooking((current) => ({ ...current, time: event.target.value }))}>
+                {timeOptions.map((time) => <option key={time} value={time}>{time}</option>)}
+              </select>
+            </Field>
+            <Field label="الطبيب المتاح">
+              <select className={inputClass} value={booking.doctorId} onChange={(event) => setBooking((current) => ({ ...current, doctorId: event.target.value }))}>
+                {availableDoctors.length ? availableDoctors.map((doctor) => <option key={doctor.id} value={doctor.id}>د. {doctor.name}</option>) : <option value="">لا يوجد أطباء متاحون</option>}
+              </select>
+            </Field>
+          </div>
+          <div className="mt-5 flex justify-end">
+            <PrimaryButton type="button" onClick={bookAppointment} disabled={bookingLoading || !booking.doctorId}>
+              <Calendar className="h-4 w-4" />
+              {bookingLoading ? 'جاري الحجز...' : 'احجز'}
+            </PrimaryButton>
+          </div>
+        </DataCard>
       ) : null}
 
       {activeTab === 'appointments' ? <List items={patient.appointments} empty="لا توجد مواعيد" render={(item) => (

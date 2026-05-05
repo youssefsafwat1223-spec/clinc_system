@@ -22,6 +22,8 @@ const ReviewsPage = lazy(() => import('./pages/ReviewsPage.jsx'));
 const PrescriptionsPage = lazy(() => import('./pages/PrescriptionsPage.jsx'));
 const PaymentsPage = lazy(() => import('./pages/PaymentsPage.jsx'));
 const RescheduleDoctorPage = lazy(() => import('./pages/RescheduleDoctorPage.jsx'));
+const DoctorTasksPage = lazy(() => import('./pages/DoctorTasksPage.jsx'));
+const SendOffersPage = lazy(() => import('./pages/SendOffersPage.jsx'));
 const SystemGuidePage = lazy(() => import('./pages/SystemGuidePage.jsx'));
 const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage.jsx'));
 const TermsOfServicePage = lazy(() => import('./pages/TermsOfServicePage.jsx'));
@@ -168,6 +170,24 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['ADMIN']}>
                 <RescheduleDoctorPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/doctor-tasks"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <DoctorTasksPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/send-offers"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'STAFF']}>
+                <SendOffersPage />
               </ProtectedRoute>
             }
           />

@@ -294,10 +294,48 @@ const sendBroadcast = async (req, res, next) => {
   }
 };
 
+const sendOffers = async (req, res, next) => {
+  try {
+    const reviewerIds = Array.isArray(req.body.reviewerIds) ? req.body.reviewerIds.filter(Boolean) : [];
+    const message = String(req.body.message || '').trim();
+
+    if (!reviewerIds.length) return res.status(400).json({ error: 'اختر مراجعين للإرسال' });
+    if (!message) return res.status(400).json({ error: 'نص العرض مطلوب' });
+
+    const patients = await prisma.patient.findMany({
+      where: { id: { in: reviewerIds }, phone: { not: '' } },
+      select: { id: true, name: true, displayName: true, phone: true, platform: true },
+    });
+
+    let successCount = 0;
+    let failCount = 0;
+    const failures = [];
+
+    for (const patient of patients) {
+      try {
+        const body = message
+          .replace(/\{\{name\}\}/g, patient.displayName || patient.name || 'عميلنا')
+          .replace(/\{\{phone\}\}/g, patient.phone || '');
+        await whatsappService.sendTextMessage(patient.phone, body);
+        successCount++;
+        await new Promise((resolve) => setTimeout(resolve, 250));
+      } catch (error) {
+        failCount++;
+        failures.push({ patientId: patient.id, phone: patient.phone, error: error.message });
+      }
+    }
+
+    res.json({ success: true, successCount, failCount, failures });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listTemplates,
   createTemplate,
   updateTemplate,
   removeTemplate,
   sendBroadcast,
+  sendOffers,
 };

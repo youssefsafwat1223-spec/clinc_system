@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Star, MessageCircle, Users, TrendingUp, Filter } from 'lucide-react';
+import { Star, MessageCircle, Users, TrendingUp, Filter, Search } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'react-toastify';
@@ -19,6 +19,23 @@ const ratingBgColors = {
 };
 
 function StarsDisplay({ rating }) {
+  const filteredReviews = reviews.filter((review) => {
+    const term = searchTerm.trim().toLowerCase();
+    const statusMatches =
+      statusFilter === 'ALL' ||
+      (statusFilter === 'EXCELLENT' && review.rating === 5) ||
+      (statusFilter === 'GOOD' && review.rating === 3) ||
+      (statusFilter === 'WEAK' && review.rating === 1) ||
+      (statusFilter === 'WITH_COMMENT' && Boolean(review.comment));
+
+    if (!statusMatches) return false;
+    if (!term) return true;
+
+    return [review.patient?.name, review.patient?.email, review.patient?.phone, review.doctor?.name, ratingLabels[review.rating]]
+      .filter(Boolean)
+      .some((value) => String(value).toLowerCase().includes(term));
+  });
+
   return (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map((i) => (
@@ -53,6 +70,8 @@ export default function ReviewsPage() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [doctorFilter, setDoctorFilter] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
 
   const fetchData = async () => {
     try {
@@ -144,6 +163,34 @@ export default function ReviewsPage() {
           />
         </section>
 
+        <div className="glass-card border border-dark-border p-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_220px_120px]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-dark-muted" />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="بحث بالاسم أو البريد أو الهاتف..."
+                className="h-11 w-full rounded-xl border border-dark-border bg-dark-card/80 px-4 pr-10 text-sm text-white outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="h-11 rounded-xl border border-dark-border bg-dark-card/80 px-4 text-sm text-white outline-none focus:border-primary-500/50 focus:ring-2 focus:ring-primary-500/20"
+            >
+              <option value="ALL">كل الحالات</option>
+              <option value="EXCELLENT">ممتاز</option>
+              <option value="GOOD">جيد</option>
+              <option value="WEAK">ضعيف</option>
+              <option value="WITH_COMMENT">به تعليق</option>
+            </select>
+            <div className="flex h-11 items-center justify-center rounded-xl border border-sky-500/20 bg-sky-500/10 text-sm font-bold text-sky-300">
+              {filteredReviews.length} نتيجة
+            </div>
+          </div>
+        </div>
+
         {/* Doctor Rating Breakdown */}
         {stats?.doctorStats?.length > 1 && (
           <div className="glass-card border border-dark-border p-5">
@@ -171,7 +218,7 @@ export default function ReviewsPage() {
             <div className="flex h-64 items-center justify-center">
               <span className="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent" />
             </div>
-          ) : reviews.length === 0 ? (
+          ) : filteredReviews.length === 0 ? (
             <div className="glass-card flex flex-col items-center justify-center p-16 text-dark-muted">
               <Star className="mb-4 h-16 w-16 opacity-20" />
               <p className="text-lg">لا توجد تقييمات بعد</p>
@@ -179,7 +226,7 @@ export default function ReviewsPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {reviews.map((review) => (
+              {filteredReviews.map((review) => (
                 <div
                   key={review.id}
                   className={`rounded-xl border p-4 transition-colors hover:border-primary-500/20 ${ratingBgColors[review.rating] || 'bg-dark-bg/40 border-dark-border'}`}

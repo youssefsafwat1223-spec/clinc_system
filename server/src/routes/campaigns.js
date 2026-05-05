@@ -10,5 +10,6 @@ router.post('/templates', requireRole('ADMIN'), campaignController.createTemplat
 router.put('/templates/:id', requireRole('ADMIN'), campaignController.updateTemplate);
 router.delete('/templates/:id', requireRole('ADMIN'), campaignController.removeTemplate);
 router.post('/broadcast', requireRole('ADMIN', 'STAFF'), campaignController.sendBroadcast);
+router.post('/send-offers', requireRole('ADMIN', 'STAFF'), campaignController.sendOffers);
 
 module.exports = router;

@@ -4,6 +4,7 @@ const {
   getOne,
   create,
   update,
+  saveTeethNotes,
   remove,
   listGroups,
   createGroup,
@@ -27,6 +28,7 @@ router.delete('/discounts/:id', requireRole('ADMIN'), removeDiscount);
 router.get('/', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), getAll);
 router.get('/:id', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), getOne);
 router.post('/', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), create);
+router.put('/:id/teeth-notes', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), saveTeethNotes);
 router.put('/:id', requireRole('ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'), update);
 router.delete('/:id', requireRole('ADMIN'), remove);
 

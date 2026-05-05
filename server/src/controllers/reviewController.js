@@ -18,7 +18,7 @@ const getAll = async (req, res, next) => {
     const reviews = await prisma.review.findMany({
       where,
       include: {
-        patient: { select: { name: true, phone: true } },
+        patient: { select: { name: true, phone: true, email: true } },
         doctor: { select: { name: true, specialization: true } },
         appointment: { select: { scheduledTime: true, service: { select: { nameAr: true } } } },
       },

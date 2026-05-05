@@ -84,6 +84,7 @@ model Doctor {
   consultations  Consultation[]
   prescriptions  Prescription[]
   reviews        Review[]
+  tasks          DoctorService[]
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
@@ -95,6 +96,9 @@ model Patient {
   name         String
   displayName  String?       @map("display_name")
   phone         String         @unique
+  email         String?
+  age           Int?
+  gender        String?
   platform      Platform       @default(WHATSAPP)
   whatsappId    String?        @unique @map("whatsapp_id")
   facebookId    String?        @unique @map("facebook_id")
@@ -107,6 +111,7 @@ model Patient {
   totalSpent    Float          @default(0) @map("total_spent")
   lastPaymentDate DateTime?    @map("last_payment_date")
   creditBalance Float          @default(0) @map("credit_balance")
+  teethNotes    Json           @default("{}") @map("teeth_notes")
   appointments  Appointment[]
   payments      Payment[]
   messages      Message[]
@@ -130,10 +135,23 @@ model Service {
   active       Boolean       @default(true)
   appointments Appointment[]
   payments     Payment[]
+  doctors      DoctorService[]
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 
   @@map("services")
+}
+
+model DoctorService {
+  id        String   @id @default(uuid())
+  doctorId  String   @map("doctor_id")
+  doctor    Doctor   @relation(fields: [doctorId], references: [id], onDelete: Cascade)
+  serviceId String   @map("service_id")
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([doctorId, serviceId])
+  @@map("doctor_services")
 }
 
 model Appointment {

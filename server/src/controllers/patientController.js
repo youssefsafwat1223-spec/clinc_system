@@ -99,6 +99,7 @@ const getAll = async (req, res, next) => {
           OR: [
             { name: { contains: search, mode: 'insensitive' } },
             { displayName: { contains: search, mode: 'insensitive' } },
+            { email: { contains: search, mode: 'insensitive' } },
             { phone: { contains: search } },
           ],
         }
@@ -190,6 +191,9 @@ const create = async (req, res, next) => {
       name,
       displayName,
       phone,
+      email,
+      age,
+      gender,
       platform,
       notes,
       accountNotes,
@@ -215,6 +219,9 @@ const create = async (req, res, next) => {
           name: name.trim(),
           displayName: displayName?.trim() || null,
           phone: phone.trim(),
+          email: email?.trim() || null,
+          age: age !== undefined && age !== '' ? Number(age) || null : null,
+          gender: gender?.trim() || null,
           platform: normalizedPlatform,
           notes: notes || null,
           accountNotes: accountNotes || null,
@@ -249,6 +256,9 @@ const update = async (req, res, next) => {
       name,
       displayName,
       phone,
+      email,
+      age,
+      gender,
       notes,
       accountNotes,
       accountBalance,
@@ -266,6 +276,9 @@ const update = async (req, res, next) => {
       ...(name !== undefined && { name: name.trim() }),
       ...(displayName !== undefined && { displayName: displayName?.trim() || null }),
       ...(phone !== undefined && { phone: phone.trim() }),
+      ...(email !== undefined && { email: email?.trim() || null }),
+      ...(age !== undefined && { age: age === '' || age === null ? null : Number(age) || null }),
+      ...(gender !== undefined && { gender: gender?.trim() || null }),
       ...(notes !== undefined && { notes }),
       ...(accountNotes !== undefined && { accountNotes }),
       ...(accountBalance !== undefined && { accountBalance: Number(accountBalance) || 0 }),
@@ -294,6 +307,31 @@ const update = async (req, res, next) => {
     });
 
     res.json({ patient });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const saveTeethNotes = async (req, res, next) => {
+  try {
+    const existingPatient = await getAccessiblePatient(req, req.params.id);
+    if (!existingPatient) return res.status(404).json({ error: 'المريض غير موجود' });
+
+    const rawTeeth = req.body?.teeth && typeof req.body.teeth === 'object' ? req.body.teeth : {};
+    const teeth = {};
+    for (const [key, value] of Object.entries(rawTeeth)) {
+      if (!/^\d{1,2}$/.test(String(key))) continue;
+      const note = value === null || value === undefined ? '' : String(value).trim();
+      if (note) teeth[String(key)] = note;
+    }
+
+    const patient = await prisma.patient.update({
+      where: { id: req.params.id },
+      data: { teethNotes: teeth },
+      select: { id: true, teethNotes: true },
+    });
+
+    res.json({ patient, teeth: patient.teethNotes || {} });
   } catch (error) {
     next(error);
   }
@@ -344,12 +382,19 @@ const bulkImport = async (req, res, next) => {
 
     if (rows.length === 0) return res.status(400).json({ error: 'قائمة المرضى مطلوبة' });
 
-    let processed = 0;
+    const summary = { total: rows.length, created: 0, updated: 0, failed: 0, errors: [] };
     await prisma.$transaction(async (tx) => {
-      for (const row of rows) {
+      for (let index = 0; index < rows.length; index++) {
+        const row = rows[index];
         const name = String(row.name || '').trim();
         const phone = String(row.phone || '').trim();
-        if (!name || !phone) continue;
+        if (!name || !phone) {
+          summary.failed++;
+          summary.errors.push({ row: index + 1, error: 'الاسم والهاتف مطلوبان' });
+          continue;
+        }
+
+        const exists = await tx.patient.findUnique({ where: { phone } });
 
         const patient = await tx.patient.upsert({
           where: { phone },
@@ -357,11 +402,17 @@ const bulkImport = async (req, res, next) => {
             name,
             ...(row.displayName !== undefined && { displayName: String(row.displayName || '').trim() || null }),
             ...(row.notes !== undefined && { notes: String(row.notes || '') }),
+            ...(row.email !== undefined && { email: String(row.email || '').trim() || null }),
+            ...(row.age !== undefined && { age: row.age === '' || row.age === null ? null : Number(row.age) || null }),
+            ...(row.gender !== undefined && { gender: String(row.gender || '').trim() || null }),
           },
           create: {
             name,
             phone,
             displayName: String(row.displayName || '').trim() || null,
+            email: String(row.email || '').trim() || null,
+            age: row.age === '' || row.age === null || row.age === undefined ? null : Number(row.age) || null,
+            gender: String(row.gender || '').trim() || null,
             notes: row.notes || null,
             platform: row.platform || 'WHATSAPP',
           },
@@ -373,11 +424,12 @@ const bulkImport = async (req, res, next) => {
           { groupNames: [...defaultGroupNames, ...parseGroupNames(row.groupNames)] },
           false
         );
-        processed++;
+        if (exists) summary.updated++;
+        else summary.created++;
       }
     });
 
-    res.json({ success: true, processed });
+    res.json({ success: true, summary, processed: summary.created + summary.updated });
   } catch (error) {
     next(error);
   }
@@ -473,6 +525,7 @@ module.exports = {
   getOne,
   create,
   update,
+  saveTeethNotes,
   remove,
   listGroups,
   createGroup,

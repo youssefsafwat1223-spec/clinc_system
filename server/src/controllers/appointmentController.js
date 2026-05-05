@@ -114,16 +114,33 @@ const create = async (req, res, next) => {
       doctorId,
       serviceId,
       scheduledTime,
+      date,
+      time,
       confirmImmediately = false,
       notifyPatient = true,
       notes,
     } = req.body;
 
+    const resolvedServiceId =
+      serviceId ||
+      (
+        await prisma.service.findFirst({
+          where: { active: true },
+          orderBy: { createdAt: 'asc' },
+          select: { id: true },
+        })
+      )?.id;
+    const resolvedScheduledTime = scheduledTime || (date && time ? `${date}T${time}` : null);
+
+    if (!patientId || !(scopedDoctor?.id || doctorId) || !resolvedServiceId || !resolvedScheduledTime) {
+      return res.status(400).json({ error: 'المريض والطبيب والتاريخ والوقت مطلوبة' });
+    }
+
     let result = await appointmentService.createAppointment({
       patientId,
       doctorId: scopedDoctor?.id || doctorId,
-      serviceId,
-      scheduledTime,
+      serviceId: resolvedServiceId,
+      scheduledTime: resolvedScheduledTime,
     });
 
     if (result.conflict) {

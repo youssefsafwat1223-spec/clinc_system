@@ -13,6 +13,7 @@ const getAll = async (req, res, next) => {
       orderBy: { createdAt: 'desc' },
       include: {
         user: { select: { email: true, displayName: true, role: true, active: true } },
+        tasks: { include: { service: true } },
         _count: { select: { appointments: true } },
       },
     });
@@ -29,6 +30,7 @@ const getOne = async (req, res, next) => {
       where: { id: req.params.id },
       include: {
         user: { select: { email: true, displayName: true, role: true, active: true } },
+        tasks: { include: { service: true } },
         appointments: {
           include: { patient: true, service: true },
           orderBy: { scheduledTime: 'desc' },
@@ -206,6 +208,53 @@ const updateMySchedule = async (req, res, next) => {
   }
 };
 
+const getTasks = async (req, res, next) => {
+  try {
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: req.params.id },
+      include: { tasks: { include: { service: true } } },
+    });
+    if (!doctor) return res.status(404).json({ error: 'الطبيب غير موجود' });
+    res.json({ doctor, treatmentIds: doctor.tasks.map((task) => task.serviceId) });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateTasks = async (req, res, next) => {
+  try {
+    const doctor = await prisma.doctor.findUnique({ where: { id: req.params.id } });
+    if (!doctor) return res.status(404).json({ error: 'الطبيب غير موجود' });
+
+    const requestedIds = Array.isArray(req.body.treatmentIds) ? req.body.treatmentIds.filter(Boolean) : [];
+    const services = await prisma.service.findMany({ where: { id: { in: requestedIds } }, select: { id: true } });
+    const treatmentIds = services.map((service) => service.id);
+
+    await prisma.$transaction(async (tx) => {
+      await tx.doctorService.deleteMany({ where: { doctorId: req.params.id } });
+      if (treatmentIds.length) {
+        await tx.doctorService.createMany({
+          data: treatmentIds.map((serviceId) => ({ doctorId: req.params.id, serviceId })),
+          skipDuplicates: true,
+        });
+      }
+    });
+
+    const updated = await prisma.doctor.findUnique({
+      where: { id: req.params.id },
+      include: {
+        user: { select: { email: true, displayName: true, role: true, active: true } },
+        tasks: { include: { service: true } },
+        _count: { select: { appointments: true } },
+      },
+    });
+
+    res.json({ doctor: updated, treatmentIds });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const removeLegacy = async (req, res, next) => {
   try {
     const existingDoctor = await prisma.doctor.findUnique({
@@ -321,5 +370,7 @@ module.exports = {
   create,
   update,
   updateMySchedule,
+  getTasks,
+  updateTasks,
   remove,
 };

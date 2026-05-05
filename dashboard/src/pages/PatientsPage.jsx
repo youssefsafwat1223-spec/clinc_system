@@ -6,6 +6,7 @@ import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 import { useNavigate } from 'react-router-dom';
+import { DataCard, Field, PrimaryButton, SecondaryButton, inputClass } from '../components/ui';
 
 const formatMedicationLine = (medication, index) => {
   if (typeof medication === 'string') {
@@ -56,6 +57,51 @@ export default function PatientsPage() {
   const [displayNameDraft, setDisplayNameDraft] = useState('');
   const [accountNotesDraft, setAccountNotesDraft] = useState('');
   const [accountBalanceDraft, setAccountBalanceDraft] = useState('0');
+  const [importRows, setImportRows] = useState([]);
+  const [importing, setImporting] = useState(false);
+
+  const parseImportFile = async (file) => {
+    if (!file) return;
+    if (false && /\.(xlsx|xls|docx|doc)$/i.test(file.name)) {
+      toast.warn('من غير مكتبات خارجية ارفع الملف كـ CSV أو انسخ جدول Word واحفظه TXT/CSV.');
+      return;
+    }
+
+    const text = await file.text();
+    const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    const rows = lines.map((line) => line.split(line.includes('\t') ? '\t' : ',').map((cell) => cell.trim()));
+    const header = rows[0] || [];
+    const hasHeader = header.some((cell) => /name|phone|email|age|gender|اسم|هاتف|بريد|عمر|نوع/i.test(cell));
+    const dataRows = hasHeader ? rows.slice(1) : rows;
+
+    const nextRows = dataRows.map((row, index) => ({
+      row: index + 1,
+      name: row[0] || '',
+      phone: row[1] || '',
+      email: row[2] || '',
+      age: row[3] || '',
+      gender: row[4] || '',
+    })).filter((row) => row.name || row.phone);
+
+    setImportRows(nextRows);
+    toast.success(`تم تجهيز ${nextRows.length} صف للمعاينة`);
+  };
+
+  const importPatients = async () => {
+    if (!importRows.length) return toast.warn('ارفع ملفاً أولاً');
+    try {
+      setImporting(true);
+      const res = await api.post('/patients/bulk-import', { patients: importRows });
+      const summary = res.data.summary || {};
+      toast.success(`تم الاستيراد: جديد ${summary.created || 0}، تحديث ${summary.updated || 0}، فشل ${summary.failed || 0}`);
+      setImportRows([]);
+      fetchPatients(1, searchTerm);
+    } catch (error) {
+      toast.error(error.response?.data?.error || error.message || 'فشل استيراد المرضى');
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const fetchPatients = async (currentPage = page, currentSearch = searchTerm) => {
     try {
@@ -149,6 +195,53 @@ export default function PatientsPage() {
   return (
     <AppLayout>
       <div className="space-y-6">
+        <DataCard>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <h2 className="text-lg font-black text-white">استيراد مرضى من ملف</h2>
+              <p className="mt-1 text-sm text-slate-400">الأعمدة بالترتيب: الاسم، الهاتف، البريد، العمر، النوع. استخدم CSV/TSV أو TXT من جدول Word.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <label className="inline-flex cursor-pointer items-center rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-white/10">
+                اختيار ملف
+                <input type="file" accept=".csv,.tsv,.txt,.doc,.docx,.xls,.xlsx" className="hidden" onChange={(event) => parseImportFile(event.target.files?.[0])} />
+              </label>
+              <PrimaryButton type="button" onClick={importPatients} disabled={importing || !importRows.length}>
+                {importing ? 'جاري الاستيراد...' : 'استيراد'}
+              </PrimaryButton>
+              {importRows.length ? <SecondaryButton type="button" onClick={() => setImportRows([])}>مسح المعاينة</SecondaryButton> : null}
+            </div>
+          </div>
+          {importRows.length ? (
+            <div className="mt-5 max-h-72 overflow-auto rounded-2xl border border-white/10">
+              <table className="w-full min-w-[720px] text-right text-sm">
+                <thead className="bg-white/5 text-slate-300">
+                  <tr>
+                    <th className="p-3">#</th>
+                    <th className="p-3">الاسم</th>
+                    <th className="p-3">الهاتف</th>
+                    <th className="p-3">البريد</th>
+                    <th className="p-3">العمر</th>
+                    <th className="p-3">النوع</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {importRows.slice(0, 50).map((row) => (
+                    <tr key={row.row} className="border-t border-white/10 text-slate-200">
+                      <td className="p-3">{row.row}</td>
+                      <td className="p-3">{row.name || '-'}</td>
+                      <td className="p-3" dir="ltr">{row.phone || '-'}</td>
+                      <td className="p-3">{row.email || '-'}</td>
+                      <td className="p-3">{row.age || '-'}</td>
+                      <td className="p-3">{row.gender || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </DataCard>
+
         {/* Header */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>

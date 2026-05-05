@@ -32,6 +32,7 @@ const contactRoutes = require('./routes/contacts');
 const discountRoutes = require('./routes/discounts');
 const paymentRoutes = require('./routes/payments');
 const staffRoutes = require('./routes/staff');
+const treatmentRoutes = require('./routes/treatments');
 
 const app = express();
 
@@ -95,6 +96,7 @@ app.use('/api/contacts', contactRoutes);
 app.use('/api/discounts', discountRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/treatments', treatmentRoutes);
 
 app.use(errorHandler);
 

@@ -63,6 +63,10 @@ const getAvailableDoctorsAt = async ({ serviceId, scheduledTime, doctorIds = nul
     where: {
       active: true,
       ...(Array.isArray(doctorIds) && doctorIds.length > 0 ? { id: { in: doctorIds } } : {}),
+      OR: [
+        { tasks: { none: {} } },
+        { tasks: { some: { serviceId } } },
+      ],
     },
     orderBy: { createdAt: 'asc' },
   });
