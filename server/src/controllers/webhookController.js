@@ -32,6 +32,12 @@ const processedWhatsAppMessages = new Map();
 const PROCESSED_WHATSAPP_MESSAGE_TTL_MS = 10 * 60 * 1000;
 const TIME_SLOT_PAGE_SIZE = 9;
 
+const hasWorkingHours = (workingHours) =>
+  Boolean(workingHours && typeof workingHours === 'object' && Object.values(workingHours).some(Boolean));
+
+const resolveDoctorWorkingHours = (doctor, clinicWorkingHours = {}) =>
+  hasWorkingHours(doctor?.workingHours) ? doctor.workingHours : clinicWorkingHours || {};
+
 const pruneBookingSessions = () => {
   const now = Date.now();
   for (const [key, session] of bookingSessions.entries()) {
@@ -848,6 +854,10 @@ const handleWhatsAppMessage = async (message, contact) => {
 
 const getAvailableDaysForDoctor = async (doctor, service) => {
   const allDays = [];
+  const clinicSettings = await prisma.clinicSettings.findFirst({
+    select: { workingHours: true },
+  });
+  const workingHours = resolveDoctorWorkingHours(doctor, clinicSettings?.workingHours || {});
 
   for (let i = 0; i < SERVICE_DAY_LOOKAHEAD_DAYS; i++) {
     const date = new Date();
@@ -867,7 +877,7 @@ const getAvailableDaysForDoctor = async (doctor, service) => {
     });
 
     const bookedTimes = bookedAppointments.map((appointment) => appointment.scheduledTime);
-    const daySlots = generateTimeSlots(date, doctor.workingHours || {}, service.duration, bookedTimes);
+    const daySlots = generateTimeSlots(date, workingHours, service.duration, bookedTimes);
 
     if (daySlots.length > 0) {
       allDays.push({
@@ -1389,6 +1399,10 @@ const handleDaySelection = async (from, patient, dateString) => {
 
     const service = await prisma.service.findUnique({ where: { id: session.serviceId } });
     const doctors = await prisma.doctor.findMany({ where: { active: true } });
+    const clinicSettings = await prisma.clinicSettings.findFirst({
+      select: { workingHours: true },
+    });
+    const clinicWorkingHours = clinicSettings?.workingHours || {};
     const targetDate = new Date(dateString);
 
     let daySlots = [];
@@ -1411,7 +1425,14 @@ const handleDaySelection = async (from, patient, dateString) => {
         start: appointment.scheduledTime,
         duration: appointment.service?.duration || service.duration,
       }));
-      daySlots.push(...generateTimeSlots(targetDate, doctor.workingHours || {}, service.duration, bookedTimes));
+      daySlots.push(
+        ...generateTimeSlots(
+          targetDate,
+          resolveDoctorWorkingHours(doctor, clinicWorkingHours),
+          service.duration,
+          bookedTimes
+        )
+      );
     }
 
     const uniqueSlots = Array.from(new Map(daySlots.map((slot) => [slot.time, slot])).values())
@@ -1512,6 +1533,10 @@ const handlePeriodSelection = async (from, patient, periodType, dateString) => {
 
     const service = await prisma.service.findUnique({ where: { id: session.serviceId } });
     const doctors = await prisma.doctor.findMany({ where: { active: true } });
+    const clinicSettings = await prisma.clinicSettings.findFirst({
+      select: { workingHours: true },
+    });
+    const clinicWorkingHours = clinicSettings?.workingHours || {};
     const targetDate = new Date(dateString);
     const dayStart = new Date(targetDate);
     dayStart.setHours(0, 0, 0, 0);
@@ -1532,7 +1557,14 @@ const handlePeriodSelection = async (from, patient, periodType, dateString) => {
         start: appointment.scheduledTime,
         duration: appointment.service?.duration || service.duration,
       }));
-      slots.push(...generateTimeSlots(targetDate, doctor.workingHours || {}, service.duration, bookedTimes));
+      slots.push(
+        ...generateTimeSlots(
+          targetDate,
+          resolveDoctorWorkingHours(doctor, clinicWorkingHours),
+          service.duration,
+          bookedTimes
+        )
+      );
     }
 
     const uniqueSlots = Array.from(new Map(slots.map((slot) => [slot.time, slot])).values());

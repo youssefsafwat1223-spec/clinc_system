@@ -11,6 +11,21 @@ const buildRange = (time, durationMinutes) => {
 
 const rangesOverlap = (a, b) => a.start < b.end && a.end > b.start;
 
+const hasWorkingHours = (workingHours) =>
+  Boolean(workingHours && typeof workingHours === 'object' && Object.values(workingHours).some(Boolean));
+
+const getClinicWorkingHours = async () => {
+  const settings = await prisma.clinicSettings.findFirst({
+    select: { workingHours: true },
+  });
+  return settings?.workingHours || {};
+};
+
+const resolveWorkingHours = async (doctorWorkingHours) => {
+  if (hasWorkingHours(doctorWorkingHours)) return doctorWorkingHours;
+  return getClinicWorkingHours();
+};
+
 const getDayBounds = (time) => {
   const dayStart = new Date(time);
   dayStart.setHours(0, 0, 0, 0);
@@ -47,7 +62,8 @@ const isDoctorAvailableAt = async ({ doctorId, scheduledTime, duration, excludeA
   const minLeadMinutes = Number(process.env.MIN_BOOKING_LEAD_MINUTES || 10);
   if (!ignoreLeadTime && requested < new Date(Date.now() + minLeadMinutes * 60 * 1000)) return false;
 
-  const daySlots = generateTimeSlots(requested, doctor.workingHours || {}, duration, []);
+  const workingHours = await resolveWorkingHours(doctor.workingHours);
+  const daySlots = generateTimeSlots(requested, workingHours, duration, []);
   const inWorkingHours = daySlots.some((slot) => new Date(slot.time).getTime() === requested.getTime());
   if (!inWorkingHours) return false;
 
@@ -260,6 +276,7 @@ const rejectAppointment = async (appointmentId, reason) => {
  */
 const getAlternativeSlots = async (doctorId, aroundTime, workingHours, duration = 30) => {
   const baseDate = new Date(aroundTime);
+  const resolvedWorkingHours = await resolveWorkingHours(workingHours);
   const slots = [];
 
   // Check the next 7 days
@@ -286,7 +303,7 @@ const getAlternativeSlots = async (doctorId, aroundTime, workingHours, duration 
       start: appointment.scheduledTime,
       duration: appointment.service?.duration || duration,
     }));
-    const daySlots = generateTimeSlots(date, workingHours, duration, bookedTimes);
+    const daySlots = generateTimeSlots(date, resolvedWorkingHours, duration, bookedTimes);
     slots.push(...daySlots);
 
     if (slots.length >= 10) break;

@@ -12,7 +12,7 @@ const selectUser = {
   active: true,
   createdAt: true,
   updatedAt: true,
-  doctor: { select: { id: true, phone: true, specialization: true, active: true } },
+  doctor: { select: { id: true, phone: true, specialization: true, workingHours: true, active: true } },
 };
 
 const normalizeRole = (role) => (STAFF_ROLES.includes(role) ? role : 'STAFF');
