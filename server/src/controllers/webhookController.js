@@ -718,12 +718,7 @@ const handleWhatsAppMessage = async (message, contact) => {
       // Start standard booking flow
       const services = await prisma.service.findMany({ where: { active: true } });
       const pricedServices = await attachServiceDiscounts(services, patient.id);
-      const doctors = await prisma.doctor.findMany({ where: { active: true }, select: { name: true } });
-      const doctorNames = doctors.map(d => d.name).join(' و ');
-
-      return await whatsappService.sendInteractiveMessage(
-        buildServiceSelection(from, pricedServices, doctorNames)
-      );
+      return await whatsappService.sendTextMessage(from, buildServicesPrompt(pricedServices));
     }
 
     if (selectedId === 'inquiry') {
@@ -779,6 +774,11 @@ const handleWhatsAppMessage = async (message, contact) => {
     if (listId && listId.startsWith('day_')) {
       const dateString = listId.replace('day_', '');
       return await handleDaySelection(from, patient, dateString);
+    }
+
+    if (listId && listId.startsWith('more_days_')) {
+      const offset = Number(listId.replace('more_days_', '')) || 0;
+      return await handleMoreDays(from, patient, offset);
     }
 
     // Period selection
@@ -929,6 +929,68 @@ const buildTimeSlotPage = (slots, offset = 0) => {
   return page;
 };
 
+const DAY_PAGE_SIZE = 9;
+
+const buildDayPage = (days, offset = 0) => {
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const page = days.slice(safeOffset, safeOffset + DAY_PAGE_SIZE);
+  const nextOffset = safeOffset + DAY_PAGE_SIZE;
+
+  if (days.length > nextOffset) {
+    page.push({
+      id: `more_days_${nextOffset}`,
+      title: 'أيام أكثر',
+      description: `عرض ${Math.min(DAY_PAGE_SIZE, days.length - nextOffset)} يوم إضافي`,
+    });
+  }
+
+  return page;
+};
+
+const normalizeArabicText = (value = '') =>
+  String(value)
+    .toLowerCase()
+    .trim()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[ًٌٍَُِّْـ]/g, '')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ');
+
+const buildServicesPrompt = (services = []) => {
+  const lines = services.map((service, index) => {
+    const serviceName = service.nameAr || service.name || `خدمة ${index + 1}`;
+    const price = service.whatsappPriceDescription || (service.price ? formatCurrency(service.price) : '');
+    return `${index + 1}. ${serviceName}${price ? ` - ${price}` : ''}`;
+  });
+
+  return [
+    'الخدمات المتاحة للحجز:',
+    ...lines,
+    '',
+    'اكتب اسم الخدمة المطلوبة كما هو ظاهر في القائمة.',
+  ].join('\n');
+};
+
+const findServiceByText = (services = [], content = '') => {
+  const normalizedInput = normalizeArabicText(content);
+  if (!normalizedInput) return null;
+
+  const exact = services.find((service) => {
+    const names = [service.nameAr, service.name].filter(Boolean).map(normalizeArabicText);
+    return names.includes(normalizedInput);
+  });
+  if (exact) return exact;
+
+  const inclusive = services.find((service) => {
+    const names = [service.nameAr, service.name].filter(Boolean).map(normalizeArabicText);
+    return names.some((name) => name.includes(normalizedInput) || normalizedInput.includes(name));
+  });
+
+  return inclusive || null;
+};
+
 const ARABIC_DAY_NAMES = {
   الاحد: 0,
   الأحد: 0,
@@ -1009,9 +1071,11 @@ const sendDoctorDaySelection = async (from, patient, service, doctor, availableD
     patientId: patient.id,
     serviceId: service.id,
     doctorId: doctor.id,
+    availableDays: allDays,
+    dayOffset: 0,
   });
 
-  await whatsappService.sendInteractiveMessage(buildDaySelection(from, allDays));
+  await whatsappService.sendInteractiveMessage(buildDaySelection(from, buildDayPage(allDays)));
   return true;
 };
 
@@ -1022,14 +1086,35 @@ const startBookingFlow = async (from, patient) => {
     return await whatsappService.sendTextMessage(from, 'عذرًا، لا توجد خدمات متاحة حاليًا.');
   }
 
-  const doctors = await prisma.doctor.findMany({ where: { active: true }, select: { name: true } });
-  const doctorNames = doctors.map((doctor) => doctor.name).join(' و ');
-
   const pricedServices = await attachServiceDiscounts(services, patient.id);
 
   setBookingSession(from, { step: 'select_service', patientId: patient.id });
 
-  await whatsappService.sendInteractiveMessage(buildServiceSelection(from, pricedServices, doctorNames));
+  await whatsappService.sendTextMessage(from, buildServicesPrompt(pricedServices));
+};
+
+const beginServiceDaySelection = async (from, patient, service, sessionOverrides = {}) => {
+  const availableDays = await getAvailableDaysForService(service);
+  if (availableDays.length === 0) {
+    clearBookingSession(from);
+    return await whatsappService.sendTextMessage(from, 'عذراً، لا توجد مواعيد متاحة لهذه الخدمة حالياً.');
+  }
+
+  const existingSession = getBookingSession(from) || {};
+  setBookingSession(from, {
+    ...existingSession,
+    ...sessionOverrides,
+    step: 'select_day',
+    patientId: patient.id,
+    serviceId: service.id,
+    serviceDuration: service.duration,
+    availableDays,
+    dayOffset: 0,
+  });
+
+  return await whatsappService.sendInteractiveMessage(
+    buildDaySelection(from, buildDayPage(availableDays))
+  );
 };
 
 const handleServiceSelectionLegacy = async (from, patient, serviceId) => {
@@ -1107,6 +1192,8 @@ const handleServiceSelection = async (from, patient, serviceId) => {
     if (!service) {
       return await whatsappService.sendTextMessage(from, 'عذرًا، الخدمة غير موجودة.');
     }
+
+    return await beginServiceDaySelection(from, patient, service);
 
     const textBookingSession = getBookingSession(from) || {};
     setBookingSession(from, {
@@ -1451,6 +1538,24 @@ const handlePeriodSelection = async (from, patient, periodType, dateString) => {
   }
 };
 
+const handleMoreDays = async (from, patient, offset) => {
+  const session = getBookingSession(from);
+  if (!session || !session.serviceId || !Array.isArray(session.availableDays)) {
+    clearBookingSession(from);
+    return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
+  }
+
+  const pageDays = buildDayPage(session.availableDays, offset);
+  if (pageDays.length === 0) {
+    return await whatsappService.sendTextMessage(from, 'لا توجد أيام إضافية متاحة حالياً.');
+  }
+
+  session.dayOffset = offset;
+  setBookingSession(from, session);
+
+  return await whatsappService.sendInteractiveMessage(buildDaySelection(from, pageDays));
+};
+
 const handleMoreTimeSlots = async (from, patient, offset) => {
   const session = getBookingSession(from);
   if (!session || !session.serviceId || !Array.isArray(session.availableSlots)) {
@@ -1632,8 +1737,21 @@ const handleTextBookingRequest = async (from, patient, content, session) => {
 const handleSessionInput = async (from, patient, content, session) => {
   // Generic session handler for text input during booking
   if (session.step === 'select_service') {
-    // Re-show service list
-    return await startBookingFlow(from, patient);
+    const services = await prisma.service.findMany({ where: { active: true } });
+    const pricedServices = await attachServiceDiscounts(services, patient.id);
+    const matchedService = findServiceByText(pricedServices, content);
+
+    if (!matchedService) {
+      await whatsappService.sendTextMessage(
+        from,
+        `لم أتعرف على الخدمة المطلوبة.\n\n${buildServicesPrompt(pricedServices)}`
+      );
+      return;
+    }
+
+    return await beginServiceDaySelection(from, patient, matchedService, {
+      rescheduleAptId: session.rescheduleAptId,
+    });
   }
   if (session.step === 'text_booking_request') {
     return await handleTextBookingRequest(from, patient, content, session);
