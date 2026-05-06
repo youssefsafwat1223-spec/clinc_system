@@ -969,7 +969,7 @@ const buildServicesPrompt = (services = []) => {
     'الخدمات المتاحة للحجز:',
     ...lines,
     '',
-    'اكتب اسم الخدمة المطلوبة كما هو ظاهر في القائمة.',
+    'اكتب رقم الخدمة المطلوبة من القائمة.',
   ].join('\n');
 };
 
@@ -1088,7 +1088,14 @@ const startBookingFlow = async (from, patient) => {
 
   const pricedServices = await attachServiceDiscounts(services, patient.id);
 
-  setBookingSession(from, { step: 'select_service', patientId: patient.id });
+  setBookingSession(from, {
+    step: 'select_service',
+    patientId: patient.id,
+    serviceOptions: pricedServices.map((service, index) => ({
+      index: index + 1,
+      id: service.id,
+    })),
+  });
 
   await whatsappService.sendTextMessage(from, buildServicesPrompt(pricedServices));
 };
@@ -1739,7 +1746,16 @@ const handleSessionInput = async (from, patient, content, session) => {
   if (session.step === 'select_service') {
     const services = await prisma.service.findMany({ where: { active: true } });
     const pricedServices = await attachServiceDiscounts(services, patient.id);
-    const matchedService = findServiceByText(pricedServices, content);
+    const selectedNumber = Number.parseInt(String(content || '').trim(), 10);
+    const matchedByNumber =
+      Number.isInteger(selectedNumber) && selectedNumber > 0
+        ? (() => {
+            const selectedOption = (session.serviceOptions || []).find((option) => option.index === selectedNumber);
+            if (!selectedOption) return null;
+            return pricedServices.find((service) => service.id === selectedOption.id) || null;
+          })()
+        : null;
+    const matchedService = matchedByNumber || findServiceByText(pricedServices, content);
 
     if (!matchedService) {
       await whatsappService.sendTextMessage(
