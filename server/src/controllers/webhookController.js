@@ -849,7 +849,7 @@ const handleWhatsAppMessage = async (message, contact) => {
 const getAvailableDaysForDoctor = async (doctor, service) => {
   const allDays = [];
 
-  for (let i = 0; i < 14; i++) {
+  for (let i = 0; i < SERVICE_DAY_LOOKAHEAD_DAYS; i++) {
     const date = new Date();
     date.setDate(date.getDate() + i);
 
@@ -877,7 +877,7 @@ const getAvailableDaysForDoctor = async (doctor, service) => {
       });
     }
 
-    if (allDays.length >= 7) {
+    if (allDays.length >= MAX_AVAILABLE_DAYS_PER_DOCTOR) {
       break;
     }
   }
@@ -905,7 +905,6 @@ const getAvailableDaysForService = async (service) => {
 
   return Array.from(daysByDate.values())
     .sort((first, second) => first.id.localeCompare(second.id))
-    .slice(0, 7)
     .map((day) => ({
       id: day.id,
       title: day.title,
@@ -930,6 +929,13 @@ const buildTimeSlotPage = (slots, offset = 0) => {
 };
 
 const DAY_PAGE_SIZE = 9;
+const SERVICE_DAY_LOOKAHEAD_DAYS = 30;
+const MAX_AVAILABLE_DAYS_PER_DOCTOR = 21;
+
+const normalizeDigits = (value = '') =>
+  String(value)
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
 
 const buildDayPage = (days, offset = 0) => {
   const safeOffset = Math.max(0, Number(offset) || 0);
@@ -974,7 +980,7 @@ const buildServicesPrompt = (services = []) => {
 };
 
 const findServiceByText = (services = [], content = '') => {
-  const normalizedInput = normalizeArabicText(content);
+  const normalizedInput = normalizeArabicText(normalizeDigits(content));
   if (!normalizedInput) return null;
 
   const exact = services.find((service) => {
@@ -1103,8 +1109,21 @@ const startBookingFlow = async (from, patient) => {
 const beginServiceDaySelection = async (from, patient, service, sessionOverrides = {}) => {
   const availableDays = await getAvailableDaysForService(service);
   if (availableDays.length === 0) {
-    clearBookingSession(from);
-    return await whatsappService.sendTextMessage(from, 'عذراً، لا توجد مواعيد متاحة لهذه الخدمة حالياً.');
+    const services = await prisma.service.findMany({ where: { active: true } });
+    const pricedServices = await attachServiceDiscounts(services, patient.id);
+    setBookingSession(from, {
+      ...sessionOverrides,
+      step: 'select_service',
+      patientId: patient.id,
+      serviceOptions: pricedServices.map((option, index) => ({
+        index: index + 1,
+        id: option.id,
+      })),
+    });
+    return await whatsappService.sendTextMessage(
+      from,
+      `عذراً، لا توجد مواعيد متاحة لهذه الخدمة حالياً.\nاختر رقم خدمة أخرى من القائمة:\n\n${buildServicesPrompt(pricedServices)}`
+    );
   }
 
   const existingSession = getBookingSession(from) || {};
@@ -1746,7 +1765,7 @@ const handleSessionInput = async (from, patient, content, session) => {
   if (session.step === 'select_service') {
     const services = await prisma.service.findMany({ where: { active: true } });
     const pricedServices = await attachServiceDiscounts(services, patient.id);
-    const selectedNumber = Number.parseInt(String(content || '').trim(), 10);
+    const selectedNumber = Number.parseInt(normalizeDigits(content).trim(), 10);
     const matchedByNumber =
       Number.isInteger(selectedNumber) && selectedNumber > 0
         ? (() => {
