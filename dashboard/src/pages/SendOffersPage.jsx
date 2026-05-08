@@ -5,23 +5,23 @@ import api from '../api/client';
 import AppLayout from '../components/Layout';
 import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
 
-const steps = ['ط§ط®طھظٹط§ط± ظ…ط±ط§ط¬ط¹ظٹ ظˆط§طھط³ط§ط¨', 'ط§ط®طھظٹط§ط± ط§ظ„ظ‚ط§ظ„ط¨ ظˆط§ظ„ط±ط³ط§ظ„ط©', 'ظ…ط±ط§ط¬ط¹ط© ظˆط¥ط±ط³ط§ظ„'];
+const steps = ['اختيار مراجعي واتساب', 'اختيار القالب والرسالة', 'مراجعة وإرسال'];
 
 const offerTemplates = [
   {
     name: 'clinic_custom_message_ar',
-    label: 'ط±ط³ط§ظ„ط© ظ…ط®طµطµط© ظ…ط±ظ†ط©',
-    hint: 'ظ‚ط§ظ„ط¨ طھط³ظˆظٹظ‚ظٹ ط¹ط§ظ…. ظٹطھظ… طھط¹ط¨ط¦ط© {{1}} ط¨ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶ ظˆ{{2}} ط¨ظ†طµ ط§ظ„ط±ط³ط§ظ„ط©.',
+    label: 'رسالة مخصصة مرنة',
+    hint: 'قالب تسويقي عام. يتم تعبئة {{1}} باسم المريض و{{2}} بنص الرسالة.',
   },
   {
     name: 'clinic_offer_text_ar',
-    label: 'ط¹ط±ط¶ ظ†طµظٹ',
-    hint: 'ط¹ط±ط¶ ط¨ط¯ظˆظ† طµظˆط±ط©. ظٹطھظ… طھط¹ط¨ط¦ط© {{1}} ط¨ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶ ظˆ{{2}} ط¨طھظپط§طµظٹظ„ ط§ظ„ط¹ط±ط¶.',
+    label: 'عرض نصي',
+    hint: 'عرض بدون صورة. يتم تعبئة {{1}} باسم المريض و{{2}} بتفاصيل العرض.',
   },
   {
     name: 'clinic_offer_image_ar',
-    label: 'ط¹ط±ط¶ ط¨طµظˆط±ط©',
-    hint: 'ط¹ط±ط¶ ط¨طµظˆط±ط© ظپظٹ Header. ظٹطھظ… طھط¹ط¨ط¦ط© {{1}} ط¨ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶ ظˆ{{2}} ط¨طھظپط§طµظٹظ„ ط§ظ„ط¹ط±ط¶.',
+    label: 'عرض بصورة',
+    hint: 'عرض بصورة في Header. يتم تعبئة {{1}} باسم المريض و{{2}} بتفاصيل العرض.',
     needsImage: true,
   },
 ];
@@ -64,7 +64,7 @@ export default function SendOffersPage() {
         });
         setPatients((res.data.patients || []).filter((patient) => patient.platform === 'WHATSAPP'));
       } catch (error) {
-        toast.error(error.message || 'ظپط´ظ„ طھط­ظ…ظٹظ„ ظ…ط±ط§ط¬ط¹ظٹ ظˆط§طھط³ط§ط¨');
+        toast.error(error.message || 'فشل تحميل مراجعي واتساب');
       } finally {
         setLoading(false);
       }
@@ -79,7 +79,7 @@ export default function SendOffersPage() {
     patients.forEach((patient) => {
       (patient.groups || []).forEach((membership) => {
         const group = membership.group || membership;
-        if (group?.id) groups.set(group.id, group.name || 'ظ…ط¬ظ…ظˆط¹ط© ط¨ط¯ظˆظ† ط§ط³ظ…');
+        if (group?.id) groups.set(group.id, group.name || 'مجموعة بدون اسم');
       });
     });
     return Array.from(groups, ([id, name]) => ({ id, name }));
@@ -154,9 +154,9 @@ export default function SendOffersPage() {
   };
 
   const sendOffers = async () => {
-    if (!selectedIds.length) return toast.warn('ط§ط®طھط± ظ…ط±ط§ط¬ط¹ظٹظ† ظ…ظ† ظˆط§طھط³ط§ط¨ ط£ظˆظ„ط§ظ‹');
-    if (!message.trim()) return toast.warn('ط§ظƒطھط¨ ظ†طµ ط§ظ„ط¹ط±ط¶ ط£ظˆظ„ط§ظ‹');
-    if (selectedTemplate.needsImage && !imageUrl.trim()) return toast.warn('طµظˆط±ط© ط§ظ„ط¹ط±ط¶ ظ…ط·ظ„ظˆط¨ط© ظ„ظ‡ط°ط§ ط§ظ„ظ‚ط§ظ„ط¨');
+    if (!selectedIds.length) return toast.warn('اختر مراجعين من واتساب أولاً');
+    if (!message.trim()) return toast.warn('اكتب نص العرض أولاً');
+    if (selectedTemplate.needsImage && !imageUrl.trim()) return toast.warn('صورة العرض مطلوبة لهذا القالب');
 
     setSending(true);
     try {
@@ -166,13 +166,13 @@ export default function SendOffersPage() {
         message,
         imageUrl: imageUrl.trim() || undefined,
       });
-      toast.success(`طھظ… ط§ظ„ط¥ط±ط³ط§ظ„: ظ†ط¬ط§ط­ ${res.data.successCount || 0} - ظپط´ظ„ ${res.data.failCount || 0}`);
+      toast.success(`تم الإرسال: نجاح ${res.data.successCount || 0} - فشل ${res.data.failCount || 0}`);
       setStep(0);
       setSelectedIds([]);
       setMessage('');
       setImageUrl('');
     } catch (error) {
-      toast.error(error.message || 'ظپط´ظ„ ط¥ط±ط³ط§ظ„ ط§ظ„ط¹ط±ظˆط¶');
+      toast.error(error.message || 'فشل إرسال العروض');
     } finally {
       setSending(false);
     }
@@ -191,16 +191,16 @@ export default function SendOffersPage() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       setImageUrl(res.data.url);
-      toast.success('طھظ… ط±ظپط¹ طµظˆط±ط© ط§ظ„ط¹ط±ط¶');
+      toast.success('تم رفع صورة العرض');
     } catch (error) {
-      toast.error(error.message || 'ظپط´ظ„ ط±ظپط¹ ط§ظ„طµظˆط±ط©');
+      toast.error(error.message || 'فشل رفع الصورة');
     } finally {
       setUploadingImage(false);
       event.target.value = '';
     }
   };
 
-  const previewName = 'ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶';
+  const previewName = 'اسم المريض';
   const previewText = message
     .replace(/\{\{name\}\}/g, previewName)
     .replace(/\{\{phone\}\}/g, '964xxxxxxxxx');
@@ -208,8 +208,8 @@ export default function SendOffersPage() {
   return (
     <AppLayout>
       <PageHeader
-        title="ط¥ط±ط³ط§ظ„ ط¹ط±ظˆط¶ ظˆط§طھط³ط§ط¨"
-        description="ط§ظ„ط¥ط±ط³ط§ظ„ ظ…ظ† ظ‡ط°ظ‡ ط§ظ„طµظپط­ط© ظ…ط®طµطµ ظ„ظ…ط±ط¶ظ‰ ظˆط§طھط³ط§ط¨ ظپظ‚ط· ط¨ط§ط³طھط®ط¯ط§ظ… ط§ظ„ظ‚ظˆط§ظ„ط¨ ط§ظ„ظ…ط¹طھظ…ط¯ط©."
+        title="إرسال عروض واتساب"
+        description="الإرسال من هذه الصفحة مختص لمرضى واتساب فقط باستخدام القوالب المعتمدة."
       />
 
       <DataCard className="mb-6">
@@ -236,7 +236,7 @@ export default function SendOffersPage() {
       {step === 0 ? (
         <DataCard>
           <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100">
-            ظ„ظ† طھط¸ظ‡ط± ظ‡ظ†ط§ ظ…ط­ط§ط¯ط«ط§طھ Instagram ط£ظˆ Facebook. ظ‡ط°ظ‡ ط§ظ„طµظپط­ط© طھط±ط³ظ„ ظپظ‚ط· ظ‚ظˆط§ظ„ط¨ ظˆط§طھط³ط§ط¨.
+            لن تظهر هنا محادثات Instagram أو Facebook. هذه الصفحة ترسل فقط قوالب واتساب.
           </div>
 
           <div className="mb-4 grid gap-3 xl:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_0.8fr_0.8fr_auto]">
@@ -246,25 +246,25 @@ export default function SendOffersPage() {
                 className={`${inputClass} pr-10`}
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="ط¨ط­ط« ط¨ط§ظ„ط§ط³ظ… ط£ظˆ ط§ظ„ظ‡ط§طھظپ ط£ظˆ ط§ظ„ط¨ط±ظٹط¯"
+                placeholder="بحث بالاسم أو الهاتف أو البريد"
               />
             </div>
 
             <select className={inputClass} value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)}>
-              <option value="ALL">ظƒظ„ ط§ظ„ظپطھط±ط§طھ</option>
-              <option value="last7">ط¢ط®ط± ط£ط³ط¨ظˆط¹</option>
-              <option value="last30">ط¢ط®ط± ط´ظ‡ط±</option>
-              <option value="thisMonth">ظ‡ط°ط§ ط§ظ„ط´ظ‡ط±</option>
+              <option value="ALL">كل الفترات</option>
+              <option value="last7">آخر أسبوع</option>
+              <option value="last30">آخر شهر</option>
+              <option value="thisMonth">هذا الشهر</option>
             </select>
 
             <select className={inputClass} value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-              <option value="recent">ط§ظ„ط£ط­ط¯ط« ط¥ط¶ط§ظپط©</option>
-              <option value="mostBooked">ط§ظ„ط£ظƒط«ط± ط­ط¬ط²ط§ظ‹</option>
-              <option value="leastBooked">ط§ظ„ط£ظ‚ظ„ ط­ط¬ط²ط§ظ‹</option>
+              <option value="recent">الأحدث إضافة</option>
+              <option value="mostBooked">الأكثر حجزاً</option>
+              <option value="leastBooked">الأقل حجزاً</option>
             </select>
 
             <select className={inputClass} value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
-              <option value="ALL">ظƒظ„ ط§ظ„ظ…ط¬ظ…ظˆط¹ط§طھ</option>
+              <option value="ALL">كل المجموعات</option>
               {patientGroups.map((group) => (
                 <option key={group.id} value={group.id}>
                   {group.name}
@@ -273,25 +273,25 @@ export default function SendOffersPage() {
             </select>
 
             <select className={inputClass} value={bookingFilter} onChange={(event) => setBookingFilter(event.target.value)}>
-              <option value="ALL">ظƒظ„ ط§ظ„ط­ط¬ظˆط²ط§طھ</option>
-              <option value="hasBookings">ظ„ط¯ظٹظ‡ظ… ط­ط¬ظˆط²ط§طھ</option>
-              <option value="noBookings">ط¨ط¯ظˆظ† ط­ط¬ظˆط²ط§طھ</option>
+              <option value="ALL">كل الحجوزات</option>
+              <option value="hasBookings">لديهم حجوزات</option>
+              <option value="noBookings">بدون حجوزات</option>
             </select>
 
             <select className={inputClass} value={contactFilter} onChange={(event) => setContactFilter(event.target.value)}>
-              <option value="ALL">ظƒظ„ ط§ظ„ط¨ظٹط§ظ†ط§طھ</option>
-              <option value="hasEmail">ظ„ط¯ظٹظ‡ظ… ط¨ط±ظٹط¯</option>
-              <option value="noEmail">ط¨ط¯ظˆظ† ط¨ط±ظٹط¯</option>
+              <option value="ALL">كل البيانات</option>
+              <option value="hasEmail">لديهم بريد</option>
+              <option value="noEmail">بدون بريد</option>
             </select>
 
             <SecondaryButton type="button" onClick={resetFilters}>
               <RotateCcw className="h-4 w-4" />
-              ط¥ط¹ط§ط¯ط© ط¶ط¨ط·
+              إعادة ضبط
             </SecondaryButton>
           </div>
 
           <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="ظ…ظ† ط¥ط¬ظ…ط§ظ„ظٹ ط¥ظ†ظپط§ظ‚">
+            <Field label="من إجمالي إنفاق">
               <input
                 className={inputClass}
                 type="number"
@@ -301,7 +301,7 @@ export default function SendOffersPage() {
                 placeholder="0"
               />
             </Field>
-            <Field label="ط¥ظ„ظ‰ ط¥ط¬ظ…ط§ظ„ظٹ ط¥ظ†ظپط§ظ‚">
+            <Field label="إلى إجمالي إنفاق">
               <input
                 className={inputClass}
                 type="number"
@@ -312,23 +312,23 @@ export default function SendOffersPage() {
               />
             </Field>
             <div className="flex items-end">
-              <StatusBadge tone="blue">ظˆط§طھط³ط§ط¨ ظپظ‚ط·: {patients.length}</StatusBadge>
+              <StatusBadge tone="blue">واتساب فقط: {patients.length}</StatusBadge>
             </div>
             <div className="flex items-end">
-              <StatusBadge tone="green">ظ†طھط§ط¦ط¬ ط§ظ„ظپظ„طھط±ط©: {filteredPatients.length}</StatusBadge>
+              <StatusBadge tone="green">نتائج الفلترة: {filteredPatients.length}</StatusBadge>
             </div>
           </div>
 
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <StatusBadge tone="amber">ط§ظ„ظ…ط­ط¯ط¯ظˆظ†: {selectedIds.length}</StatusBadge>
+            <StatusBadge tone="amber">المحددون: {selectedIds.length}</StatusBadge>
             <SecondaryButton type="button" onClick={toggleAllFiltered}>
               {allFilteredSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
-              ط§ط®طھط± ط§ظ„ظƒظ„ ({filteredPatients.length})
+              اختر الكل ({filteredPatients.length})
             </SecondaryButton>
           </div>
 
           {loading ? (
-            <p className="text-slate-400">ط¬ط§ط±ظٹ ط§ظ„طھط­ظ…ظٹظ„...</p>
+            <p className="text-slate-400">جارٍ التحميل...</p>
           ) : (
             <div className="grid max-h-[58vh] gap-3 overflow-auto md:grid-cols-2 xl:grid-cols-3">
               {filteredPatients.map((patient) => (
@@ -344,11 +344,11 @@ export default function SendOffersPage() {
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="font-black text-white">{patient.displayName || patient.name || 'ظ…ط±ظٹط¶ ظˆط§طھط³ط§ط¨'}</h3>
+                      <h3 className="font-black text-white">{patient.displayName || patient.name || 'مريض واتساب'}</h3>
                       <p className="mt-1 text-sm text-slate-400" dir="ltr">{patient.phone || '-'}</p>
                       {patient.email ? <p className="mt-1 text-xs text-slate-500">{patient.email}</p> : null}
                       <p className="mt-2 text-xs text-slate-400">
-                        ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ط¥ظ†ظپط§ظ‚: {Number(patient.totalSpent || 0).toLocaleString('ar-IQ')} ط¯.ط¹
+                        إجمالي الإنفاق: {Number(patient.totalSpent || 0).toLocaleString('ar-IQ')} د.ع
                       </p>
                     </div>
                     {selectedIds.includes(patient.id) ? (
@@ -364,7 +364,7 @@ export default function SendOffersPage() {
 
           <div className="mt-5 flex justify-end gap-2">
             <PrimaryButton type="button" onClick={() => setStep(1)} disabled={!selectedIds.length}>
-              ط§ظ„طھط§ظ„ظٹ
+              التالي
             </PrimaryButton>
           </div>
         </DataCard>
@@ -393,21 +393,21 @@ export default function SendOffersPage() {
 
           <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_360px]">
             <div className="space-y-4">
-              <Field label="ظ†طµ ط§ظ„ط¹ط±ط¶ ط£ظˆ ط§ظ„ط±ط³ط§ظ„ط©">
+              <Field label="نص العرض أو الرسالة">
                 <textarea
                   className={`${inputClass} min-h-[220px]`}
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
-                  placeholder="ط§ظƒطھط¨ ط§ظ„ط±ط³ط§ظ„ط© ظ‡ظ†ط§. ظٹظ…ظƒظ†ظƒ ط§ط³طھط®ط¯ط§ظ… {{name}} ظˆ {{phone}}."
+                  placeholder="اكتب الرسالة هنا. يمكنك استخدام {{name}} و {{phone}}."
                 />
               </Field>
 
               {selectedTemplate.needsImage ? (
-                <Field label="طµظˆط±ط© ط§ظ„ط¹ط±ط¶">
+                <Field label="صورة العرض">
                   <div className="flex flex-wrap gap-2">
                     <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold text-slate-300 transition hover:bg-white/10 hover:text-white">
                       <Upload className="h-4 w-4" />
-                      {uploadingImage ? 'ط¬ط§ط±ظٹ ط§ظ„ط±ظپط¹...' : 'ط±ظپط¹ طµظˆط±ط©'}
+                      {uploadingImage ? 'جارٍ الرفع...' : 'رفع صورة'}
                       <input
                         type="file"
                         accept="image/*"
@@ -418,7 +418,7 @@ export default function SendOffersPage() {
                     </label>
                     {imageUrl ? (
                       <SecondaryButton type="button" onClick={() => setImageUrl('')}>
-                        ط­ط°ظپ ط§ظ„طµظˆط±ط©
+                        حذف الصورة
                       </SecondaryButton>
                     ) : null}
                   </div>
@@ -432,30 +432,30 @@ export default function SendOffersPage() {
             <div className="rounded-3xl border border-white/10 bg-[#0d1225] p-5">
               <div className="mb-3 flex items-center gap-2 text-sm font-black text-sky-300">
                 {selectedTemplate.needsImage ? <Image className="h-4 w-4" /> : null}
-                ظ…ط¹ط§ظٹظ†ط© ظˆط§طھط³ط§ط¨
+                معاينة واتساب
               </div>
               {selectedTemplate.needsImage && imageUrl ? (
                 <div className="mb-3 overflow-hidden rounded-2xl border border-white/10 bg-black/20">
-                  <img src={imageUrl} alt="ظ…ط¹ط§ظٹظ†ط© طµظˆط±ط© ط§ظ„ط¹ط±ط¶" className="max-h-48 w-full object-cover" />
+                  <img src={imageUrl} alt="معاينة صورة العرض" className="max-h-48 w-full object-cover" />
                 </div>
               ) : null}
               <p className="text-xs text-slate-500" dir="ltr">{templateName}</p>
               <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white">
-                ظ…ط±ط­ط¨ط§ظ‹ {previewName}
+                مرحباً {previewName}
                 {'\n\n'}
-                {previewText || 'ظ†طµ ط§ظ„ط¹ط±ط¶ ط³ظٹط¸ظ‡ط± ظ‡ظ†ط§'}
+                {previewText || 'نص العرض سيظهر هنا'}
               </p>
             </div>
           </div>
 
           <div className="mt-5 flex justify-between gap-2">
-            <SecondaryButton type="button" onClick={() => setStep(0)}>ط§ظ„ط³ط§ط¨ظ‚</SecondaryButton>
+            <SecondaryButton type="button" onClick={() => setStep(0)}>السابق</SecondaryButton>
             <PrimaryButton
               type="button"
               onClick={() => setStep(2)}
               disabled={!message.trim() || (selectedTemplate.needsImage && !imageUrl.trim())}
             >
-              ط§ظ„طھط§ظ„ظٹ
+              التالي
             </PrimaryButton>
           </div>
         </DataCard>
@@ -464,19 +464,19 @@ export default function SendOffersPage() {
       {step === 2 ? (
         <DataCard>
           <div className="space-y-4">
-            <Info label="ط§ظ„ظ‚ط§ظ„ط¨" value={`${selectedTemplate.label} - ${templateName}`} />
-            <Info label="ط¹ط¯ط¯ ظ…طھظ„ظ‚ظٹ ظˆط§طھط³ط§ط¨" value={selectedIds.length} />
-            <Info label="ط§ظ„طµظˆط±ط©" value={selectedTemplate.needsImage ? imageUrl : 'ظ„ط§ ظٹظˆط¬ط¯'} />
+            <Info label="القالب" value={`${selectedTemplate.label} - ${templateName}`} />
+            <Info label="عدد متلقي واتساب" value={selectedIds.length} />
+            <Info label="الصورة" value={selectedTemplate.needsImage ? imageUrl : 'لا يوجد'} />
             <div className="rounded-2xl border border-white/10 bg-[#0d1225] p-4">
               <p className="mb-2 text-sm font-bold text-slate-300">{`نص المتغير {{2}}`}</p>
               <p className="whitespace-pre-wrap text-sm leading-7 text-white">{message}</p>
             </div>
           </div>
           <div className="mt-5 flex justify-between gap-2">
-            <SecondaryButton type="button" onClick={() => setStep(1)}>ط§ظ„ط³ط§ط¨ظ‚</SecondaryButton>
+            <SecondaryButton type="button" onClick={() => setStep(1)}>السابق</SecondaryButton>
             <PrimaryButton type="button" onClick={sendOffers} disabled={sending}>
               <Send className="h-4 w-4" />
-              {sending ? 'ط¬ط§ط±ظٹ ط§ظ„ط¥ط±ط³ط§ظ„...' : 'ط¥ط±ط³ط§ظ„ ظˆط§طھط³ط§ط¨'}
+              {sending ? 'جارٍ الإرسال...' : 'إرسال واتساب'}
             </PrimaryButton>
           </div>
         </DataCard>
