@@ -835,7 +835,7 @@ const handleWhatsAppMessage = async (message, contact) => {
   } catch (error) {
     console.error('[WhatsApp] handleWhatsAppMessage ERROR:', error.message, error.stack);
     try {
-      await whatsappService.sendTextMessage(from, 'عذراًطŒ حدث خطأ طھظ‚ظ†ظٹ. يرجى المحاولة لاحقاً.');
+      await whatsappService.sendTextMessage(from, 'عذراً، حدث خطأ تقني. يرجى المحاولة لاحقاً.');
     } catch (e) {
       // ignore send error
     }
@@ -1103,24 +1103,34 @@ const sendDoctorDaySelection = async (from, patient, service, doctor, availableD
 };
 
 const startBookingFlow = async (from, patient) => {
-  const services = await prisma.service.findMany({ where: { active: true } });
+  try {
+    const services = await prisma.service.findMany({ where: { active: true } });
 
-  if (services.length === 0) {
-    return await whatsappService.sendTextMessage(from, 'عذراً، لا توجد خدمات متاحة حالياً.');
+    if (services.length === 0) {
+      return await whatsappService.sendTextMessage(from, 'عذراً، لا توجد خدمات متاحة حالياً.');
+    }
+
+    let pricedServices = services;
+    try {
+      pricedServices = await attachServiceDiscounts(services, patient.id);
+    } catch (discountError) {
+      console.error('[Booking] attachServiceDiscounts ERROR:', discountError.message);
+    }
+
+    setBookingSession(from, {
+      step: 'select_service',
+      patientId: patient.id,
+      serviceOptions: pricedServices.map((service, index) => ({
+        index: index + 1,
+        id: service.id,
+      })),
+    });
+
+    await whatsappService.sendTextMessage(from, buildServicesPrompt(pricedServices));
+  } catch (error) {
+    console.error('[Booking] startBookingFlow ERROR:', error.message, error.stack);
+    return await whatsappService.sendTextMessage(from, 'عذراً، حدث خطأ أثناء بدء الحجز. يرجى المحاولة مرة أخرى.');
   }
-
-  const pricedServices = await attachServiceDiscounts(services, patient.id);
-
-  setBookingSession(from, {
-    step: 'select_service',
-    patientId: patient.id,
-    serviceOptions: pricedServices.map((service, index) => ({
-      index: index + 1,
-      id: service.id,
-    })),
-  });
-
-  await whatsappService.sendTextMessage(from, buildServicesPrompt(pricedServices));
 };
 
 const beginServiceDaySelection = async (from, patient, service, sessionOverrides = {}) => {
