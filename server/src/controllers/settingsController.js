@@ -81,9 +81,18 @@ const getPublic = async (req, res, next) => {
     });
 
     // Fetch real stats
-    const [patientCount, appointmentCount] = await Promise.all([
+    const [patientCount, appointmentCount, activeDiscounts] = await Promise.all([
       prisma.patient.count(),
       prisma.appointment.count({ where: { status: 'CONFIRMED' } }),
+      prisma.discountRule.findMany({
+        where: {
+          active: true,
+          OR: [{ startsAt: null }, { startsAt: { lte: new Date() } }],
+          AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: new Date() } }] }],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
     ]);
 
     res.json({
@@ -104,6 +113,15 @@ const getPublic = async (req, res, next) => {
         appointments: appointmentCount,
         doctors: doctors.length,
       },
+      activeDiscounts: activeDiscounts.map((discount) => ({
+        id: discount.id,
+        name: discount.name,
+        type: discount.type,
+        value: discount.value,
+        serviceName: discount.serviceName || null,
+        startsAt: discount.startsAt,
+        endsAt: discount.endsAt,
+      })),
     });
   } catch (error) {
     next(error);

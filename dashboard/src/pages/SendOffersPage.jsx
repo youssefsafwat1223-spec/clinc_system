@@ -11,20 +11,25 @@ const offerTemplates = [
   {
     name: 'clinic_custom_message_ar',
     label: 'ط±ط³ط§ظ„ط© ظ…ط®طµطµط© ظ…ط±ظ†ط©',
-    hint: 'ط§ط³طھط®ط¯ظ…ظ‡ ظ„ط£ظٹ ط±ط³ط§ظ„ط© طھط³ظˆظٹظ‚ظٹط© ط¹ط§ظ…ط©. ط§ظ„ظ…طھط؛ظٹط± {{1}} ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶ ظˆ {{2}} ظ†طµ ط§ظ„ط±ط³ط§ظ„ط©.',
+    hint: 'ظ‚ط§ظ„ط¨ طھط³ظˆظٹظ‚ظٹ ط¹ط§ظ…. ظٹطھظ… طھط¹ط¨ط¦ط© {{1}} ط¨ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶ ظˆ{{2}} ط¨ظ†طµ ط§ظ„ط±ط³ط§ظ„ط©.',
   },
   {
     name: 'clinic_offer_text_ar',
     label: 'ط¹ط±ط¶ ظ†طµظٹ',
-    hint: 'ط§ط³طھط®ط¯ظ…ظ‡ ظ„ط¹ط±ظˆط¶ ط§ظ„ط®طµظ… ط§ظ„ظ†طµظٹط© ط¨ط¯ظˆظ† طµظˆط±ط©. ط§ظ„ظ…طھط؛ظٹط± {{1}} ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶ ظˆ {{2}} طھظپط§طµظٹظ„ ط§ظ„ط¹ط±ط¶.',
+    hint: 'ط¹ط±ط¶ ط¨ط¯ظˆظ† طµظˆط±ط©. ظٹطھظ… طھط¹ط¨ط¦ط© {{1}} ط¨ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶ ظˆ{{2}} ط¨طھظپط§طµظٹظ„ ط§ظ„ط¹ط±ط¶.',
   },
   {
     name: 'clinic_offer_image_ar',
     label: 'ط¹ط±ط¶ ط¨طµظˆط±ط©',
-    hint: 'ط§ط³طھط®ط¯ظ…ظ‡ ط¹ظ†ط¯ ظˆط¬ظˆط¯ طµظˆط±ط© ظپظٹ Header ط§ظ„ظ‚ط§ظ„ط¨. ط§ظ„ظ…طھط؛ظٹط± {{1}} ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶ ظˆ {{2}} طھظپط§طµظٹظ„ ط§ظ„ط¹ط±ط¶.',
+    hint: 'ط¹ط±ط¶ ط¨طµظˆط±ط© ظپظٹ Header. ظٹطھظ… طھط¹ط¨ط¦ط© {{1}} ط¨ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶ ظˆ{{2}} ط¨طھظپط§طµظٹظ„ ط§ظ„ط¹ط±ط¶.',
     needsImage: true,
   },
 ];
+
+const toNumber = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
 
 export default function SendOffersPage() {
   const [step, setStep] = useState(0);
@@ -35,6 +40,8 @@ export default function SendOffersPage() {
   const [groupFilter, setGroupFilter] = useState('ALL');
   const [bookingFilter, setBookingFilter] = useState('ALL');
   const [contactFilter, setContactFilter] = useState('ALL');
+  const [minSpent, setMinSpent] = useState('');
+  const [maxSpent, setMaxSpent] = useState('');
   const [selectedIds, setSelectedIds] = useState([]);
   const [templateName, setTemplateName] = useState('clinic_custom_message_ar');
   const [message, setMessage] = useState('');
@@ -72,7 +79,7 @@ export default function SendOffersPage() {
     patients.forEach((patient) => {
       (patient.groups || []).forEach((membership) => {
         const group = membership.group || membership;
-        if (group?.id) groups.set(group.id, group.name || 'مجموعة بدون اسم');
+        if (group?.id) groups.set(group.id, group.name || 'ظ…ط¬ظ…ظˆط¹ط© ط¨ط¯ظˆظ† ط§ط³ظ…');
       });
     });
     return Array.from(groups, ([id, name]) => ({ id, name }));
@@ -80,10 +87,15 @@ export default function SendOffersPage() {
 
   const filteredPatients = useMemo(() => {
     const term = searchTerm.trim().toLowerCase();
+    const minValue = toNumber(minSpent);
+    const maxValue = toNumber(maxSpent);
+
     return patients.filter((patient) => {
-      const matchesSearch = !term || [patient.name, patient.displayName, patient.phone, patient.email]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term));
+      const matchesSearch =
+        !term ||
+        [patient.name, patient.displayName, patient.phone, patient.email]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(term));
 
       const appointmentCount = patient._count?.appointments || 0;
       const matchesBookings =
@@ -98,22 +110,34 @@ export default function SendOffersPage() {
 
       const matchesGroup =
         groupFilter === 'ALL' ||
-        (patient.groups || []).some((membership) => (membership.groupId || membership.group?.id || membership.id) === groupFilter);
+        (patient.groups || []).some(
+          (membership) => (membership.groupId || membership.group?.id || membership.id) === groupFilter
+        );
 
-      return matchesSearch && matchesBookings && matchesContact && matchesGroup;
+      const spent = Number(patient.totalSpent || 0);
+      const matchesPriceRange =
+        (minValue === null || spent >= minValue) &&
+        (maxValue === null || spent <= maxValue);
+
+      return matchesSearch && matchesBookings && matchesContact && matchesGroup && matchesPriceRange;
     });
-  }, [patients, searchTerm, bookingFilter, contactFilter, groupFilter]);
+  }, [patients, searchTerm, bookingFilter, contactFilter, groupFilter, minSpent, maxSpent]);
 
-  const allFilteredSelected = filteredPatients.length > 0 && filteredPatients.every((patient) => selectedIds.includes(patient.id));
+  const allFilteredSelected =
+    filteredPatients.length > 0 && filteredPatients.every((patient) => selectedIds.includes(patient.id));
 
   const togglePatient = (id) => {
-    setSelectedIds((current) => (current.includes(id) ? current.filter((item) => item !== id) : [...current, id]));
+    setSelectedIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    );
   };
 
   const toggleAllFiltered = () => {
     const filteredIds = filteredPatients.map((patient) => patient.id);
     setSelectedIds((current) => {
-      if (filteredIds.every((id) => current.includes(id))) return current.filter((id) => !filteredIds.includes(id));
+      if (filteredIds.every((id) => current.includes(id))) {
+        return current.filter((id) => !filteredIds.includes(id));
+      }
       return [...new Set([...current, ...filteredIds])];
     });
   };
@@ -125,12 +149,14 @@ export default function SendOffersPage() {
     setGroupFilter('ALL');
     setBookingFilter('ALL');
     setContactFilter('ALL');
+    setMinSpent('');
+    setMaxSpent('');
   };
 
   const sendOffers = async () => {
     if (!selectedIds.length) return toast.warn('ط§ط®طھط± ظ…ط±ط§ط¬ط¹ظٹظ† ظ…ظ† ظˆط§طھط³ط§ط¨ ط£ظˆظ„ط§ظ‹');
     if (!message.trim()) return toast.warn('ط§ظƒطھط¨ ظ†طµ ط§ظ„ط¹ط±ط¶ ط£ظˆظ„ط§ظ‹');
-    if (selectedTemplate.needsImage && !imageUrl.trim()) return toast.warn('ط±ط§ط¨ط· ط§ظ„طµظˆط±ط© ظ…ط·ظ„ظˆط¨ ظ„ظ‚ط§ظ„ط¨ ط§ظ„ط¹ط±ط¶ ط¨طµظˆط±ط©');
+    if (selectedTemplate.needsImage && !imageUrl.trim()) return toast.warn('طµظˆط±ط© ط§ظ„ط¹ط±ط¶ ظ…ط·ظ„ظˆط¨ط© ظ„ظ‡ط°ط§ ط§ظ„ظ‚ط§ظ„ط¨');
 
     setSending(true);
     try {
@@ -140,7 +166,7 @@ export default function SendOffersPage() {
         message,
         imageUrl: imageUrl.trim() || undefined,
       });
-      toast.success(`طھظ… ط§ظ„ط¥ط±ط³ط§ظ„: ظ†ط¬ط­ ${res.data.successCount || 0}طŒ ظپط´ظ„ ${res.data.failCount || 0}`);
+      toast.success(`طھظ… ط§ظ„ط¥ط±ط³ط§ظ„: ظ†ط¬ط§ط­ ${res.data.successCount || 0} - ظپط´ظ„ ${res.data.failCount || 0}`);
       setStep(0);
       setSelectedIds([]);
       setMessage('');
@@ -167,7 +193,7 @@ export default function SendOffersPage() {
       setImageUrl(res.data.url);
       toast.success('طھظ… ط±ظپط¹ طµظˆط±ط© ط§ظ„ط¹ط±ط¶');
     } catch (error) {
-      toast.error(error.message || 'ظپط´ظ„ ط±ظپط¹ طµظˆط±ط© ط§ظ„ط¹ط±ط¶');
+      toast.error(error.message || 'ظپط´ظ„ ط±ظپط¹ ط§ظ„طµظˆط±ط©');
     } finally {
       setUploadingImage(false);
       event.target.value = '';
@@ -175,13 +201,15 @@ export default function SendOffersPage() {
   };
 
   const previewName = 'ط§ط³ظ… ط§ظ„ظ…ط±ظٹط¶';
-  const previewText = message.replace(/\{\{name\}\}/g, previewName).replace(/\{\{phone\}\}/g, '964xxxxxxxxx');
+  const previewText = message
+    .replace(/\{\{name\}\}/g, previewName)
+    .replace(/\{\{phone\}\}/g, '964xxxxxxxxx');
 
   return (
     <AppLayout>
       <PageHeader
         title="ط¥ط±ط³ط§ظ„ ط¹ط±ظˆط¶ ظˆط§طھط³ط§ط¨"
-        description="ظ‡ط°ظ‡ ط§ظ„طµظپط­ط© طھط±ط³ظ„ ظپظ‚ط· ظ„ظ…ط±ط§ط¬ط¹ظٹ ظˆط§طھط³ط§ط¨طŒ ظˆطھط³طھط®ط¯ظ… ظ‚ظˆط§ظ„ط¨ Meta ط§ظ„ظ…ط¹طھظ…ط¯ط©: ط±ط³ط§ظ„ط© ظ…ط®طµطµط©طŒ ط¹ط±ط¶ ظ†طµظٹطŒ ط£ظˆ ط¹ط±ط¶ ط¨طµظˆط±ط©."
+        description="ط§ظ„ط¥ط±ط³ط§ظ„ ظ…ظ† ظ‡ط°ظ‡ ط§ظ„طµظپط­ط© ظ…ط®طµطµ ظ„ظ…ط±ط¶ظ‰ ظˆط§طھط³ط§ط¨ ظپظ‚ط· ط¨ط§ط³طھط®ط¯ط§ظ… ط§ظ„ظ‚ظˆط§ظ„ط¨ ط§ظ„ظ…ط¹طھظ…ط¯ط©."
       />
 
       <DataCard className="mb-6">
@@ -192,7 +220,11 @@ export default function SendOffersPage() {
               type="button"
               onClick={() => setStep(index)}
               className={`rounded-xl px-4 py-2 text-sm font-black transition ${
-                step === index ? 'bg-sky-500 text-white' : index < step ? 'bg-emerald-500/10 text-emerald-300' : 'bg-white/5 text-slate-300'
+                step === index
+                  ? 'bg-sky-500 text-white'
+                  : index < step
+                    ? 'bg-emerald-500/10 text-emerald-300'
+                    : 'bg-white/5 text-slate-300'
               }`}
             >
               {index + 1}. {label}
@@ -204,10 +236,10 @@ export default function SendOffersPage() {
       {step === 0 ? (
         <DataCard>
           <div className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100">
-            ظ„ظ† طھط¸ظ‡ط± ظ‡ظ†ط§ ظ…ط­ط§ط¯ط«ط§طھ Instagram ط£ظˆ Facebook. ط§ظ„ط¹ط±ظˆط¶ ظپظٹ ظ‡ط°ظ‡ ط§ظ„طµظپط­ط© ظ…ط®طµطµط© ظ„ط¥ط±ط³ط§ظ„ WhatsApp Templates ظپظ‚ط·.
+            ظ„ظ† طھط¸ظ‡ط± ظ‡ظ†ط§ ظ…ط­ط§ط¯ط«ط§طھ Instagram ط£ظˆ Facebook. ظ‡ط°ظ‡ ط§ظ„طµظپط­ط© طھط±ط³ظ„ ظپظ‚ط· ظ‚ظˆط§ظ„ط¨ ظˆط§طھط³ط§ط¨.
           </div>
 
-          <div className="mb-4 grid gap-3 xl:grid-cols-[1.3fr_0.8fr_0.8fr_0.8fr_0.8fr_0.8fr_auto]">
+          <div className="mb-4 grid gap-3 xl:grid-cols-[1.2fr_0.8fr_0.8fr_0.8fr_0.8fr_0.8fr_auto]">
             <div className="relative">
               <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input
@@ -217,45 +249,78 @@ export default function SendOffersPage() {
                 placeholder="ط¨ط­ط« ط¨ط§ظ„ط§ط³ظ… ط£ظˆ ط§ظ„ظ‡ط§طھظپ ط£ظˆ ط§ظ„ط¨ط±ظٹط¯"
               />
             </div>
+
             <select className={inputClass} value={periodFilter} onChange={(event) => setPeriodFilter(event.target.value)}>
-              <option value="ALL">كل الفترات</option>
-              <option value="last7">آخر أسبوع</option>
-              <option value="last30">آخر شهر</option>
-              <option value="thisMonth">هذا الشهر</option>
+              <option value="ALL">ظƒظ„ ط§ظ„ظپطھط±ط§طھ</option>
+              <option value="last7">ط¢ط®ط± ط£ط³ط¨ظˆط¹</option>
+              <option value="last30">ط¢ط®ط± ط´ظ‡ط±</option>
+              <option value="thisMonth">ظ‡ط°ط§ ط§ظ„ط´ظ‡ط±</option>
             </select>
+
             <select className={inputClass} value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
-              <option value="recent">الأحدث إضافة</option>
-              <option value="mostBooked">الأكثر حجزاً</option>
-              <option value="leastBooked">الأقل حجزاً</option>
+              <option value="recent">ط§ظ„ط£ط­ط¯ط« ط¥ط¶ط§ظپط©</option>
+              <option value="mostBooked">ط§ظ„ط£ظƒط«ط± ط­ط¬ط²ط§ظ‹</option>
+              <option value="leastBooked">ط§ظ„ط£ظ‚ظ„ ط­ط¬ط²ط§ظ‹</option>
             </select>
+
             <select className={inputClass} value={groupFilter} onChange={(event) => setGroupFilter(event.target.value)}>
-              <option value="ALL">كل المجموعات</option>
+              <option value="ALL">ظƒظ„ ط§ظ„ظ…ط¬ظ…ظˆط¹ط§طھ</option>
               {patientGroups.map((group) => (
-                <option key={group.id} value={group.id}>{group.name}</option>
+                <option key={group.id} value={group.id}>
+                  {group.name}
+                </option>
               ))}
             </select>
+
             <select className={inputClass} value={bookingFilter} onChange={(event) => setBookingFilter(event.target.value)}>
-              <option value="ALL">كل الحجوزات</option>
-              <option value="hasBookings">لديهم حجوزات</option>
-              <option value="noBookings">بدون حجوزات</option>
+              <option value="ALL">ظƒظ„ ط§ظ„ط­ط¬ظˆط²ط§طھ</option>
+              <option value="hasBookings">ظ„ط¯ظٹظ‡ظ… ط­ط¬ظˆط²ط§طھ</option>
+              <option value="noBookings">ط¨ط¯ظˆظ† ط­ط¬ظˆط²ط§طھ</option>
             </select>
+
             <select className={inputClass} value={contactFilter} onChange={(event) => setContactFilter(event.target.value)}>
-              <option value="ALL">كل البيانات</option>
-              <option value="hasEmail">لديهم بريد</option>
-              <option value="noEmail">بدون بريد</option>
+              <option value="ALL">ظƒظ„ ط§ظ„ط¨ظٹط§ظ†ط§طھ</option>
+              <option value="hasEmail">ظ„ط¯ظٹظ‡ظ… ط¨ط±ظٹط¯</option>
+              <option value="noEmail">ط¨ط¯ظˆظ† ط¨ط±ظٹط¯</option>
             </select>
+
             <SecondaryButton type="button" onClick={resetFilters}>
               <RotateCcw className="h-4 w-4" />
-              إعادة ضبط
+              ط¥ط¹ط§ط¯ط© ط¶ط¨ط·
             </SecondaryButton>
           </div>
 
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex flex-wrap gap-2">
-              <StatusBadge tone="blue">واتساب فقط: {patients.length}</StatusBadge>
-              <StatusBadge tone="green">نتائج الفلترة: {filteredPatients.length}</StatusBadge>
-              <StatusBadge tone="amber">المحددون: {selectedIds.length}</StatusBadge>
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Field label="ظ…ظ† ط¥ط¬ظ…ط§ظ„ظٹ ط¥ظ†ظپط§ظ‚">
+              <input
+                className={inputClass}
+                type="number"
+                min="0"
+                value={minSpent}
+                onChange={(event) => setMinSpent(event.target.value)}
+                placeholder="0"
+              />
+            </Field>
+            <Field label="ط¥ظ„ظ‰ ط¥ط¬ظ…ط§ظ„ظٹ ط¥ظ†ظپط§ظ‚">
+              <input
+                className={inputClass}
+                type="number"
+                min="0"
+                value={maxSpent}
+                onChange={(event) => setMaxSpent(event.target.value)}
+                placeholder="100000"
+              />
+            </Field>
+            <div className="flex items-end">
+              <StatusBadge tone="blue">ظˆط§طھط³ط§ط¨ ظپظ‚ط·: {patients.length}</StatusBadge>
             </div>
+            <div className="flex items-end">
+              <StatusBadge tone="green">ظ†طھط§ط¦ط¬ ط§ظ„ظپظ„طھط±ط©: {filteredPatients.length}</StatusBadge>
+            </div>
+          </div>
+
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <StatusBadge tone="amber">ط§ظ„ظ…ط­ط¯ط¯ظˆظ†: {selectedIds.length}</StatusBadge>
             <SecondaryButton type="button" onClick={toggleAllFiltered}>
               {allFilteredSelected ? <CheckSquare className="h-4 w-4" /> : <Square className="h-4 w-4" />}
               ط§ط®طھط± ط§ظ„ظƒظ„ ({filteredPatients.length})
@@ -272,25 +337,35 @@ export default function SendOffersPage() {
                   type="button"
                   onClick={() => togglePatient(patient.id)}
                   className={`rounded-2xl border p-4 text-right transition ${
-                    selectedIds.includes(patient.id) ? 'border-sky-500/50 bg-sky-500/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
+                    selectedIds.includes(patient.id)
+                      ? 'border-sky-500/50 bg-sky-500/10'
+                      : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <h3 className="font-black text-white">{patient.displayName || patient.name || 'ظ…ط±ط§ط¬ط¹ ظˆط§طھط³ط§ط¨'}</h3>
+                      <h3 className="font-black text-white">{patient.displayName || patient.name || 'ظ…ط±ظٹط¶ ظˆط§طھط³ط§ط¨'}</h3>
                       <p className="mt-1 text-sm text-slate-400" dir="ltr">{patient.phone || '-'}</p>
                       {patient.email ? <p className="mt-1 text-xs text-slate-500">{patient.email}</p> : null}
+                      <p className="mt-2 text-xs text-slate-400">
+                        ط¥ط¬ظ…ط§ظ„ظٹ ط§ظ„ط¥ظ†ظپط§ظ‚: {Number(patient.totalSpent || 0).toLocaleString('ar-IQ')} ط¯.ط¹
+                      </p>
                     </div>
-                    {selectedIds.includes(patient.id) ? <CheckSquare className="h-5 w-5 text-sky-300" /> : <Square className="h-5 w-5 text-slate-500" />}
+                    {selectedIds.includes(patient.id) ? (
+                      <CheckSquare className="h-5 w-5 text-sky-300" />
+                    ) : (
+                      <Square className="h-5 w-5 text-slate-500" />
+                    )}
                   </div>
                 </button>
               ))}
             </div>
           )}
 
-          <div className="mt-5 flex justify-between gap-2">
-            <StatusBadge tone="blue">ط§ظ„ظ…ط­ط¯ط¯ظˆظ†: {selectedIds.length}</StatusBadge>
-            <PrimaryButton type="button" onClick={() => setStep(1)} disabled={!selectedIds.length}>ط§ظ„طھط§ظ„ظٹ</PrimaryButton>
+          <div className="mt-5 flex justify-end gap-2">
+            <PrimaryButton type="button" onClick={() => setStep(1)} disabled={!selectedIds.length}>
+              ط§ظ„طھط§ظ„ظٹ
+            </PrimaryButton>
           </div>
         </DataCard>
       ) : null}
@@ -304,7 +379,9 @@ export default function SendOffersPage() {
                 type="button"
                 onClick={() => setTemplateName(template.name)}
                 className={`rounded-2xl border p-4 text-right transition ${
-                  templateName === template.name ? 'border-sky-500/50 bg-sky-500/10' : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
+                  templateName === template.name
+                    ? 'border-sky-500/50 bg-sky-500/10'
+                    : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
                 }`}
               >
                 <h3 className="font-black text-white">{template.label}</h3>
@@ -321,20 +398,33 @@ export default function SendOffersPage() {
                   className={`${inputClass} min-h-[220px]`}
                   value={message}
                   onChange={(event) => setMessage(event.target.value)}
-                  placeholder="ط§ظƒطھط¨ ظ†طµ ط§ظ„ط¹ط±ط¶ ظ‡ظ†ط§. ظٹظ…ظƒظ† ط§ط³طھط®ط¯ط§ظ… {{name}} ظˆ {{phone}} ط¯ط§ط®ظ„ ط§ظ„ظ†طµ."
+                  placeholder="ط§ظƒطھط¨ ط§ظ„ط±ط³ط§ظ„ط© ظ‡ظ†ط§. ظٹظ…ظƒظ†ظƒ ط§ط³طھط®ط¯ط§ظ… {{name}} ظˆ {{phone}}."
                 />
               </Field>
+
               {selectedTemplate.needsImage ? (
-                <Field label="صورة العرض">
+                <Field label="طµظˆط±ط© ط§ظ„ط¹ط±ط¶">
                   <div className="flex flex-wrap gap-2">
                     <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-bold text-slate-300 transition hover:bg-white/10 hover:text-white">
                       <Upload className="h-4 w-4" />
-                      {uploadingImage ? 'جاري الرفع...' : 'رفع صورة'}
-                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} disabled={uploadingImage} />
+                      {uploadingImage ? 'ط¬ط§ط±ظٹ ط§ظ„ط±ظپط¹...' : 'ط±ظپط¹ طµظˆط±ط©'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleImageUpload}
+                        disabled={uploadingImage}
+                      />
                     </label>
-                    {imageUrl ? <SecondaryButton type="button" onClick={() => setImageUrl('')}>حذف الصورة</SecondaryButton> : null}
+                    {imageUrl ? (
+                      <SecondaryButton type="button" onClick={() => setImageUrl('')}>
+                        ط­ط°ظپ ط§ظ„طµظˆط±ط©
+                      </SecondaryButton>
+                    ) : null}
                   </div>
-                  {imageUrl ? <p className="mt-2 break-all text-xs text-slate-400" dir="ltr">{imageUrl}</p> : null}
+                  {imageUrl ? (
+                    <p className="mt-2 break-all text-xs text-slate-400" dir="ltr">{imageUrl}</p>
+                  ) : null}
                 </Field>
               ) : null}
             </div>
@@ -350,13 +440,23 @@ export default function SendOffersPage() {
                 </div>
               ) : null}
               <p className="text-xs text-slate-500" dir="ltr">{templateName}</p>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white">ظ…ط±ط­ط¨ط§ظ‹ {previewName}{'\n\n'}{previewText || 'ظ†طµ ط§ظ„ط¹ط±ط¶ ط³ظٹط¸ظ‡ط± ظ‡ظ†ط§'}</p>
+              <p className="mt-3 whitespace-pre-wrap text-sm leading-7 text-white">
+                ظ…ط±ط­ط¨ط§ظ‹ {previewName}
+                {'\n\n'}
+                {previewText || 'ظ†طµ ط§ظ„ط¹ط±ط¶ ط³ظٹط¸ظ‡ط± ظ‡ظ†ط§'}
+              </p>
             </div>
           </div>
 
           <div className="mt-5 flex justify-between gap-2">
             <SecondaryButton type="button" onClick={() => setStep(0)}>ط§ظ„ط³ط§ط¨ظ‚</SecondaryButton>
-            <PrimaryButton type="button" onClick={() => setStep(2)} disabled={!message.trim() || (selectedTemplate.needsImage && !imageUrl.trim())}>ط§ظ„طھط§ظ„ظٹ</PrimaryButton>
+            <PrimaryButton
+              type="button"
+              onClick={() => setStep(2)}
+              disabled={!message.trim() || (selectedTemplate.needsImage && !imageUrl.trim())}
+            >
+              ط§ظ„طھط§ظ„ظٹ
+            </PrimaryButton>
           </div>
         </DataCard>
       ) : null}
@@ -368,7 +468,7 @@ export default function SendOffersPage() {
             <Info label="ط¹ط¯ط¯ ظ…طھظ„ظ‚ظٹ ظˆط§طھط³ط§ط¨" value={selectedIds.length} />
             <Info label="ط§ظ„طµظˆط±ط©" value={selectedTemplate.needsImage ? imageUrl : 'ظ„ط§ ظٹظˆط¬ط¯'} />
             <div className="rounded-2xl border border-white/10 bg-[#0d1225] p-4">
-              <p className="mb-2 text-sm font-bold text-slate-300">ظ†طµ ط§ظ„ظ…طھط؛ظٹط± {'{{2}}'}</p>
+              <p className="mb-2 text-sm font-bold text-slate-300">{`نص المتغير {{2}}`}</p>
               <p className="whitespace-pre-wrap text-sm leading-7 text-white">{message}</p>
             </div>
           </div>
@@ -393,4 +493,5 @@ function Info({ label, value }) {
     </div>
   );
 }
+
 

@@ -1,18 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Plus, Save, Settings, Trash2 } from 'lucide-react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
+import { Plus, Save, Settings, Trash2, Upload } from 'lucide-react';
 import { toast } from 'react-toastify';
 import AppLayout from '../components/Layout';
 import api from '../api/client';
 import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
 
 const daysAr = {
-  sunday: 'الأحد',
-  monday: 'الإثنين',
-  tuesday: 'الثلاثاء',
-  wednesday: 'الأربعاء',
-  thursday: 'الخميس',
-  friday: 'الجمعة',
-  saturday: 'السبت',
+  sunday: 'ط§ظ„ط£ط­ط¯',
+  monday: 'ط§ظ„ط¥ط«ظ†ظٹظ†',
+  tuesday: 'ط§ظ„ط«ظ„ط§ط«ط§ط،',
+  wednesday: 'ط§ظ„ط£ط±ط¨ط¹ط§ط،',
+  thursday: 'ط§ظ„ط®ظ…ظٹط³',
+  friday: 'ط§ظ„ط¬ظ…ط¹ط©',
+  saturday: 'ط§ظ„ط³ط¨طھ',
 };
 
 const emptyContactForm = { name: '', phone: '', description: '', active: true };
@@ -29,25 +29,25 @@ const emptyDiscountForm = {
 };
 
 const discountPatientPeriods = [
-  { value: '', label: 'كل المرضى' },
-  { value: 'last7', label: 'مرضى آخر أسبوع' },
-  { value: 'last30', label: 'مرضى آخر شهر' },
-  { value: 'thisMonth', label: 'مرضى هذا الشهر' },
+  { value: '', label: 'ظƒظ„ ط§ظ„ظ…ط±ط¶ظ‰' },
+  { value: 'last7', label: 'ظ…ط±ط¶ظ‰ ط¢ط®ط± ط£ط³ط¨ظˆط¹' },
+  { value: 'last30', label: 'ظ…ط±ط¶ظ‰ ط¢ط®ط± ط´ظ‡ط±' },
+  { value: 'thisMonth', label: 'ظ…ط±ط¶ظ‰ ظ‡ط°ط§ ط§ظ„ط´ظ‡ط±' },
 ];
 
 const discountPatientSortOptions = [
-  { value: 'createdAt', label: 'الأحدث إضافة' },
-  { value: 'mostBooked', label: 'الأكثر حجزاً' },
-  { value: 'leastBooked', label: 'الأقل حجزاً' },
+  { value: 'createdAt', label: 'ط§ظ„ط£ط­ط¯ط« ط¥ط¶ط§ظپط©' },
+  { value: 'mostBooked', label: 'ط§ظ„ط£ظƒط«ط± ط­ط¬ط²ط§ظ‹' },
+  { value: 'leastBooked', label: 'ط§ظ„ط£ظ‚ظ„ ط­ط¬ط²ط§ظ‹' },
 ];
 
 function formatDate(value) {
-  if (!value) return 'بدون تاريخ';
+  if (!value) return 'ط¨ط¯ظˆظ† طھط§ط±ظٹط®';
   return new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium' }).format(new Date(value));
 }
 
 function discountValue(discount) {
-  return discount.type === 'FIXED' ? `${Number(discount.value || 0).toLocaleString('ar-IQ')} د.ع` : `${Number(discount.value || 0).toLocaleString('ar-IQ')}%`;
+  return discount.type === 'FIXED' ? `${Number(discount.value || 0).toLocaleString('ar-IQ')} ط¯.ط¹` : `${Number(discount.value || 0).toLocaleString('ar-IQ')}%`;
 }
 
 export default function SettingsPage() {
@@ -64,6 +64,7 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [contactForm, setContactForm] = useState(emptyContactForm);
   const [discountForm, setDiscountForm] = useState(emptyDiscountForm);
+  const promoImageInputRef = useRef(null);
 
   const activeWorkingDays = useMemo(() => Object.values(settings?.workingHours || {}).filter(Boolean).length, [settings]);
 
@@ -82,7 +83,7 @@ export default function SettingsPage() {
       setServices(servicesRes.data.services || []);
       await loadDiscountPatients();
     } catch (error) {
-      toast.error('فشل تحميل الإعدادات');
+      toast.error('ظپط´ظ„ طھط­ظ…ظٹظ„ ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ');
     } finally {
       setLoading(false);
     }
@@ -103,7 +104,7 @@ export default function SettingsPage() {
       });
       setDiscountPatients((res.data.patients || []).filter((patient) => patient.platform === 'WHATSAPP' && patient.phone));
     } catch (error) {
-      toast.error('فشل تحميل المرضى لاختيار الخصم');
+      toast.error('ظپط´ظ„ طھط­ظ…ظٹظ„ ط§ظ„ظ…ط±ط¶ظ‰ ظ„ط§ط®طھظٹط§ط± ط§ظ„ط®طµظ…');
     }
   };
 
@@ -145,9 +146,9 @@ export default function SettingsPage() {
     setSaving(true);
     try {
       await api.put('/settings', settings);
-      toast.success('تم حفظ الإعدادات');
+      toast.success('طھظ… ط­ظپط¸ ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ');
     } catch (error) {
-      toast.error(error.response?.data?.error || 'فشل حفظ الإعدادات');
+      toast.error(error.response?.data?.error || 'ظپط´ظ„ ط­ظپط¸ ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ');
     } finally {
       setSaving(false);
     }
@@ -155,40 +156,61 @@ export default function SettingsPage() {
 
   const saveContact = async () => {
     if (!contactForm.name.trim() || !contactForm.phone.trim()) {
-      toast.warn('اكتب اسم جهة الاتصال ورقم الهاتف');
+      toast.warn('ط§ظƒطھط¨ ط§ط³ظ… ط¬ظ‡ط© ط§ظ„ط§طھطµط§ظ„ ظˆط±ظ‚ظ… ط§ظ„ظ‡ط§طھظپ');
       return;
     }
     try {
       const res = await api.post('/contacts', contactForm);
       setContacts((current) => [res.data.contact, ...current]);
       setContactForm(emptyContactForm);
-      toast.success('تمت إضافة جهة الاتصال');
+      toast.success('طھظ…طھ ط¥ط¶ط§ظپط© ط¬ظ‡ط© ط§ظ„ط§طھطµط§ظ„');
     } catch (error) {
-      toast.error(error.response?.data?.error || 'فشل حفظ جهة الاتصال');
+      toast.error(error.response?.data?.error || 'ظپط´ظ„ ط­ظپط¸ ط¬ظ‡ط© ط§ظ„ط§طھطµط§ظ„');
     }
   };
 
+  const uploadPromoImage = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await api.post('/upload/campaign-image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      updateField('logoUrl', res.data.url);
+      toast.success('تم رفع صورة العرض');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'فشل رفع صورة العرض');
+    }
+  };
+
+
+
   const removeContact = async (contact) => {
-    if (!window.confirm(`حذف جهة الاتصال "${contact.name}"؟`)) return;
+    if (!window.confirm(`ط­ط°ظپ ط¬ظ‡ط© ط§ظ„ط§طھطµط§ظ„ "${contact.name}"طں`)) return;
     try {
       await api.delete(`/contacts/${contact.id}`);
       setContacts((current) => current.filter((item) => item.id !== contact.id));
-      toast.success('تم حذف جهة الاتصال');
+      toast.success('طھظ… ط­ط°ظپ ط¬ظ‡ط© ط§ظ„ط§طھطµط§ظ„');
     } catch (error) {
-      toast.error(error.response?.data?.error || 'فشل حذف جهة الاتصال');
+      toast.error(error.response?.data?.error || 'ظپط´ظ„ ط­ط°ظپ ط¬ظ‡ط© ط§ظ„ط§طھطµط§ظ„');
     }
   };
 
   const saveDiscount = async () => {
     if (!discountForm.name.trim() || !discountForm.value) {
-      toast.warn('اكتب اسم الخصم وقيمته');
+      toast.warn('ط§ظƒطھط¨ ط§ط³ظ… ط§ظ„ط®طµظ… ظˆظ‚ظٹظ…طھظ‡');
       return;
     }
 
     const service = services.find((item) => item.id === discountForm.serviceId);
     const filteredPhones = discountPatients.map((patient) => patient.phone).filter(Boolean);
     if (discountForm.targetMode === 'FILTERED' && filteredPhones.length === 0) {
-      toast.warn('لا يوجد مرضى مطابقين للفلاتر الحالية');
+      toast.warn('ظ„ط§ ظٹظˆط¬ط¯ ظ…ط±ط¶ظ‰ ظ…ط·ط§ط¨ظ‚ظٹظ† ظ„ظ„ظپظ„ط§طھط± ط§ظ„ط­ط§ظ„ظٹط©');
       return;
     }
     try {
@@ -202,40 +224,40 @@ export default function SettingsPage() {
             : discountForm.targetMode === 'FILTERED'
               ? filteredPhones
             : discountForm.phoneNumbers
-                .split(/[\n,،]+/)
+                .split(/[\n,طŒ]+/)
                 .map((item) => item.trim())
                 .filter(Boolean),
       });
       setDiscounts((current) => [res.data.discount, ...current]);
       setDiscountForm(emptyDiscountForm);
-      toast.success('تم حفظ الخصم');
+      toast.success('طھظ… ط­ظپط¸ ط§ظ„ط®طµظ…');
     } catch (error) {
-      toast.error(error.response?.data?.error || 'فشل حفظ الخصم');
+      toast.error(error.response?.data?.error || 'ظپط´ظ„ ط­ظپط¸ ط§ظ„ط®طµظ…');
     }
   };
 
   const removeDiscount = async (discount) => {
-    if (!window.confirm(`حذف خصم "${discount.name}"؟`)) return;
+    if (!window.confirm(`ط­ط°ظپ ط®طµظ… "${discount.name}"طں`)) return;
     try {
       await api.delete(`/discounts/${discount.id}`);
       setDiscounts((current) => current.filter((item) => item.id !== discount.id));
-      toast.success('تم حذف الخصم');
+      toast.success('طھظ… ط­ط°ظپ ط§ظ„ط®طµظ…');
     } catch (error) {
-      toast.error(error.response?.data?.error || 'فشل حذف الخصم');
+      toast.error(error.response?.data?.error || 'ظپط´ظ„ ط­ط°ظپ ط§ظ„ط®طµظ…');
     }
   };
 
   const tabs = [
-    { id: 'clinic', label: 'بيانات العيادة' },
-    { id: 'hours', label: 'ساعات العمل' },
-    { id: 'contacts', label: 'جهات الاتصال' },
-    { id: 'discounts', label: 'الخصومات' },
+    { id: 'clinic', label: 'ط¨ظٹط§ظ†ط§طھ ط§ظ„ط¹ظٹط§ط¯ط©' },
+    { id: 'hours', label: 'ط³ط§ط¹ط§طھ ط§ظ„ط¹ظ…ظ„' },
+    { id: 'contacts', label: 'ط¬ظ‡ط§طھ ط§ظ„ط§طھطµط§ظ„' },
+    { id: 'discounts', label: 'ط§ظ„ط®طµظˆظ…ط§طھ' },
   ];
 
   if (loading) {
     return (
       <AppLayout>
-        <DataCard className="text-center text-slate-300">جاري تحميل الإعدادات...</DataCard>
+        <DataCard className="text-center text-slate-300">ط¬ط§ط±ظٹ طھط­ظ…ظٹظ„ ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ...</DataCard>
       </AppLayout>
     );
   }
@@ -243,21 +265,21 @@ export default function SettingsPage() {
   return (
     <AppLayout>
       <PageHeader
-        title="الإعدادات"
-        description="إدارة بيانات العيادة والبراند وجهات الاتصال والخصومات."
+        title="ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ"
+        description="ط¥ط¯ط§ط±ط© ط¨ظٹط§ظ†ط§طھ ط§ظ„ط¹ظٹط§ط¯ط© ظˆط§ظ„ط¨ط±ط§ظ†ط¯ ظˆط¬ظ‡ط§طھ ط§ظ„ط§طھطµط§ظ„ ظˆط§ظ„ط®طµظˆظ…ط§طھ."
         actions={
           <PrimaryButton type="button" onClick={saveSettings} disabled={saving}>
             <Save className="h-4 w-4" />
-            {saving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
+            {saving ? 'ط¬ط§ط±ظٹ ط§ظ„ط­ظپط¸...' : 'ط­ظپط¸ ط§ظ„ط¥ط¹ط¯ط§ط¯ط§طھ'}
           </PrimaryButton>
         }
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-4">
-        <StatCard title="أيام العمل" value={activeWorkingDays} icon={Settings} tone="blue" />
-        <StatCard title="جهات الاتصال" value={contacts.length} icon={Plus} tone="green" />
-        <StatCard title="الخصومات" value={discounts.length} icon={Save} tone="amber" />
-        <StatCard title="اسم البوت" value={settings?.botName ? 'محدد' : 'غير محدد'} icon={Settings} tone="slate" />
+        <StatCard title="ط£ظٹط§ظ… ط§ظ„ط¹ظ…ظ„" value={activeWorkingDays} icon={Settings} tone="blue" />
+        <StatCard title="ط¬ظ‡ط§طھ ط§ظ„ط§طھطµط§ظ„" value={contacts.length} icon={Plus} tone="green" />
+        <StatCard title="ط§ظ„ط®طµظˆظ…ط§طھ" value={discounts.length} icon={Save} tone="amber" />
+        <StatCard title="ط§ط³ظ… ط§ظ„ط¨ظˆطھ" value={settings?.botName ? 'ظ…ط­ط¯ط¯' : 'ط؛ظٹط± ظ…ط­ط¯ط¯'} icon={Settings} tone="slate" />
       </div>
 
       <DataCard className="mb-6">
@@ -282,28 +304,45 @@ export default function SettingsPage() {
       {activeTab === 'clinic' ? (
         <DataCard>
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="اسم العيادة بالعربية">
+            <Field label="ط§ط³ظ… ط§ظ„ط¹ظٹط§ط¯ط© ط¨ط§ظ„ط¹ط±ط¨ظٹط©">
               <input className={inputClass} value={settings?.clinicNameAr || ''} onChange={(event) => updateField('clinicNameAr', event.target.value)} />
             </Field>
-            <Field label="اسم العيادة بالإنجليزية">
+            <Field label="ط§ط³ظ… ط§ظ„ط¹ظٹط§ط¯ط© ط¨ط§ظ„ط¥ظ†ط¬ظ„ظٹط²ظٹط©">
               <input className={inputClass} dir="ltr" value={settings?.clinicName || ''} onChange={(event) => updateField('clinicName', event.target.value)} />
             </Field>
-            <Field label="اسم البوت الظاهر في الرسائل">
-              <input className={inputClass} value={settings?.botName || ''} onChange={(event) => updateField('botName', event.target.value)} placeholder="مثال: عيادة د. إبراهيم" />
+            <Field label="ط§ط³ظ… ط§ظ„ط¨ظˆطھ ط§ظ„ط¸ط§ظ‡ط± ظپظٹ ط§ظ„ط±ط³ط§ط¦ظ„">
+              <input className={inputClass} value={settings?.botName || ''} onChange={(event) => updateField('botName', event.target.value)} placeholder="ظ…ط«ط§ظ„: ط¹ظٹط§ط¯ط© ط¯. ط¥ط¨ط±ط§ظ‡ظٹظ…" />
             </Field>
-            <Field label="رقم الهاتف">
+            <Field label="ط±ظ‚ظ… ط§ظ„ظ‡ط§طھظپ">
               <input className={inputClass} value={settings?.phone || ''} onChange={(event) => updateField('phone', event.target.value)} />
             </Field>
-            <Field label="رابط شعار الروشتة">
+            <Field label="ط±ط§ط¨ط· ط´ط¹ط§ط± ط§ظ„ط±ظˆط´طھط©">
               <input className={inputClass} dir="ltr" value={settings?.brandLogoUrl || settings?.logoUrl || ''} onChange={(event) => updateField('brandLogoUrl', event.target.value)} placeholder="/api/images/logo.png" />
             </Field>
-            <Field label="لون البراند الأساسي">
+            <Field label="طµظˆط±ط© ط§ظ„ط¹ط±ط¶ ط§ظ„ط­ط§ظ„ظٹ">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <input className={inputClass} dir="ltr" value={settings?.logoUrl || ''} onChange={(event) => updateField('logoUrl', event.target.value)} placeholder="/api/images/promo.jpg" />
+                  <SecondaryButton type="button" onClick={() => promoImageInputRef.current?.click()} className="shrink-0">
+                    <Upload className="h-4 w-4" />
+                    ط±ظپط¹
+                  </SecondaryButton>
+                  <input ref={promoImageInputRef} type="file" accept="image/*" className="hidden" onChange={uploadPromoImage} />
+                </div>
+                {settings?.logoUrl ? (
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1225]">
+                    <img src={settings.logoUrl} alt="Promo" className="h-36 w-full object-cover" />
+                  </div>
+                ) : null}
+              </div>
+            </Field>
+            <Field label="ظ„ظˆظ† ط§ظ„ط¨ط±ط§ظ†ط¯ ط§ظ„ط£ط³ط§ط³ظٹ">
               <input className={inputClass} value={settings?.brandPrimaryColor || ''} onChange={(event) => updateField('brandPrimaryColor', event.target.value)} placeholder="#2563eb" />
             </Field>
-            <Field label="العنوان">
+            <Field label="ط§ظ„ط¹ظ†ظˆط§ظ†">
               <input className={inputClass} value={settings?.address || ''} onChange={(event) => updateField('address', event.target.value)} />
             </Field>
-            <Field label="رابط واتساب مباشر">
+            <Field label="ط±ط§ط¨ط· ظˆط§طھط³ط§ط¨ ظ…ط¨ط§ط´ط±">
               <input className={inputClass} dir="ltr" value={settings?.whatsappChatLink || ''} onChange={(event) => updateField('whatsappChatLink', event.target.value)} />
             </Field>
           </div>
@@ -324,15 +363,15 @@ export default function SettingsPage() {
                       onClick={() => toggleDay(key)}
                       className={`rounded-full px-3 py-1 text-xs font-bold ${day ? 'bg-emerald-500/10 text-emerald-300' : 'bg-white/5 text-slate-400'}`}
                     >
-                      {day ? 'يعمل' : 'إجازة'}
+                      {day ? 'ظٹط¹ظ…ظ„' : 'ط¥ط¬ط§ط²ط©'}
                     </button>
                   </div>
                   {day ? (
                     <div className="grid grid-cols-2 gap-3">
-                      <Field label="من">
+                      <Field label="ظ…ظ†">
                         <input className={inputClass} type="time" value={day.start || '09:00'} onChange={(event) => updateWorkingHours(key, 'start', event.target.value)} />
                       </Field>
-                      <Field label="إلى">
+                      <Field label="ط¥ظ„ظ‰">
                         <input className={inputClass} type="time" value={day.end || '17:00'} onChange={(event) => updateWorkingHours(key, 'end', event.target.value)} />
                       </Field>
                     </div>
@@ -347,24 +386,24 @@ export default function SettingsPage() {
       {activeTab === 'contacts' ? (
         <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
           <DataCard>
-            <h2 className="mb-4 text-lg font-black text-white">إضافة جهة اتصال</h2>
+            <h2 className="mb-4 text-lg font-black text-white">ط¥ط¶ط§ظپط© ط¬ظ‡ط© ط§طھطµط§ظ„</h2>
             <div className="space-y-4">
-              <Field label="الاسم">
+              <Field label="ط§ظ„ط§ط³ظ…">
                 <input className={inputClass} value={contactForm.name} onChange={(event) => setContactForm((current) => ({ ...current, name: event.target.value }))} />
               </Field>
-              <Field label="رقم الهاتف">
+              <Field label="ط±ظ‚ظ… ط§ظ„ظ‡ط§طھظپ">
                 <input className={inputClass} value={contactForm.phone} onChange={(event) => setContactForm((current) => ({ ...current, phone: event.target.value }))} />
               </Field>
-              <Field label="الوصف">
+              <Field label="ط§ظ„ظˆطµظپ">
                 <input className={inputClass} value={contactForm.description} onChange={(event) => setContactForm((current) => ({ ...current, description: event.target.value }))} />
               </Field>
-              <PrimaryButton type="button" onClick={saveContact}>إضافة</PrimaryButton>
+              <PrimaryButton type="button" onClick={saveContact}>ط¥ط¶ط§ظپط©</PrimaryButton>
             </div>
           </DataCard>
 
           <div className="grid gap-4">
             {contacts.length === 0 ? (
-              <DataCard className="text-center text-slate-400">لا توجد جهات اتصال محفوظة.</DataCard>
+              <DataCard className="text-center text-slate-400">ظ„ط§ طھظˆط¬ط¯ ط¬ظ‡ط§طھ ط§طھطµط§ظ„ ظ…ط­ظپظˆط¸ط©.</DataCard>
             ) : (
               contacts.map((contact) => (
                 <DataCard key={contact.id}>
@@ -376,7 +415,7 @@ export default function SettingsPage() {
                     </div>
                     <SecondaryButton type="button" onClick={() => removeContact(contact)} className="hover:bg-rose-500/10 hover:text-rose-200">
                       <Trash2 className="h-4 w-4" />
-                      حذف
+                      ط­ط°ظپ
                     </SecondaryButton>
                   </div>
                 </DataCard>
@@ -389,70 +428,70 @@ export default function SettingsPage() {
       {activeTab === 'discounts' ? (
         <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <DataCard>
-            <h2 className="mb-2 text-lg font-black text-white">إضافة خصم</h2>
+            <h2 className="mb-2 text-lg font-black text-white">ط¥ط¶ط§ظپط© ط®طµظ…</h2>
             <p className="mb-5 text-sm leading-6 text-slate-400">
-              اختر كل المرضى أو أرقام محددة. عند الحجز لاحقاً يظهر الخصم في المدفوعات وردود الأسعار على واتساب.
+              ط§ط®طھط± ظƒظ„ ط§ظ„ظ…ط±ط¶ظ‰ ط£ظˆ ط£ط±ظ‚ط§ظ… ظ…ط­ط¯ط¯ط©. ط¹ظ†ط¯ ط§ظ„ط­ط¬ط² ظ„ط§ط­ظ‚ط§ظ‹ ظٹط¸ظ‡ط± ط§ظ„ط®طµظ… ظپظٹ ط§ظ„ظ…ط¯ظپظˆط¹ط§طھ ظˆط±ط¯ظˆط¯ ط§ظ„ط£ط³ط¹ط§ط± ط¹ظ„ظ‰ ظˆط§طھط³ط§ط¨.
             </p>
             <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-7 text-amber-100">
-              لو هتعمل خصم عام جديد على نفس الخدمة، احذف الخصم القديم الأول من قائمة الخصومات الحالية حتى لا تتداخل الخصومات. النظام يختار أعلى خصم مناسب، لكن حذف القديم أوضح للإدارة والحسابات.
+              ظ„ظˆ ظ‡طھط¹ظ…ظ„ ط®طµظ… ط¹ط§ظ… ط¬ط¯ظٹط¯ ط¹ظ„ظ‰ ظ†ظپط³ ط§ظ„ط®ط¯ظ…ط©طŒ ط§ط­ط°ظپ ط§ظ„ط®طµظ… ط§ظ„ظ‚ط¯ظٹظ… ط§ظ„ط£ظˆظ„ ظ…ظ† ظ‚ط§ط¦ظ…ط© ط§ظ„ط®طµظˆظ…ط§طھ ط§ظ„ط­ط§ظ„ظٹط© ط­طھظ‰ ظ„ط§ طھطھط¯ط§ط®ظ„ ط§ظ„ط®طµظˆظ…ط§طھ. ط§ظ„ظ†ط¸ط§ظ… ظٹط®طھط§ط± ط£ط¹ظ„ظ‰ ط®طµظ… ظ…ظ†ط§ط³ط¨طŒ ظ„ظƒظ† ط­ط°ظپ ط§ظ„ظ‚ط¯ظٹظ… ط£ظˆط¶ط­ ظ„ظ„ط¥ط¯ط§ط±ط© ظˆط§ظ„ط­ط³ط§ط¨ط§طھ.
             </div>
             <div className="space-y-4">
-              <Field label="اسم الخصم">
+              <Field label="ط§ط³ظ… ط§ظ„ط®طµظ…">
                 <input className={inputClass} value={discountForm.name} onChange={(event) => setDiscountForm((current) => ({ ...current, name: event.target.value }))} />
               </Field>
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="نوع الخصم">
+                <Field label="ظ†ظˆط¹ ط§ظ„ط®طµظ…">
                   <select className={inputClass} value={discountForm.type} onChange={(event) => setDiscountForm((current) => ({ ...current, type: event.target.value }))}>
-                    <option value="PERCENT">نسبة مئوية</option>
-                    <option value="FIXED">مبلغ ثابت</option>
+                    <option value="PERCENT">ظ†ط³ط¨ط© ظ…ط¦ظˆظٹط©</option>
+                    <option value="FIXED">ظ…ط¨ظ„ط؛ ط«ط§ط¨طھ</option>
                   </select>
                 </Field>
-                <Field label="القيمة">
+                <Field label="ط§ظ„ظ‚ظٹظ…ط©">
                   <input className={inputClass} type="number" min="0" value={discountForm.value} onChange={(event) => setDiscountForm((current) => ({ ...current, value: event.target.value }))} />
                 </Field>
               </div>
-              <Field label="الخدمة المستهدفة">
+              <Field label="ط§ظ„ط®ط¯ظ…ط© ط§ظ„ظ…ط³طھظ‡ط¯ظپط©">
                 <select className={inputClass} value={discountForm.serviceId} onChange={(event) => setDiscountForm((current) => ({ ...current, serviceId: event.target.value }))}>
-                  <option value="">كل الخدمات</option>
+                  <option value="">ظƒظ„ ط§ظ„ط®ط¯ظ…ط§طھ</option>
                   {services.map((service) => (
                     <option key={service.id} value={service.id}>{service.nameAr || service.name}</option>
                   ))}
                 </select>
               </Field>
-              <Field label="المستفيدين من الخصم">
+              <Field label="ط§ظ„ظ…ط³طھظپظٹط¯ظٹظ† ظ…ظ† ط§ظ„ط®طµظ…">
                 <select className={inputClass} value={discountForm.targetMode} onChange={(event) => setDiscountForm((current) => ({ ...current, targetMode: event.target.value }))}>
-                  <option value="ALL">كل المرضى الحاليين والجدد</option>
-                  <option value="FILTERED">مرضى حسب الفلاتر</option>
-                  <option value="PHONES">أرقام محددة فقط</option>
+                  <option value="ALL">ظƒظ„ ط§ظ„ظ…ط±ط¶ظ‰ ط§ظ„ط­ط§ظ„ظٹظٹظ† ظˆط§ظ„ط¬ط¯ط¯</option>
+                  <option value="FILTERED">ظ…ط±ط¶ظ‰ ط­ط³ط¨ ط§ظ„ظپظ„ط§طھط±</option>
+                  <option value="PHONES">ط£ط±ظ‚ط§ظ… ظ…ط­ط¯ط¯ط© ظپظ‚ط·</option>
                 </select>
               </Field>
               <div className="grid gap-4 md:grid-cols-2">
-                <Field label="يبدأ من">
+                <Field label="ظٹط¨ط¯ط£ ظ…ظ†">
                   <input className={inputClass} type="date" value={discountForm.startsAt} onChange={(event) => setDiscountForm((current) => ({ ...current, startsAt: event.target.value }))} />
                 </Field>
-                <Field label="ينتهي في">
+                <Field label="ظٹظ†طھظ‡ظٹ ظپظٹ">
                   <input className={inputClass} type="date" value={discountForm.endsAt} onChange={(event) => setDiscountForm((current) => ({ ...current, endsAt: event.target.value }))} />
                 </Field>
               </div>
               {discountForm.targetMode === 'FILTERED' ? (
                 <div className="space-y-3 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
                   <div className="grid gap-3 md:grid-cols-3">
-                    <Field label="بحث">
+                    <Field label="ط¨ط­ط«">
                       <input
                         className={inputClass}
                         value={discountPatientSearch}
                         onChange={(event) => setDiscountPatientSearch(event.target.value)}
-                        placeholder="اسم أو رقم المريض"
+                        placeholder="ط§ط³ظ… ط£ظˆ ط±ظ‚ظ… ط§ظ„ظ…ط±ظٹط¶"
                       />
                     </Field>
-                    <Field label="الفترة">
+                    <Field label="ط§ظ„ظپطھط±ط©">
                       <select className={inputClass} value={discountPatientPeriod} onChange={(event) => setDiscountPatientPeriod(event.target.value)}>
                         {discountPatientPeriods.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
                         ))}
                       </select>
                     </Field>
-                    <Field label="الترتيب">
+                    <Field label="ط§ظ„طھط±طھظٹط¨">
                       <select className={inputClass} value={discountPatientSort} onChange={(event) => setDiscountPatientSort(event.target.value)}>
                         {discountPatientSortOptions.map((option) => (
                           <option key={option.value} value={option.value}>{option.label}</option>
@@ -461,43 +500,43 @@ export default function SettingsPage() {
                     </Field>
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-sm font-bold text-sky-100">سيتم تطبيق الخصم على {discountPatients.length} مريض مطابق للفلاتر.</p>
+                    <p className="text-sm font-bold text-sky-100">ط³ظٹطھظ… طھط·ط¨ظٹظ‚ ط§ظ„ط®طµظ… ط¹ظ„ظ‰ {discountPatients.length} ظ…ط±ظٹط¶ ظ…ط·ط§ط¨ظ‚ ظ„ظ„ظپظ„ط§طھط±.</p>
                     <SecondaryButton
                       type="button"
                       onClick={() => loadDiscountPatients({ search: discountPatientSearch, period: discountPatientPeriod, sortBy: discountPatientSort })}
                     >
-                      تطبيق الفلاتر
+                      طھط·ط¨ظٹظ‚ ط§ظ„ظپظ„ط§طھط±
                     </SecondaryButton>
                   </div>
                   <div className="max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-black/10 p-3 text-sm text-slate-200">
                     {discountPatients.length === 0 ? (
-                      <p className="text-slate-400">لا يوجد مرضى مطابقين حالياً.</p>
+                      <p className="text-slate-400">ظ„ط§ ظٹظˆط¬ط¯ ظ…ط±ط¶ظ‰ ظ…ط·ط§ط¨ظ‚ظٹظ† ط­ط§ظ„ظٹط§ظ‹.</p>
                     ) : (
                       <div className="grid gap-2">
                         {discountPatients.slice(0, 40).map((patient) => (
                           <div key={patient.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/5 px-3 py-2">
-                            <span className="font-bold text-white">{patient.displayName || patient.name || 'مريض'}</span>
+                            <span className="font-bold text-white">{patient.displayName || patient.name || 'ظ…ط±ظٹط¶'}</span>
                             <span dir="ltr" className="text-slate-300">{patient.phone}</span>
                           </div>
                         ))}
-                        {discountPatients.length > 40 ? <p className="text-xs text-slate-400">و {discountPatients.length - 40} مريض آخر...</p> : null}
+                        {discountPatients.length > 40 ? <p className="text-xs text-slate-400">ظˆ {discountPatients.length - 40} ظ…ط±ظٹط¶ ط¢ط®ط±...</p> : null}
                       </div>
                     )}
                   </div>
                 </div>
               ) : discountForm.targetMode === 'PHONES' ? (
-                <Field label="أرقام المرضى">
+                <Field label="ط£ط±ظ‚ط§ظ… ط§ظ„ظ…ط±ط¶ظ‰">
                   <textarea
                     className={`${inputClass} min-h-32`}
                     value={discountForm.phoneNumbers}
                     onChange={(event) => setDiscountForm((current) => ({ ...current, phoneNumbers: event.target.value }))}
-                    placeholder="رقم في كل سطر أو افصل بفاصلة"
+                    placeholder="ط±ظ‚ظ… ظپظٹ ظƒظ„ ط³ط·ط± ط£ظˆ ط§ظپطµظ„ ط¨ظپط§طµظ„ط©"
                     dir="ltr"
                   />
                 </Field>
               ) : (
                 <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100">
-                  اختيار كل المرضى يعني أن الخصم سيطبق على أي مريض موجود حالياً، وأي مريض جديد يتكلم على واتساب أو يتم إضافته لاحقاً.
+                  ط§ط®طھظٹط§ط± ظƒظ„ ط§ظ„ظ…ط±ط¶ظ‰ ظٹط¹ظ†ظٹ ط£ظ† ط§ظ„ط®طµظ… ط³ظٹط·ط¨ظ‚ ط¹ظ„ظ‰ ط£ظٹ ظ…ط±ظٹط¶ ظ…ظˆط¬ظˆط¯ ط­ط§ظ„ظٹط§ظ‹طŒ ظˆط£ظٹ ظ…ط±ظٹط¶ ط¬ط¯ظٹط¯ ظٹطھظƒظ„ظ… ط¹ظ„ظ‰ ظˆط§طھط³ط§ط¨ ط£ظˆ ظٹطھظ… ط¥ط¶ط§ظپطھظ‡ ظ„ط§ط­ظ‚ط§ظ‹.
                 </div>
               )}
               <label className="flex items-center gap-2 text-sm font-bold text-slate-300">
@@ -507,43 +546,43 @@ export default function SettingsPage() {
                   onChange={(event) => setDiscountForm((current) => ({ ...current, active: event.target.checked }))}
                   className="h-4 w-4 rounded border-white/20 bg-white/10"
                 />
-                الخصم نشط
+                ط§ظ„ط®طµظ… ظ†ط´ط·
               </label>
-              <PrimaryButton type="button" onClick={saveDiscount}>حفظ الخصم</PrimaryButton>
+              <PrimaryButton type="button" onClick={saveDiscount}>ط­ظپط¸ ط§ظ„ط®طµظ…</PrimaryButton>
             </div>
           </DataCard>
 
           <div>
             <div className="mb-3 flex items-center justify-between">
               <div>
-                <h2 className="text-lg font-black text-white">الخصومات الحالية</h2>
-                <p className="mt-1 text-sm text-slate-400">يمكن حذف أي خصم من هنا فوراً.</p>
+                <h2 className="text-lg font-black text-white">ط§ظ„ط®طµظˆظ…ط§طھ ط§ظ„ط­ط§ظ„ظٹط©</h2>
+                <p className="mt-1 text-sm text-slate-400">ظٹظ…ظƒظ† ط­ط°ظپ ط£ظٹ ط®طµظ… ظ…ظ† ظ‡ظ†ط§ ظپظˆط±ط§ظ‹.</p>
               </div>
-              <StatusBadge tone="amber">{discounts.length} خصم</StatusBadge>
+              <StatusBadge tone="amber">{discounts.length} ط®طµظ…</StatusBadge>
             </div>
             <div className="grid gap-4">
               {discounts.length === 0 ? (
-                <DataCard className="text-center text-slate-400">لا توجد خصومات محفوظة.</DataCard>
+                <DataCard className="text-center text-slate-400">ظ„ط§ طھظˆط¬ط¯ ط®طµظˆظ…ط§طھ ظ…ط­ظپظˆط¸ط©.</DataCard>
               ) : (
                 discounts.map((discount) => (
                   <DataCard key={discount.id}>
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                       <div className="min-w-0">
                         <div className="mb-3 flex flex-wrap gap-2">
-                          <StatusBadge tone={discount.active ? 'green' : 'slate'}>{discount.active ? 'نشط' : 'متوقف'}</StatusBadge>
+                          <StatusBadge tone={discount.active ? 'green' : 'slate'}>{discount.active ? 'ظ†ط´ط·' : 'ظ…طھظˆظ‚ظپ'}</StatusBadge>
                           <StatusBadge tone="blue">{discountValue(discount)}</StatusBadge>
-                          <StatusBadge tone="slate">{discount.type === 'FIXED' ? 'مبلغ ثابت' : 'نسبة مئوية'}</StatusBadge>
+                          <StatusBadge tone="slate">{discount.type === 'FIXED' ? 'ظ…ط¨ظ„ط؛ ط«ط§ط¨طھ' : 'ظ†ط³ط¨ط© ظ…ط¦ظˆظٹط©'}</StatusBadge>
                         </div>
                         <h3 className="truncate text-lg font-black text-white">{discount.name}</h3>
                         <div className="mt-2 grid gap-2 text-sm text-slate-400">
-                          <p>المجموعة: <span className="text-slate-200">{discount.group?.name || 'كل المرضى'}</span></p>
-                          <p>الخدمة: <span className="text-slate-200">{discount.serviceName || 'كل الخدمات'}</span></p>
-                          <p>الفترة: <span className="text-slate-200">{formatDate(discount.startsAt)} - {formatDate(discount.endsAt)}</span></p>
+                          <p>ط§ظ„ظ…ط¬ظ…ظˆط¹ط©: <span className="text-slate-200">{discount.group?.name || 'ظƒظ„ ط§ظ„ظ…ط±ط¶ظ‰'}</span></p>
+                          <p>ط§ظ„ط®ط¯ظ…ط©: <span className="text-slate-200">{discount.serviceName || 'ظƒظ„ ط§ظ„ط®ط¯ظ…ط§طھ'}</span></p>
+                          <p>ط§ظ„ظپطھط±ط©: <span className="text-slate-200">{formatDate(discount.startsAt)} - {formatDate(discount.endsAt)}</span></p>
                         </div>
                       </div>
                       <SecondaryButton type="button" onClick={() => removeDiscount(discount)} className="shrink-0 hover:bg-rose-500/10 hover:text-rose-200">
                         <Trash2 className="h-4 w-4" />
-                        حذف الخصم
+                        ط­ط°ظپ ط§ظ„ط®طµظ…
                       </SecondaryButton>
                     </div>
                   </DataCard>
@@ -556,3 +595,8 @@ export default function SettingsPage() {
     </AppLayout>
   );
 }
+
+
+
+
+
