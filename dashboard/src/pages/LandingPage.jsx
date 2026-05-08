@@ -29,10 +29,10 @@ import api from '../api/client';
    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 const FALLBACK_CLINIC = {
-  name: 'ط¯. ط§ط¨ط±ط§ظ‡ظٹظ… ط§ظ„طھط®طµطµظٹ',
-  nameAr: 'ط¯. ط§ط¨ط±ط§ظ‡ظٹظ… ط§ظ„طھط®طµطµظٹ',
+  name: 'Dr. Ibrahim Specialized Clinic',
+  nameAr: 'د. إبراهيم التخصصي',
   phone: '07882332330',
-  address: 'ط§ظ„ط¹ط±ط§ظ‚ - ط§ظ„ظ†ط¬ظپ ط§ظ„ط£ط´ط±ظپ - ط´ط§ط±ط¹ ظ…ظƒطھط¨ ط§ظ„ط±ط´ظٹط¯',
+  address: 'العراق - النجف الأشرف - شارع مكتب الرشيد',
   whatsappLink: 'https://wa.me/9647882332330',
   googleMapsLink: 'https://maps.app.goo.gl/F4gJhkgjVWuyLgn67?g_st=iw',
   workingHours: {
@@ -46,31 +46,31 @@ const FALLBACK_CLINIC = {
   },
 };
 
-const CLINIC_SUBTITLE = 'ظ„ط·ط¨ ظˆطھط¬ظ…ظٹظ„ ط§ظ„ط£ط³ظ†ط§ظ†';
+const CLINIC_SUBTITLE = 'لطب وتجميل الأسنان';
 const CLINIC_DESCRIPTION =
-  'ط¹ظٹط§ط¯ط© ظ…ط®طھطµط© ط¨ط·ط¨ ظˆطھط¬ظ…ظٹظ„ ط§ظ„ط£ط³ظ†ط§ظ† ط­ظٹط« ظ†ظ‚ط¯ظ… ط®ط¯ظ…ط§طھ ظ…طھظƒط§ظ…ظ„ط© ظ„ظƒظ„ ظ…ط§ طھط­طھط§ط¬ظ‡ ظپظٹ ط·ط¨ ط§ظ„ط£ط³ظ†ط§ظ† ط§ظ„طھط¬ظ…ظٹظ„ظٹ ظˆط§ظ„ط¹ظ„ط§ط¬ظٹ ظˆظ†ظ‚ط¯ظ… طھط¬ط±ط¨ط© ظ…طھط·ظˆط±ط© ظˆظپط±ظٹط¯ط© ط¨ط£ط­ط¯ط« ط§ظ„طھظ‚ظ†ظٹط§طھ ظˆط§ظ„ط®ط¨ط±ط§طھ';
+  'عيادة مختصة بطب وتجميل الأسنان، نقدم خدمات متكاملة في العلاج والتجميل بأحدث التقنيات الطبية وبخبرة تركز على الراحة والدقة وجودة النتائج.';
 
 const DAY_NAMES = {
-  sunday: 'ط§ظ„ط£ط­ط¯',
-  monday: 'ط§ظ„ط£ط«ظ†ظٹظ†',
-  tuesday: 'ط§ظ„ط«ظ„ط§ط«ط§ط،',
-  wednesday: 'ط§ظ„ط£ط±ط¨ط¹ط§ط،',
-  thursday: 'ط§ظ„ط®ظ…ظٹط³',
-  friday: 'ط§ظ„ط¬ظ…ط¹ط©',
-  saturday: 'ط§ظ„ط³ط¨طھ',
+  sunday: 'الأحد',
+  monday: 'الاثنين',
+  tuesday: 'الثلاثاء',
+  wednesday: 'الأربعاء',
+  thursday: 'الخميس',
+  friday: 'الجمعة',
+  saturday: 'السبت',
 };
 
 /* Map service name keywords to icons */
 const SERVICE_ICON_MAP = [
-  { keywords: ['طھط¨ظٹظٹط¶', 'whitening'], icon: Sparkles },
-  { keywords: ['طھظ‚ظˆظٹظ…', 'braces', 'orthodon'], icon: Layers },
-  { keywords: ['ط²ط±ط§ط¹ط©', 'implant'], icon: Syringe },
-  { keywords: ['طھظ†ط¸ظٹظپ', 'cleaning', 'scaling'], icon: Shield },
-  { keywords: ['ط­ط´ظˆ', 'filling', 'طھط±ظ…ظٹظ…'], icon: Gem },
-  { keywords: ['ط®ظ„ط¹', 'extraction', 'ط¬ط±ط§ط­'], icon: HeartPulse },
-  { keywords: ['ط£ط·ظپط§ظ„', 'ط·ظپظ„', 'child', 'pediatric'], icon: Baby },
-  { keywords: ['طھط¬ظ…ظٹظ„', 'cosmetic', 'veneer', 'ظپظٹظ†ظٹط±', 'ط§ط¨طھط³ط§ظ…ط©', 'smile'], icon: Smile },
-  { keywords: ['ط£ط´ط¹ط©', 'scan', 'x-ray', 'xray'], icon: ScanLine },
+  { keywords: ['تبييض', 'whitening'], icon: Sparkles },
+  { keywords: ['تقويم', 'braces', 'orthodon'], icon: Layers },
+  { keywords: ['زراعة', 'implant'], icon: Syringe },
+  { keywords: ['تنظيف', 'cleaning', 'scaling'], icon: Shield },
+  { keywords: ['حشو', 'filling', 'ترميم'], icon: Gem },
+  { keywords: ['خلع', 'extraction', 'جراح'], icon: HeartPulse },
+  { keywords: ['أطفال', 'طفل', 'child', 'pediatric'], icon: Baby },
+  { keywords: ['تجميل', 'cosmetic', 'veneer', 'فينير', 'ابتسامة', 'smile'], icon: Smile },
+  { keywords: ['أشعة', 'scan', 'x-ray', 'xray'], icon: ScanLine },
 ];
 
 function getServiceIcon(service) {
@@ -247,7 +247,7 @@ export default function LandingPage() {
         target="_blank"
         rel="noopener noreferrer"
         className="fixed bottom-6 left-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30 transition-transform hover:scale-110 active:scale-95"
-        aria-label="طھظˆط§طµظ„ ط¹ط¨ط± ظˆط§طھط³ط§ط¨"
+        aria-label="تواصل عبر واتساب"
       >
         <MessageCircle className="h-7 w-7 text-white" />
       </a>
@@ -283,10 +283,10 @@ function TopInfoBar({ clinic }) {
 /* â”€â”€ Navbar â”€â”€ */
 function Navbar({ clinic, scrolled, mobileMenuOpen, setMobileMenuOpen, scrollToSection }) {
   const navLinks = [
-    { label: 'ط§ظ„ط±ط¦ظٹط³ظٹط©', id: 'hero' },
-    { label: 'ط®ط¯ظ…ط§طھظ†ط§', id: 'services' },
-    { label: 'ط¹ظ† ط§ظ„ط¹ظٹط§ط¯ط©', id: 'about' },
-    { label: 'طھظˆط§طµظ„ ظˆظٹط§ظ†ط§', id: 'contact' },
+    { label: 'الرئيسية', id: 'hero' },
+    { label: 'خدماتنا', id: 'services' },
+    { label: 'عن العيادة', id: 'about' },
+    { label: 'تواصل ويانا', id: 'contact' },
   ];
 
   return (
@@ -393,7 +393,7 @@ function HeroSection({ clinic, whatsappLink, scrollToSection }) {
         {/* Badge */}
         <div className="mb-8 inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-sky-500/10 px-5 py-2 text-sm font-medium text-sky-300">
           <Sparkles className="h-4 w-4" />
-          <span>ط£ط­ط¯ط« ط§ظ„طھظ‚ظ†ظٹط§طھ ظپظٹ ط·ط¨ ط§ظ„ط£ط³ظ†ط§ظ†</span>
+          <span>أحدث التقنيات في طب الأسنان</span>
         </div>
 
         {/* Heading */}
@@ -418,14 +418,14 @@ function HeroSection({ clinic, whatsappLink, scrollToSection }) {
             className="group flex items-center gap-3 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-8 py-4 text-lg font-bold text-white shadow-2xl shadow-sky-500/25 transition-all hover:shadow-sky-500/40 hover:brightness-110"
           >
             <MessageCircle className="h-6 w-6" />
-            <span>ط§ط­ط¬ط² ظ…ظˆط¹ط¯ظƒ ظ‡ط³ظ‡</span>
+            <span>احجز موعدك هسه</span>
             <ArrowLeft className="h-5 w-5 transition-transform group-hover:-translate-x-1" />
           </a>
           <button
             onClick={() => scrollToSection('services')}
             className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-8 py-4 text-lg font-medium text-slate-300 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
           >
-            <span>ط´ظˆظپ ط®ط¯ظ…ط§طھظ†ط§</span>
+            <span>شوف خدماتنا</span>
             <ChevronDown className="h-5 w-5 animate-bounce" />
           </button>
         </div>
@@ -448,22 +448,22 @@ function FeaturesSection() {
   const features = [
     {
       icon: Shield,
-      title: 'طھط¹ظ‚ظٹظ… ظˆط£ظ…ط§ظ†',
-      description: 'ظ†ظ„طھط²ظ… ط¨ط£ط¹ظ„ظ‰ ظ…ط¹ط§ظٹظٹط± ط§ظ„طھط¹ظ‚ظٹظ… ظˆط§ظ„ط³ظ„ط§ظ…ط© ظ„ط¶ظ…ط§ظ† طµط­طھظƒ ظˆط±ط§ط­طھظƒ',
+      title: 'تعقيم وأمان',
+      description: 'نلتزم بأعلى معايير التعقيم والسلامة لضمان صحتك وراحتك في كل زيارة.',
       gradient: 'from-emerald-500/20 to-teal-500/20',
       iconColor: 'text-emerald-400',
     },
     {
       icon: Sparkles,
-      title: 'طھظ‚ظ†ظٹط§طھ ط­ط¯ظٹط«ط©',
-      description: 'ظ†ط³طھط®ط¯ظ… ط£ط­ط¯ط« ط§ظ„ط£ط¬ظ‡ط²ط© ظˆط§ظ„طھظ‚ظ†ظٹط§طھ ط§ظ„ظ…طھط·ظˆط±ط© ظپظٹ ط¹ط§ظ„ظ… ط·ط¨ ط§ظ„ط£ط³ظ†ط§ظ†',
+      title: 'تقنيات حديثة',
+      description: 'نستخدم أحدث الأجهزة والتقنيات للحصول على تشخيص أدق وعلاج أكثر راحة.',
       gradient: 'from-sky-500/20 to-blue-500/20',
       iconColor: 'text-sky-400',
     },
     {
       icon: Smile,
-      title: 'ط§ط¨طھط³ط§ظ…ط© ظ…ط«ط§ظ„ظٹط©',
-      description: 'ظ†طµظ…ظ… ط§ط¨طھط³ط§ظ…طھظƒ ط§ظ„ظ…ط«ط§ظ„ظٹط© ط¨ط¯ظ‚ط© ظˆط§ط­طھط±ط§ظپظٹط© طھظ†ط§ط³ط¨ ظ…ظ„ط§ظ…ط­ ظˆط¬ظ‡ظƒ',
+      title: 'ابتسامة مثالية',
+      description: 'نصمم ابتسامتك بعناية لتناسب ملامحك وتمنحك مظهراً طبيعياً وواثقاً.',
       gradient: 'from-amber-500/20 to-orange-500/20',
       iconColor: 'text-amber-400',
     },
@@ -551,10 +551,10 @@ function CounterSection({ stats }) {
   const doctorsCount = useCountUp(stats.doctors > 0 ? stats.doctors : 5, 1500, inView);
 
   const counters = [
-    { value: patients, suffix: '+', label: 'ظ…ط±ط§ط¬ط¹ ط±ط§ط¶ظٹ', icon: Smile },
-    { value: appointments, suffix: '+', label: 'ظ…ظˆط¹ط¯ ظ…ظƒطھظ…ظ„', icon: Clock },
-    { value: doctorsCount, suffix: '', label: 'ط·ط¨ظٹط¨ ظ…طھط®طµطµ', icon: Stethoscope },
-    { value: 24, suffix: '/7', label: 'ط¯ط¹ظ… ظ…طھظˆط§طµظ„', icon: MessageCircle },
+    { value: patients, suffix: '+', label: 'مراجع راضٍ', icon: Smile },
+    { value: appointments, suffix: '+', label: 'موعد مكتمل', icon: Clock },
+    { value: doctorsCount, suffix: '', label: 'طبيب متخصص', icon: Stethoscope },
+    { value: 24, suffix: '/7', label: 'دعم متواصل', icon: MessageCircle },
   ];
 
   return (
@@ -623,13 +623,13 @@ function ServicesSection({ services, loading, whatsappLink }) {
         <div className="mb-16 text-center">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-sky-500/10 px-4 py-1.5 text-xs font-bold text-sky-300">
             <Star className="h-3.5 w-3.5" />
-            ط®ط¯ظ…ط§طھظ†ط§ ط§ظ„ظ…طھظ…ظٹط²ط©
+            خدماتنا المتميزة
           </div>
           <h2 className="mb-4 text-3xl font-black tracking-tight text-white sm:text-4xl">
-            ط®ط¯ظ…ط§طھ ط·ط¨ ط§ظ„ط£ط³ظ†ط§ظ† ط§ظ„ط´ط§ظ…ظ„ط©
+            خدمات طب الأسنان الشاملة
           </h2>
           <p className="mx-auto max-w-xl text-sm leading-7 text-slate-400">
-            ظ†ظ‚ط¯ظ… ظ…ط¬ظ…ظˆط¹ط© ط´ط§ظ…ظ„ط© ظ…ظ† ط®ط¯ظ…ط§طھ ط·ط¨ ط§ظ„ط£ط³ظ†ط§ظ† ط§ظ„طھط¬ظ…ظٹظ„ظٹ ظˆط§ظ„ط¹ظ„ط§ط¬ظٹ ط¨ط£ط­ط¯ط« ط§ظ„طھظ‚ظ†ظٹط§طھ ظˆط£ط¹ظ„ظ‰ ط¬ظˆط¯ط©
+            نقدم مجموعة متكاملة من خدمات طب الأسنان العلاجي والتجميلي بأحدث التقنيات وأعلى معايير الجودة.
           </p>
         </div>
 
@@ -646,7 +646,7 @@ function ServicesSection({ services, loading, whatsappLink }) {
         ) : services.length === 0 ? (
           <div className="mx-auto max-w-md rounded-2xl border border-white/5 bg-white/[0.02] p-12 text-center">
             <ToothIcon className="mx-auto mb-4 h-12 w-12 text-slate-600" />
-            <p className="text-slate-400">ط±ط§ط­ طھظ†ط¶ط§ظپ ط§ظ„ط®ط¯ظ…ط§طھ ظ‚ط±ظٹط¨ط§ظ‹</p>
+            <p className="text-slate-400">الخدمات ستظهر هنا قريباً</p>
           </div>
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -666,20 +666,20 @@ function ServicesSection({ services, loading, whatsappLink }) {
                     </div>
                     {service.price != null && (
                       <div className={`rounded-xl ${accent.priceBg} px-3 py-1.5 text-sm font-bold ${accent.priceColor}`}>
-                        {service.price.toLocaleString()} ط¯.ط¹
+                        {service.price.toLocaleString()} د.ع
                       </div>
                     )}
                   </div>
 
                   <h3 className="mb-2 text-lg font-bold text-white">{service.nameAr}</h3>
                   <p className="mb-5 text-sm leading-7 text-slate-400">
-                    {service.description || 'ط®ط¯ظ…ط© ظ…طھظ…ظٹط²ط© ظ†ظ‚ط¯ظ…ظ‡ط§ ظ„ظƒظ… ط¨ط£ط¹ظ„ظ‰ ط¬ظˆط¯ط© ظˆط£ط­ط¯ط« ط§ظ„طھظ‚ظ†ظٹط§طھ'}
+                    {service.description || 'خدمة متميزة نقدمها لكم بأعلى جودة وبأحدث التقنيات.'}
                   </p>
 
                   <div className="flex items-center justify-between border-t border-white/5 pt-4">
                     <div className="flex items-center gap-1.5 text-xs text-slate-500">
                       <Clock className="h-3.5 w-3.5" />
-                      <span>{service.duration} ط¯ظ‚ظٹظ‚ط©</span>
+                      <span>{service.duration} دقيقة</span>
                     </div>
                     <a
                       href={whatsappLink}
@@ -687,7 +687,7 @@ function ServicesSection({ services, loading, whatsappLink }) {
                       rel="noopener noreferrer"
                       className="flex items-center gap-1.5 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-300 transition-all hover:bg-white/10 hover:text-white"
                     >
-                      <span>ط§ط­ط¬ط² ظ‡ط³ظ‡</span>
+                      <span>احجز هسه</span>
                       <ArrowLeft className="h-3 w-3" />
                     </a>
                   </div>
@@ -727,13 +727,13 @@ function DoctorsSection({ doctors }) {
         <div className="mb-16 text-center">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-sky-500/10 px-4 py-1.5 text-xs font-bold text-sky-300">
             <Stethoscope className="h-3.5 w-3.5" />
-            ظپط±ظٹظ‚ظ†ط§ ط§ظ„ط·ط¨ظٹ
+            فريقنا الطبي
           </div>
           <h2 className="mb-4 text-3xl font-black tracking-tight text-white sm:text-4xl">
-            ط£ط·ط¨ط§ط¤ظ†ط§ ط§ظ„ظ…طھط®طµطµظٹظ†
+            أطباؤنا المتخصصون
           </h2>
           <p className="mx-auto max-w-xl text-sm leading-7 text-slate-400">
-            ظپط±ظٹظ‚ ط·ط¨ظٹ ظ…طھظ…ط±ط³ ظˆط°ظˆ ط®ط¨ط±ط© ط¹ط§ظ„ظٹط© ط¨ط®ط¯ظ…طھظƒظ…
+            فريق طبي متمرس بخبرة عالية لخدمتكم وتقديم رعاية دقيقة ومريحة.
           </p>
         </div>
 
@@ -764,7 +764,7 @@ function DoctorsSection({ doctors }) {
                 </div>
 
                 <h3 className="mb-1 text-lg font-bold text-white">{doctor.name}</h3>
-                <p className="text-sm text-sky-400 font-medium">{doctor.specialization}</p>
+                    <p className="text-sm font-medium text-sky-400">{doctor.specialization || 'طبيب أسنان متخصص'}</p>
               </div>
             );
           })}
@@ -799,7 +799,7 @@ function AboutSection({ clinic, whatsappLink }) {
                 <div className="relative h-64 sm:h-80 overflow-hidden">
                   <img
                     src="/images/doctor.png"
-                    alt="ط¯. ط§ط¨ط±ط§ظ‡ظٹظ… - ط·ط¨ظٹط¨ ط£ط³ظ†ط§ظ†"
+                    alt="د. إبراهيم - طبيب أسنان"
                     className="h-full w-full object-cover object-top"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0d1225] via-transparent to-transparent" />
@@ -807,10 +807,10 @@ function AboutSection({ clinic, whatsappLink }) {
 
                 <div className="space-y-6 p-8 sm:p-10">
                   {[
-                    { label: 'ط·ط¨ ط£ط³ظ†ط§ظ† طھط¬ظ…ظٹظ„ظٹ', progress: 95 },
-                    { label: 'ط²ط±ط§ط¹ط© ط£ط³ظ†ط§ظ†', progress: 90 },
-                    { label: 'طھظ‚ظˆظٹظ… ط£ط³ظ†ط§ظ†', progress: 88 },
-                    { label: 'ط¹ظ„ط§ط¬ ط¹طµط¨', progress: 92 },
+                    { label: 'طب أسنان تجميلي', progress: 95 },
+                    { label: 'زراعة أسنان', progress: 90 },
+                    { label: 'تقويم أسنان', progress: 88 },
+                    { label: 'علاج عصب', progress: 92 },
                   ].map((item) => (
                     <div key={item.label}>
                       <div className="mb-2 flex items-center justify-between">
@@ -834,12 +834,12 @@ function AboutSection({ clinic, whatsappLink }) {
               <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1225] shadow-2xl shadow-black/50">
                 <img
                   src="/images/smile.png"
-                  alt="ظ†طھظٹط¬ط© طھط¬ظ…ظٹظ„ ط£ط³ظ†ط§ظ†"
+                  alt="نتيجة تجميل أسنان"
                   className="h-28 w-40 object-cover"
                 />
                 <div className="px-3 py-2">
-                  <p className="text-xs font-bold text-white">ط§ط¨طھط³ط§ظ…ط© ظ…ط«ط§ظ„ظٹط©</p>
-                  <p className="text-[10px] text-sky-400">ظ†طھط§ط¦ط¬ ط­ظ‚ظٹظ‚ظٹط©</p>
+                  <p className="text-xs font-bold text-white">ابتسامة مثالية</p>
+                  <p className="text-[10px] text-sky-400">نتائج حقيقية</p>
                 </div>
               </div>
             </div>
@@ -848,10 +848,10 @@ function AboutSection({ clinic, whatsappLink }) {
           {/* Text side */}
           <div>
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-sky-500/10 px-4 py-1.5 text-xs font-bold text-sky-300">
-              ط¹ظ† ط§ظ„ط¹ظٹط§ط¯ط©
+              عن العيادة
             </div>
             <h2 className="mb-6 text-3xl font-black tracking-tight text-white sm:text-4xl">
-              ط®ط¨ط±ط© ظˆطھظ…ظٹظ‘ط² ط¨ط¹ظ†ط§ظٹط© ط£ط³ظ†ط§ظ†ظƒ
+              خبرة وتميز بعناية أسنانك
             </h2>
             <p className="mb-8 text-base leading-8 text-slate-400">
               {CLINIC_DESCRIPTION}
@@ -859,10 +859,10 @@ function AboutSection({ clinic, whatsappLink }) {
 
             <div className="mb-10 grid grid-cols-2 gap-4">
               {[
-                { label: 'ط£ط¬ظ‡ط²ط© ظ…طھط·ظˆط±ط©', icon: Sparkles },
-                { label: 'ظپط±ظٹظ‚ ظ…طھط®طµطµ', icon: Shield },
-                { label: 'ط±ط§ط­ط© ط§ظ„ظ…ط±ظٹط¶', icon: Smile },
-                { label: 'ظ†طھط§ط¦ط¬ ظ…ط¶ظ…ظˆظ†ط©', icon: Star },
+                { label: 'أجهزة متطورة', icon: Sparkles },
+                { label: 'فريق متخصص', icon: Shield },
+                { label: 'راحة المريض', icon: Smile },
+                { label: 'نتائج مضمونة', icon: Star },
               ].map((item) => {
                 const Icon = item.icon;
                 return (
@@ -886,7 +886,7 @@ function AboutSection({ clinic, whatsappLink }) {
               className="inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-8 py-4 font-bold text-white shadow-xl shadow-sky-500/20 transition-all hover:shadow-sky-500/40 hover:brightness-110"
             >
               <MessageCircle className="h-5 w-5" />
-              <span>طھظˆط§طµظ„ ظˆظٹط§ظ†ط§ ظ‡ط³ظ‡</span>
+              <span>تواصل ويانا هسه</span>
             </a>
           </div>
         </div>
@@ -902,28 +902,28 @@ function ContactSection({ clinic, whatsappLink }) {
   const contactCards = [
     {
       icon: Phone,
-      title: 'ط®ط§ط¨ط±ظ†ط§',
+      title: 'خابرنا',
       info: clinic.phone,
       action: `tel:${clinic.phone}`,
-      actionLabel: 'ط®ط§ط¨ط±ظ†ط§ ظ‡ط³ظ‡',
+      actionLabel: 'خابرنا هسه',
       gradient: 'from-sky-500/20 to-blue-500/20',
       iconColor: 'text-sky-400',
     },
     {
       icon: MessageCircle,
-      title: 'ظˆط§طھط³ط§ط¨',
+      title: 'واتساب',
       info: clinic.phone,
       action: whatsappLink,
-      actionLabel: 'ط¯ط² ط±ط³ط§ظ„ط©',
+      actionLabel: 'دز رسالة',
       gradient: 'from-emerald-500/20 to-teal-500/20',
       iconColor: 'text-emerald-400',
     },
     {
       icon: MapPin,
-      title: 'ط§ظ„ط¹ظ†ظˆط§ظ†',
+      title: 'العنوان',
       info: clinic.address,
       action: clinic.googleMapsLink,
-      actionLabel: 'ط§ظپطھط­ ط§ظ„ط®ط±ظٹط·ط©',
+      actionLabel: 'افتح الخريطة',
       gradient: 'from-violet-500/20 to-purple-500/20',
       iconColor: 'text-violet-400',
     },
@@ -944,13 +944,13 @@ function ContactSection({ clinic, whatsappLink }) {
         <div className="mb-16 text-center">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sky-500/20 bg-sky-500/10 px-4 py-1.5 text-xs font-bold text-sky-300">
             <Phone className="h-3.5 w-3.5" />
-            طھظˆط§طµظ„ ظˆظٹط§ظ†ط§
+            تواصل ويانا
           </div>
           <h2 className="mb-4 text-3xl font-black tracking-tight text-white sm:text-4xl">
-            ط¥ط­ظ†ط§ ظ‡ظ†ط§ ط¨ط®ط¯ظ…طھظƒ
+            إحنا هنا بخدمتك
           </h2>
           <p className="mx-auto max-w-lg text-sm leading-7 text-slate-400">
-            ظ„ط§ طھطھط±ط¯ط¯ طھط®ط§ط¨ط±ظ†ط§ ط¨ط£ظٹ ظˆظ‚طھ. ط¥ط­ظ†ط§ ظƒظ„ط´ ط³ط¹ظٹط¯ظٹظ† ظ†ط¬ط§ظˆط¨ ط¹ظ„ظ‰ ط§ط³طھظپط³ط§ط±ط§طھظƒ ظˆظ†ط­ط¬ط² ظ…ظˆط¹ط¯ظƒ
+            لا تتردد تتواصل ويانا بأي وقت. نسعد بالرد على استفساراتك ومساعدتك في حجز موعدك.
           </p>
         </div>
 
@@ -972,7 +972,7 @@ function ContactSection({ clinic, whatsappLink }) {
                     <Icon className="h-8 w-8" />
                   </div>
                   <h3 className="mb-2 text-lg font-bold text-white">{card.title}</h3>
-                  <p className="mb-5 text-sm text-slate-400" dir={card.title === 'ط§ظ„ط¹ظ†ظˆط§ظ†' ? 'rtl' : 'ltr'}>
+                  <p className="mb-5 text-sm text-slate-400" dir={card.title === 'العنوان' ? 'rtl' : 'ltr'}>
                     {card.info}
                   </p>
                   <span className="inline-flex items-center gap-2 rounded-xl bg-white/5 px-5 py-2.5 text-sm font-medium text-slate-300 transition-all group-hover:bg-white/10 group-hover:text-white">
@@ -1018,7 +1018,7 @@ function Footer({ clinic }) {
           <div>
             <h4 className="mb-5 flex items-center gap-2 text-sm font-bold text-white">
               <Clock className="h-4 w-4 text-sky-400" />
-              ط£ظˆظ‚ط§طھ ط§ظ„ط¹ظ…ظ„
+              أوقات العمل
             </h4>
             <div className="space-y-2.5">
               {dayOrder.map((day) => {
@@ -1031,7 +1031,7 @@ function Footer({ clinic }) {
                         {hours.start} - {hours.end}
                       </span>
                     ) : (
-                      <span className="text-rose-400/70">ظ…ط؛ظ„ظ‚</span>
+                      <span className="text-rose-400/70">مغلق</span>
                     )}
                   </div>
                 );
@@ -1041,13 +1041,13 @@ function Footer({ clinic }) {
 
           {/* Col 3: Quick links + contact */}
           <div>
-            <h4 className="mb-5 text-sm font-bold text-white">ط±ظˆط§ط¨ط· ط³ط±ظٹط¹ط©</h4>
+            <h4 className="mb-5 text-sm font-bold text-white">روابط سريعة</h4>
             <div className="space-y-2.5 text-sm">
               <Link to="/privacy-policy" className="block text-slate-500 transition-colors hover:text-slate-300">
-                ط³ظٹط§ط³ط© ط§ظ„ط®طµظˆطµظٹط©
+                سياسة الخصوصية
               </Link>
               <a href={clinic.googleMapsLink} target="_blank" rel="noopener noreferrer" className="block text-slate-500 transition-colors hover:text-slate-300">
-                ط§ظ„ظ…ظˆظ‚ط¹ ط¹ظ„ظ‰ ط§ظ„ط®ط±ظٹط·ط©
+                الموقع على الخريطة
               </a>
               <a href={`tel:${clinic.phone}`} className="block text-slate-500 transition-colors hover:text-slate-300" dir="ltr">
                 {clinic.phone}
@@ -1057,7 +1057,7 @@ function Footer({ clinic }) {
         </div>
 
         <div className="mt-10 border-t border-white/5 pt-8 text-center text-xs text-slate-600">
-          آ© {new Date().getFullYear()} {clinic.nameAr || clinic.name} {CLINIC_SUBTITLE}. ط¬ظ…ظٹط¹ ط§ظ„ط­ظ‚ظˆظ‚ ظ…ط­ظپظˆط¸ط©.
+          © {new Date().getFullYear()} {clinic.nameAr || clinic.name} {CLINIC_SUBTITLE}. جميع الحقوق محفوظة.
         </div>
       </div>
     </footer>
