@@ -2,6 +2,11 @@ const prisma = require('../lib/prisma');
 const { normalizePhoneDigits } = require('../utils/clinicLinks');
 const { paginate } = require('../utils/helpers');
 
+const isMissingDiscountImageColumnError = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('image_url');
+};
+
 const parseGroupNames = (value) => {
   if (Array.isArray(value)) return value.map((item) => String(item || '').trim()).filter(Boolean);
   return String(value || '')
@@ -437,10 +442,34 @@ const bulkImport = async (req, res, next) => {
 
 const listDiscounts = async (req, res, next) => {
   try {
-    const discounts = await prisma.discountRule.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: { group: true },
-    });
+    let discounts;
+    try {
+      discounts = await prisma.discountRule.findMany({
+        orderBy: { createdAt: 'desc' },
+        include: { group: true },
+      });
+    } catch (error) {
+      if (!isMissingDiscountImageColumnError(error)) throw error;
+      discounts = await prisma.discountRule.findMany({
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          value: true,
+          active: true,
+          groupId: true,
+          serviceId: true,
+          serviceName: true,
+          startsAt: true,
+          endsAt: true,
+          createdAt: true,
+          updatedAt: true,
+          group: true,
+        },
+      });
+      discounts = discounts.map((discount) => ({ ...discount, imageUrl: null }));
+    }
     res.json({ discounts });
   } catch (error) {
     next(error);
@@ -502,9 +531,20 @@ const saveDiscount = async (req, res, next) => {
       data.groupId = group.id;
     }
 
-    const discount = req.params.id
-      ? await prisma.discountRule.update({ where: { id: req.params.id }, data, include: { group: true } })
-      : await prisma.discountRule.create({ data, include: { group: true } });
+    let discount;
+    try {
+      discount = req.params.id
+        ? await prisma.discountRule.update({ where: { id: req.params.id }, data, include: { group: true } })
+        : await prisma.discountRule.create({ data, include: { group: true } });
+    } catch (error) {
+      if (!isMissingDiscountImageColumnError(error)) throw error;
+      const legacyData = { ...data };
+      delete legacyData.imageUrl;
+      discount = req.params.id
+        ? await prisma.discountRule.update({ where: { id: req.params.id }, data: legacyData, include: { group: true } })
+        : await prisma.discountRule.create({ data: legacyData, include: { group: true } });
+      discount = { ...discount, imageUrl: null };
+    }
 
     res.status(req.params.id ? 200 : 201).json({ discount });
   } catch (error) {

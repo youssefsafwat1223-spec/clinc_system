@@ -45,6 +45,11 @@ const createDefaultSettings = () => ({
   prescriptionFooter: '',
 });
 
+const isMissingDiscountImageColumnError = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('image_url');
+};
+
 const buildKnowledgeImportPreview = ({ currentAiConfig, importData, mode }) => {
   const existingCasesCount = currentAiConfig.knowledgeCases.length;
   const mergedKnowledgeCases =
@@ -81,10 +86,14 @@ const getPublic = async (req, res, next) => {
     });
 
     // Fetch real stats
-    const [patientCount, appointmentCount, activeDiscounts] = await Promise.all([
+    const [patientCount, appointmentCount] = await Promise.all([
       prisma.patient.count(),
       prisma.appointment.count({ where: { status: 'CONFIRMED' } }),
-      prisma.discountRule.findMany({
+    ]);
+
+    let activeDiscounts;
+    try {
+      activeDiscounts = await prisma.discountRule.findMany({
         where: {
           active: true,
           OR: [{ startsAt: null }, { startsAt: { lte: new Date() } }],
@@ -92,8 +101,29 @@ const getPublic = async (req, res, next) => {
         },
         orderBy: { createdAt: 'desc' },
         take: 5,
-      }),
-    ]);
+      });
+    } catch (error) {
+      if (!isMissingDiscountImageColumnError(error)) throw error;
+      activeDiscounts = await prisma.discountRule.findMany({
+        where: {
+          active: true,
+          OR: [{ startsAt: null }, { startsAt: { lte: new Date() } }],
+          AND: [{ OR: [{ endsAt: null }, { endsAt: { gte: new Date() } }] }],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          value: true,
+          serviceName: true,
+          startsAt: true,
+          endsAt: true,
+        },
+      });
+      activeDiscounts = activeDiscounts.map((discount) => ({ ...discount, imageUrl: null }));
+    }
 
     res.json({
       clinic: {

@@ -1,5 +1,10 @@
 const prisma = require('../lib/prisma');
 
+const isMissingDiscountImageColumnError = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('image_url');
+};
+
 const toNumber = (value, fallback = 0) => {
   const number = Number(value);
   return Number.isFinite(number) ? number : fallback;
@@ -16,26 +21,67 @@ const getActiveDiscountRules = async ({ patientId, serviceId, serviceName, servi
   const groupIds = memberships.map((membership) => membership.groupId);
   const now = new Date();
 
-  return prisma.discountRule.findMany({
-    where: {
-      active: true,
-      OR: [{ groupId: null }, ...(groupIds.length ? [{ groupId: { in: groupIds } }] : [])],
-      AND: [
-        {
-          OR: [
-            { serviceId: null },
-            ...(serviceId ? [{ serviceId }] : []),
-            ...(serviceName ? [{ serviceName }] : []),
-            ...(serviceNameAr ? [{ serviceName: serviceNameAr }] : []),
-          ],
-        },
-        { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
-        { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
-      ],
-    },
-    include: { group: true },
-    orderBy: { createdAt: 'desc' },
-  });
+  try {
+    return await prisma.discountRule.findMany({
+      where: {
+        active: true,
+        OR: [{ groupId: null }, ...(groupIds.length ? [{ groupId: { in: groupIds } }] : [])],
+        AND: [
+          {
+            OR: [
+              { serviceId: null },
+              ...(serviceId ? [{ serviceId }] : []),
+              ...(serviceName ? [{ serviceName }] : []),
+              ...(serviceNameAr ? [{ serviceName: serviceNameAr }] : []),
+            ],
+          },
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+        ],
+      },
+      include: { group: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  } catch (error) {
+    if (!isMissingDiscountImageColumnError(error)) throw error;
+
+    const rules = await prisma.discountRule.findMany({
+      where: {
+        active: true,
+        OR: [{ groupId: null }, ...(groupIds.length ? [{ groupId: { in: groupIds } }] : [])],
+        AND: [
+          {
+            OR: [
+              { serviceId: null },
+              ...(serviceId ? [{ serviceId }] : []),
+              ...(serviceName ? [{ serviceName }] : []),
+              ...(serviceNameAr ? [{ serviceName: serviceNameAr }] : []),
+            ],
+          },
+          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+          { OR: [{ endsAt: null }, { endsAt: { gte: now } }] },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        value: true,
+        active: true,
+        groupId: true,
+        serviceId: true,
+        serviceName: true,
+        startsAt: true,
+        endsAt: true,
+        createdAt: true,
+        updatedAt: true,
+        group: true,
+      },
+    });
+
+    return rules.map((rule) => ({ ...rule, imageUrl: null }));
+  }
 };
 
 const calculateRuleDiscount = (amount, rule) => {
