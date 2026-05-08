@@ -13,7 +13,7 @@ const getPublic = async (req, res, next) => {
   try {
     const services = await prisma.service.findMany({
       where: { active: true },
-      select: { id: true, name: true, nameAr: true, description: true, price: true, duration: true },
+      select: { id: true, name: true, nameAr: true, description: true, price: true, priceFrom: true, priceTo: true, duration: true },
       orderBy: { createdAt: 'desc' },
     });
     res.json({ services });
@@ -24,9 +24,9 @@ const getPublic = async (req, res, next) => {
 
 const create = async (req, res, next) => {
   try {
-    const { name, nameAr, description, price, duration } = req.body;
+    const { name, nameAr, description, price, priceFrom, priceTo, duration } = req.body;
     const service = await prisma.service.create({
-      data: { name, nameAr, description, price, duration: duration ?? 30 },
+      data: { name, nameAr, description, price, priceFrom, priceTo, duration: duration ?? 30 },
     });
     res.status(201).json({ service });
   } catch (error) {
@@ -36,7 +36,7 @@ const create = async (req, res, next) => {
 
 const update = async (req, res, next) => {
   try {
-    const { name, nameAr, description, price, duration, active } = req.body;
+    const { name, nameAr, description, price, priceFrom, priceTo, duration, active } = req.body;
     const service = await prisma.service.update({
       where: { id: req.params.id },
       data: {
@@ -44,6 +44,8 @@ const update = async (req, res, next) => {
         ...(nameAr !== undefined && { nameAr }),
         ...(description !== undefined && { description }),
         ...(price !== undefined && { price }),
+        ...(priceFrom !== undefined && { priceFrom }),
+        ...(priceTo !== undefined && { priceTo }),
         ...(duration !== undefined && { duration }),
         ...(active !== undefined && { active }),
       },

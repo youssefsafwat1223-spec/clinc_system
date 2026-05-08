@@ -48,8 +48,21 @@ const formatWorkingHours = (workingHours = {}) =>
     })
     .join('\n');
 
+const formatBaseServicePrice = (service = {}) => {
+  const from = service.priceFrom;
+  const to = service.priceTo;
+
+  if (from != null && to != null) return `من ${formatCurrency(from)} إلى ${formatCurrency(to)}`;
+  if (from != null) return `يبدأ من ${formatCurrency(from)}`;
+  if (to != null) return `حتى ${formatCurrency(to)}`;
+  if (service.price != null) return formatCurrency(service.price);
+  return '';
+};
+
 const formatServicePriceForPatient = async (service, patientId) => {
-  if (!service?.price) return '';
+  if (service?.price == null) {
+    return formatBaseServicePrice(service);
+  }
   if (!patientId) return formatCurrency(service.price);
 
   const discount = await getDiscountForService({ patientId, service });
@@ -88,7 +101,11 @@ const buildServicePricesReplySuffix = async (patientId = null) => {
     const services = await prisma.service.findMany({
       where: {
         active: true,
-        price: { not: null },
+        OR: [
+          { price: { not: null } },
+          { priceFrom: { not: null } },
+          { priceTo: { not: null } },
+        ],
       },
       orderBy: { createdAt: 'asc' },
       select: {
@@ -96,6 +113,8 @@ const buildServicePricesReplySuffix = async (patientId = null) => {
         nameAr: true,
         name: true,
         price: true,
+        priceFrom: true,
+        priceTo: true,
       },
     });
 
@@ -124,6 +143,8 @@ const buildServicesDirectReply = async (patientId = null) => {
         name: true,
         description: true,
         price: true,
+        priceFrom: true,
+        priceTo: true,
       },
     });
 

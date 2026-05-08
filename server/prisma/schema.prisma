@@ -131,6 +131,8 @@ model Service {
   nameAr       String        @map("name_ar")
   description  String?
   price        Float?
+  priceFrom    Float?        @map("price_from")
+  priceTo      Float?        @map("price_to")
   duration     Int           @default(30)
   active       Boolean       @default(true)
   appointments Appointment[]

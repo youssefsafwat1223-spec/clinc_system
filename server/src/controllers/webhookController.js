@@ -82,6 +82,26 @@ const attachServiceDiscounts = async (services, patientId) =>
       };
     })
   );
+
+const formatServicePriceLabel = (service = {}) => {
+  const from = service.priceFrom;
+  const to = service.priceTo;
+
+  if (from != null && to != null) {
+    return `من ${formatCurrency(from)} إلى ${formatCurrency(to)}`;
+  }
+  if (from != null) {
+    return `يبدأ من ${formatCurrency(from)}`;
+  }
+  if (to != null) {
+    return `حتى ${formatCurrency(to)}`;
+  }
+  if (service.price != null) {
+    return formatCurrency(service.price);
+  }
+
+  return '';
+};
 const hasProcessedWhatsAppMessage = (messageId) => {
   if (!messageId) {
     return false;
@@ -591,7 +611,7 @@ const handleWhatsAppMessage = async (message, contact) => {
         session.selectedTime = null;
         session.doctorId = null;
         setBookingSession(from, session);
-        return await whatsappService.sendTextMessage(from, 'اكتب موعداً آخر بنفس الشكل:\nط§ظ„ط®ظ…ظٹط³ 9 ظ…ط³ط§ط، 28/6');
+        return await whatsappService.sendTextMessage(from, 'اكتب موعداً آخر بنفس الشكل:\nالخميس 9 مساءً 28/6');
       }
       clearBookingSession(from);
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
@@ -643,7 +663,7 @@ const handleWhatsAppMessage = async (message, contact) => {
       });
 
       if (!appointment || !['PENDING', 'CONFIRMED'].includes(appointment.status)) {
-        return await whatsappService.sendTextMessage(from, 'عذراًطŒ ظ‡ط°ط§ ط§ظ„ظ…ظˆط¹ط¯ ط؛ظٹط± ظ…طھط§ط­ ط£ظˆ طھظ… ط¥ظ„ط؛ط§ط¤ظ‡ ظ…ط³ط¨ظ‚ط§ظ‹.');
+        return await whatsappService.sendTextMessage(from, 'عذراً، هذا الموعد غير متاح أو تم إلغاؤه مسبقاً.');
       }
 
       return await whatsappService.sendInteractiveMessage(
@@ -672,14 +692,14 @@ const handleWhatsAppMessage = async (message, contact) => {
       // Notify Dashboard
       await prisma.adminNotification.create({
         data: {
-          title: 'ط¥ظ„ط؛ط§ط، ط­ط¬ط² â‌Œ',
+          title: 'إلغاء حجز',
           message: `المريض ${patient.name} قام بإلغاء حجزه القادم.`,
           type: 'CANCELED_APPOINTMENT',
           link: `/appointments?doctorId=${cancelledAppointment.doctorId}&appointmentId=${cancelledAppointment.id}`
         }
       });
 
-      return await whatsappService.sendTextMessage(from, 'âœ… طھظ… ط§ظ„ط«ط£ظƒظٹطھظ… ط¥ظ„ط؛ط§ط، ط­ط¬ط²ظƒ ط¨ظ†ط¬ط§ط­.\nظ†طھظ…ظ†ظ‰ ظ„ظƒ ط¯ظˆط§ظ… الصحة والعافية.');
+      return await whatsappService.sendTextMessage(from, 'تم إلغاء حجزك بنجاح.\nنتمنى لك دوام الصحة والعافية.');
     }
 
     // Handle rescheduling
@@ -689,7 +709,7 @@ const handleWhatsAppMessage = async (message, contact) => {
       // Inject the appointment ID into the session so createAppointment updates it
       setBookingSession(from, { step: 'select_service', patientId: patient.id, rescheduleAptId: aptId });
 
-      await whatsappService.sendTextMessage(from, 'ًں”„ ط­ط³ظ†ط§ظ‹طŒ ط³ظٹطھظ… طھط£ط¬ظٹظ„ ظ…ظˆط¹ط¯ظƒ ط§ظ„ط­ط§ظ„ظٹ. يرجى ط§ط®طھظٹط§ط± ط§ظ„ط®ط¯ظ…ط© ظˆط§ظ„ظˆظ‚طھ ط§ظ„ط¬ط¯ظٹط¯:');
+      await whatsappService.sendTextMessage(from, 'حسناً، سيتم تأجيل موعدك الحالي. يرجى اختيار الخدمة والوقت الجديد:');
 
       // Start standard booking flow
       const services = await prisma.service.findMany({ where: { active: true } });
@@ -703,12 +723,12 @@ const handleWhatsAppMessage = async (message, contact) => {
 
     if (selectedId === 'call_doctor') {
       const settings = await prisma.clinicSettings.findFirst();
-      return await whatsappService.sendTextMessage(from, `ًں“‍ ظ„ظ„تواصل ظ…ط¹ ط§ظ„طبيب: ${settings?.phone || 'يرجى ط§ظ„تواصل ظ…ط¹ ط¥ط¯ط§ط±ط© ط§ظ„ط¹ظٹط§ط¯ط©'}`);
+      return await whatsappService.sendTextMessage(from, `للتواصل مع العيادة: ${settings?.phone || 'يرجى التواصل مع إدارة العيادة'}`);
     }
 
     if (selectedId === 'check_appointment') {
       setBookingSession(from, { step: 'check_appointment', patientId: patient.id });
-      return await whatsappService.sendTextMessage(from, 'يرجى ط¥ط±ط³ط§ظ„ "رقم ط§ظ„ط­ط¬ط²" ط§ظ„ظ…ظƒظˆظ† ظ…ظ† 6 ط£ط­ط±ظپ (ظ…ط«ط§ظ„: BK-A1B2):');
+      return await whatsappService.sendTextMessage(from, 'يرجى إرسال رقم الحجز المكوّن من 6 أحرف، مثال: BK-A1B2');
     }
 
     if (selectedId === 'request_reception') {
@@ -720,19 +740,19 @@ const handleWhatsAppMessage = async (message, contact) => {
       // Trigger Dashboard Notification
       await prisma.adminNotification.create({
         data: {
-          title: 'ط±ط¯ ط¨ط´ط±ظٹ ظ…ط·ظ„ظˆط¨ ًں‘¨â€چًں’»',
-          message: `ط§ظ„ظ…ط±ظٹط¶ ${patient.name} ظٹط·ظ„ط¨ ط§ظ„طھط­ط¯ط« ظ„ظ…ظˆط¸ظپ ط§ظ„ط§ط³طھظ‚ط¨ط§ظ„ ط§ظ„ط¢ظ†.`,
+          title: 'طلب رد بشري',
+          message: `المريض ${patient.name} يطلب التحدث مع موظف الاستقبال الآن.`,
           type: 'HUMAN_REQUEST',
           link: `/inbox?patientId=${patient.id}`,
         }
       });
 
-      return await whatsappService.sendTextMessage(from, 'ًں‘¨â€چًں’» ط¬ط§ط±ظٹ طھط­ظˆظٹظ„ظƒ ظ„ظ…ظˆط¸ظپ ط®ط¯ظ…ط© ط§ظ„ط¹ظ…ظ„ط§ط،.. طھظپط¶ظ„ ط¨ظƒطھط§ط¨ط© ط§ط³طھظپط³ط§ط±ظƒ ظˆظ„ظ† ظٹطھظ… ط§ظ„ط±ط¯ ط¹ظ„ظٹظƒ ط¢ظ„ظٹط§ظ‹ ط¨ط¹ط¯ ط§ظ„ط¢ظ†. (ظ„ظ„ط¹ظˆط¯ط© ظ„ظ„ظ‚ط§ط¦ظ…ط© ط§ظ„ط±ط¦ظٹط³ظٹط© ظپظٹ ط£ظٹ ظˆظ‚طھ ط§ظƒطھط¨ "ط±ط¬ظˆط¹")');
+      return await whatsappService.sendTextMessage(from, 'جارٍ تحويلك إلى موظف خدمة العملاء. تفضل بكتابة استفسارك، ولن يتم الرد عليك آلياً بعد الآن. للعودة إلى القائمة الرئيسية في أي وقت اكتب "رجوع".');
     }
 
     if (selectedId === 'request_consultation') {
       setBookingSession(from, { step: 'ask_consultation', patientId: patient.id });
-      return await whatsappService.sendTextMessage(from, 'ًں‘¨â€چâڑ•ï¸ڈ يرجى ظƒطھط§ط¨ط© ط§ط³طھط´ط§ط±طھظƒ ط£ظˆ ط§ظ„ط£ط¹ط±ط§ط¶ ط§ظ„طھظٹ طھط¹ط§ظ†ظٹ ظ…ظ†ظ‡ط§ ط¨ط§ظ„طھظپطµظٹظ„ ظپظٹ ط±ط³ط§ظ„ط© ظˆط§ط­ط¯ط©:');
+      return await whatsappService.sendTextMessage(from, 'يرجى كتابة استشارتك أو الأعراض التي تعاني منها بالتفصيل في رسالة واحدة:');
     }
 
     // Service selection (in booking flow)
@@ -783,7 +803,7 @@ const handleWhatsAppMessage = async (message, contact) => {
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
 
-    if (session && content && /ط±ط¬ظˆط¹|ط¹ظˆط¯ط©|ط§ظ„ظ‚ط§ط¦ظ…ط©|ط¨ط¯ط§ظٹط©|ط¥ظ„ط؛ط§ط،|ط§ظ„ط؛ط§ط،|cancel/i.test(content)) {
+    if (session && content && /رجوع|عودة|القائمة|بداية|إلغاء|الغاء|cancel/i.test(content)) {
       clearBookingSession(from);
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
@@ -900,8 +920,8 @@ const buildTimeSlotPage = (slots, offset = 0) => {
   if (slots.length > nextOffset) {
     page.push({
       id: `more_slots_${nextOffset}`,
-      label: 'ظ…ظˆط§ط¹ظٹط¯ ط£ظƒط«ط±',
-      description: `ط¹ط±ط¶ ${Math.min(TIME_SLOT_PAGE_SIZE, slots.length - nextOffset)} ظ…ظˆط¹ط¯ ط¥ط¶ط§ظپظٹ`,
+      label: 'مواعيد أكثر',
+      description: `عرض ${Math.min(TIME_SLOT_PAGE_SIZE, slots.length - nextOffset)} موعد إضافي`,
     });
   }
 
@@ -914,8 +934,8 @@ const MAX_AVAILABLE_DAYS_PER_DOCTOR = 21;
 
 const normalizeDigits = (value = '') =>
   String(value)
-    .replace(/[ظ -ظ©]/g, (digit) => String('ظ ظ،ظ¢ظ£ظ¤ظ¥ظ¦ظ§ظ¨ظ©'.indexOf(digit)))
-    .replace(/[غ°-غ¹]/g, (digit) => String('غ°غ±غ²غ³غ´غµغ¶غ·غ¸غ¹'.indexOf(digit)));
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[۰-۹]/g, (digit) => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(digit)));
 
 const buildDayPage = (days, offset = 0) => {
   const safeOffset = Math.max(0, Number(offset) || 0);
@@ -925,8 +945,8 @@ const buildDayPage = (days, offset = 0) => {
   if (days.length > nextOffset) {
     page.push({
       id: `more_days_${nextOffset}`,
-      title: 'ط£ظٹط§ظ… ط£ظƒط«ط±',
-      description: `ط¹ط±ط¶ ${Math.min(DAY_PAGE_SIZE, days.length - nextOffset)} ظٹظˆظ… ط¥ط¶ط§ظپظٹ`,
+      title: 'أيام أكثر',
+      description: `عرض ${Math.min(DAY_PAGE_SIZE, days.length - nextOffset)} يوم إضافي`,
     });
   }
 
@@ -937,16 +957,19 @@ const normalizeArabicText = (value = '') =>
   String(value)
     .toLowerCase()
     .trim()
-    .replace(/[ط£ط¥ط¢]/g, 'ط§')
-    .replace(/ظ‰/g, 'ظٹ')
-    .replace(/ط©/g, 'ظ‡')
-    .replace(/[ظ‘ظژظ‹ظڈظŒظگظچظ’ظ€]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/ة/g, 'ه')
+    .replace(/[ًٌٍَُِّْـ]/g, '')
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ');
 
 const buildServicesPrompt = (services = []) => {
   const priceValues = services
-    .map((service) => Number(service.discountedPriceAmount ?? service.basePriceAmount ?? service.price ?? 0))
+    .flatMap((service) => [
+      Number(service.discountedPriceAmount ?? service.basePriceAmount ?? service.priceFrom ?? service.price ?? 0),
+      Number(service.priceTo ?? service.discountedPriceAmount ?? service.basePriceAmount ?? service.price ?? 0),
+    ])
     .filter((value) => Number.isFinite(value) && value > 0);
   const hasDiscount = services.some((service) => Number(service.activeDiscountValue || 0) > 0);
 
@@ -962,7 +985,7 @@ const buildServicesPrompt = (services = []) => {
     const hasServiceDiscount = Number(service.activeDiscountValue || 0) > 0 && finalPrice > 0;
     const price = hasServiceDiscount
       ? `السعر قبل الخصم ${formatCurrency(basePrice)}، وبعد الخصم ${formatCurrency(finalPrice)}`
-      : service.whatsappPriceDescription || (service.price ? formatCurrency(service.price) : '');
+      : service.whatsappPriceDescription || formatServicePriceLabel(service);
 
     return `${index + 1}. ${serviceName}${price ? ` - ${price}` : ''}`;
   });
@@ -1012,7 +1035,7 @@ const parseTextBookingRequest = (content) => {
 
   const dateMatch = text.match(/(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?/);
   const timeMatch =
-    text.match(/(\d{1,2})(?::(\d{2}))?\s*(طµ|طµط¨ط§ط­ط§|طµط¨ط§ط­ظ‹ط§|am|a\.m\.|ظ…|ظ…ط³ط§ط،|ظ…ط³ط§ط،ط§|ظ…ط³ط§ط،ظ‹|pm|p\.m\.)/i) ||
+    text.match(/(\d{1,2})(?::(\d{2}))?\s*(ص|صباحا|صباحاً|am|a\.m\.|م|مساء|مساءً|pm|p\.m\.)/i) ||
     text.match(/(\d{1,2}):(\d{2})/);
   if (!dateMatch || !timeMatch) return null;
 
@@ -1025,8 +1048,8 @@ const parseTextBookingRequest = (content) => {
   let hour = Number(timeMatch[1]);
   const minute = Number(timeMatch[2] || 0);
   const period = String(timeMatch[3] || '').toLowerCase();
-  if (/(ظ…|pm|p\.m\.)/.test(period) && hour < 12) hour += 12;
-  if (/(طµ|am|a\.m\.)/.test(period) && hour === 12) hour = 0;
+  if (/(م|pm|p\.m\.)/.test(period) && hour < 12) hour += 12;
+  if (/(ص|am|a\.m\.)/.test(period) && hour === 12) hour = 0;
 
   let scheduledTime = new Date(year, month - 1, day, hour, minute, 0, 0);
   if (!dateMatch[3] && scheduledTime < now) {
@@ -1083,7 +1106,7 @@ const startBookingFlow = async (from, patient) => {
   const services = await prisma.service.findMany({ where: { active: true } });
 
   if (services.length === 0) {
-    return await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§طŒ لا توجد خدمات متاحة حالياً.');
+    return await whatsappService.sendTextMessage(from, 'عذراً، لا توجد خدمات متاحة حالياً.');
   }
 
   const pricedServices = await attachServiceDiscounts(services, patient.id);
@@ -1116,7 +1139,7 @@ const beginServiceDaySelection = async (from, patient, service, sessionOverrides
     });
     return await whatsappService.sendTextMessage(
       from,
-      `عذراًطŒ ظ„ط§ طھظˆط¬ط¯ ظ…ظˆط§ط¹ظٹط¯ ظ…طھط§ط­ط© ظ„ظ‡ط°ظ‡ ط§ظ„ط®ط¯ظ…ط© ط­ط§ظ„ظٹط§ظ‹.\nط§ط®طھط± رقم ط®ط¯ظ…ط© ط£ط®ط±ظ‰ ظ…ظ† ط§ظ„ظ‚ط§ط¦ظ…ط©:\n\n${buildServicesPrompt(pricedServices)}`
+      `عذراً، لا توجد مواعيد متاحة لهذه الخدمة حالياً.\nاختر رقم خدمة أخرى من القائمة:\n\n${buildServicesPrompt(pricedServices)}`
     );
   }
 
@@ -1144,7 +1167,7 @@ const handleServiceSelectionLegacy = async (from, patient, serviceId) => {
     const service = await prisma.service.findUnique({ where: { id: serviceId } });
     if (!service) {
       console.log('[Booking] Service not found:', serviceId);
-      return await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§طŒ الخدمة غير موجودة.');
+      return await whatsappService.sendTextMessage(from, 'عذراً، الخدمة غير موجودة.');
     }
 
     const doctors = await prisma.doctor.findMany({
@@ -1154,7 +1177,7 @@ const handleServiceSelectionLegacy = async (from, patient, serviceId) => {
 
     if (doctors.length === 0) {
       clearBookingSession(from);
-      return await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§طŒ ظ„ط§ ظٹظˆط¬ط¯ ط£ط·ط¨ط§ط، ظ…طھط§ط­ظˆظ† ط­ط§ظ„ظٹظ‹ط§.');
+      return await whatsappService.sendTextMessage(from, 'عذراً، لا يوجد أطباء متاحون حالياً.');
     }
 
     const availableDoctors = (
@@ -1168,7 +1191,7 @@ const handleServiceSelectionLegacy = async (from, patient, serviceId) => {
 
     if (availableDoctors.length === 0) {
       clearBookingSession(from);
-      return await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§طŒ ظ„ط§ طھظˆط¬ط¯ ظ…ظˆط§ط¹ظٹط¯ ظ…طھط§ط­ط© ط­ط§ظ„ظٹظ‹ط§. يرجى ط§ظ„ظ…ط­ط§ظˆظ„ط© ظ„ط§ط­ظ‚ظ‹ط§.');
+      return await whatsappService.sendTextMessage(from, 'عذراً، لا توجد مواعيد متاحة حالياً. يرجى المحاولة لاحقاً.');
     }
 
     if (availableDoctors.length === 1) {
@@ -1202,7 +1225,7 @@ const handleServiceSelectionLegacy = async (from, patient, serviceId) => {
   } catch (error) {
     console.error('[Booking] handleServiceSelection ERROR:', error.message, error.stack);
     clearBookingSession(from);
-    await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§طŒ حدث خطأ ط£ط«ظ†ط§ط، ط¹ط±ط¶ ط§ظ„ظ…ظˆط§ط¹ظٹيرجى ط§ظ„ظ…ط­ط§ظˆظ„ط© ظ„ط§ط­ظ‚ظ‹ط§.');
+    await whatsappService.sendTextMessage(from, 'عذراً، حدث خطأ أثناء عرض المواعيد. يرجى المحاولة لاحقاً.');
   }
 };
 
@@ -1210,14 +1233,14 @@ const handleServiceSelection = async (from, patient, serviceId) => {
   try {
     const service = await prisma.service.findUnique({ where: { id: serviceId } });
     if (!service) {
-      return await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§طŒ الخدمة غير موجودة.');
+      return await whatsappService.sendTextMessage(from, 'عذراً، الخدمة غير موجودة.');
     }
 
     return await beginServiceDaySelection(from, patient, service);
   } catch (error) {
     console.error('[Booking] handleServiceSelection ERROR:', error.message, error.stack);
     clearBookingSession(from);
-    await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§طŒ حدث خطأ ط£ط«ظ†ط§ط، ط¹ط±ط¶ ط§ظ„ظ…ظˆط§ط¹ظٹيرجى ط§ظ„ظ…ط­ط§ظˆظ„ط© ظ„ط§ط­ظ‚ظ‹ط§.');
+    await whatsappService.sendTextMessage(from, 'عذراً، حدث خطأ أثناء عرض المواعيد. يرجى المحاولة لاحقاً.');
   }
 };
 
@@ -1237,7 +1260,7 @@ const handleDoctorSelection = async (from, patient, doctorId) => {
       });
 
       if (!available) {
-        await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§طŒ ظ‡ط°ط§ ط§ظ„طبيب ظ„ظ… ظٹط¹ط¯ ظ…طھط§ط­ظ‹ط§ ظپظٹ ط§ظ„ظˆظ‚طھ ط§ظ„ظ…ط®طھط§ط±. يرجى ط§ط®طھظٹط§ط± ظ…ظˆط¹ط¯ ط¢ط®ط±.');
+        await whatsappService.sendTextMessage(from, 'عذراً، هذا الطبيب لم يعد متاحاً في الوقت المختار. يرجى اختيار موعد آخر.');
         return await handleServiceSelection(from, patient, session.serviceId);
       }
 
@@ -1267,17 +1290,17 @@ const handleDoctorSelection = async (from, patient, doctorId) => {
     ]);
 
     if (!service || !doctor) {
-      return await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§طŒ ظ‡ط°ط§ ط§ظ„طبيب ط؛ظٹط± ظ…طھط§ط­ ط§ظ„ط¢ظ†.');
+      return await whatsappService.sendTextMessage(from, 'عذراً، هذا الطبيب غير متاح الآن.');
     }
 
     const didSendDays = await sendDoctorDaySelection(from, patient, service, doctor);
     if (!didSendDays) {
-      await whatsappService.sendTextMessage(from, 'ظ„ط§ طھظˆط¬ط¯ ظ…ظˆط§ط¹ظٹط¯ ظ…طھط§ط­ط© ظ„ظ‡ط°ط§ ط§ظ„طبيب ط§ظ„ط¢ظ†. ط³ظ†ط¹ط±ط¶ ظ„ظƒ ط§ظ„ط£ط·ط¨ط§ط، ط§ظ„ظ…طھط§ط­ظٹظ† ظ…ط±ط© ط£ط®ط±ظ‰.');
+      await whatsappService.sendTextMessage(from, 'لا توجد مواعيد متاحة لهذا الطبيب الآن. سنعرض لك الأطباء المتاحين مرة أخرى.');
       return await handleServiceSelection(from, patient, session.serviceId);
     }
   } catch (error) {
     console.error('[Booking] handleDoctorSelection ERROR:', error.message);
-    await whatsappService.sendTextMessage(from, 'حدث خطأطŒ يرجى ط§ظ„ظ…ط­ط§ظˆظ„ط© ظ„ط§ط­ظ‚ظ‹ط§.');
+    await whatsappService.sendTextMessage(from, 'حدث خطأ، يرجى المحاولة لاحقاً.');
   }
 };
 
@@ -1310,7 +1333,7 @@ const handleDaySelectionLegacy = async (from, patient, dateString) => {
     const daySlots = generateTimeSlots(targetDate, doctor.workingHours, service.duration, bookedTimes);
 
     if (daySlots.length === 0) {
-      return await whatsappService.sendTextMessage(from, 'عذراً ظ„ط§ طھظˆط¬ط¯ ظ…ظˆط§ط¹ظٹط¯ ظ…طھط§ط­ط© ظپظٹ ظ‡ط°ط§ ط§ظ„ظٹظˆظ…. يرجى ط§ط®طھظٹط§ط± ظٹظˆظ… ط¢ط®ط±.');
+      return await whatsappService.sendTextMessage(from, 'عذراً، لا توجد مواعيد متاحة في هذا اليوم. يرجى اختيار يوم آخر.');
     }
 
     // Update session
@@ -1326,20 +1349,20 @@ const handleDaySelectionLegacy = async (from, patient, dateString) => {
     const dateLabel = formatDateAr(targetDate);
 
     if (hasMorning) {
-      periods.push({ id: `period_morning_${dateString}`, title: 'âک€ï¸ڈ ط§ظ„طµط¨ط§ط­', description: 'ظ‚ط¨ظ„ 12 ط¸ظ‡ط±ط§ظ‹' });
+      periods.push({ id: `period_morning_${dateString}`, title: 'الصباح', description: 'قبل 12 ظهراً' });
     }
     if (hasAfternoon) {
-      periods.push({ id: `period_afternoon_${dateString}`, title: 'ًںŒ¤ï¸ڈ ط§ظ„ط¸ظ‡ط± ظˆط§ظ„ط¹طµط±', description: 'ظ…ظ† 12 ط¸ظ‡ط±ط§ظ‹ ط¥ظ„ظ‰ 5 ط¹طµط±ط§ظ‹' });
+      periods.push({ id: `period_afternoon_${dateString}`, title: 'الظهر والعصر', description: 'من 12 ظهراً إلى 5 عصراً' });
     }
     if (hasEvening) {
-      periods.push({ id: `period_evening_${dateString}`, title: 'ًںŒ™ ط§ظ„ظ…ط³ط§ط،', description: 'ط¨ط¹ط¯ 5 ط¹طµط±ط§ظ‹' });
+      periods.push({ id: `period_evening_${dateString}`, title: 'المساء', description: 'بعد 5 عصراً' });
     }
 
     const periodMessage = buildPeriodSelection(from, dateLabel, periods);
     await whatsappService.sendInteractiveMessage(periodMessage);
   } catch (error) {
     console.error('[Booking] handleDaySelection ERROR:', error.message);
-    await whatsappService.sendTextMessage(from, 'حدث خطأطŒ يرجى المحاولة لاحقاً.');
+    await whatsappService.sendTextMessage(from, 'حدث خطأ، يرجى المحاولة لاحقاً.');
   }
 };
 
@@ -1393,7 +1416,7 @@ const handleDaySelection = async (from, patient, dateString) => {
       .sort((first, second) => new Date(first.time) - new Date(second.time));
 
     if (uniqueSlots.length === 0) {
-      return await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§ ظ„ط§ طھظˆط¬ط¯ ظ…ظˆط§ط¹ظٹط¯ ظ…طھط§ط­ط© ظپظٹ ظ‡ط°ط§ ط§ظ„ظٹظˆظ…. يرجى ط§ط®طھظٹط§ط± ظٹظˆظ… ط¢ط®ط±.');
+      return await whatsappService.sendTextMessage(from, 'عذراً، لا توجد مواعيد متاحة في هذا اليوم. يرجى اختيار يوم آخر.');
     }
 
     session.step = 'select_period';
@@ -1403,19 +1426,19 @@ const handleDaySelection = async (from, patient, dateString) => {
 
     const periods = [];
     if (uniqueSlots.some((s) => new Date(s.time).getHours() < 12)) {
-      periods.push({ id: `period_morning_${dateString}`, title: 'ط§ظ„طµط¨ط§ط­', description: 'ظ‚ط¨ظ„ 12 ط¸ظ‡ط±ظ‹ط§' });
+      periods.push({ id: `period_morning_${dateString}`, title: 'الصباح', description: 'قبل 12 ظهراً' });
     }
     if (uniqueSlots.some((s) => new Date(s.time).getHours() >= 12 && new Date(s.time).getHours() < 17)) {
-      periods.push({ id: `period_afternoon_${dateString}`, title: 'ط§ظ„ط¸ظ‡ط± ظˆط§ظ„ط¹طµط±', description: 'ظ…ظ† 12 ط¸ظ‡ط±ظ‹ط§ ط¥ظ„ظ‰ 5 ط¹طµط±ظ‹ط§' });
+      periods.push({ id: `period_afternoon_${dateString}`, title: 'الظهر والعصر', description: 'من 12 ظهراً إلى 5 عصراً' });
     }
     if (uniqueSlots.some((s) => new Date(s.time).getHours() >= 17)) {
-      periods.push({ id: `period_evening_${dateString}`, title: 'ط§ظ„ظ…ط³ط§ط،', description: 'ط¨ط¹ط¯ 5 ط¹طµط±ظ‹ط§' });
+      periods.push({ id: `period_evening_${dateString}`, title: 'المساء', description: 'بعد 5 عصراً' });
     }
 
     await whatsappService.sendInteractiveMessage(buildPeriodSelection(from, formatDateAr(targetDate), periods));
   } catch (error) {
     console.error('[Booking] handleDaySelection ERROR:', error.message);
-    await whatsappService.sendTextMessage(from, 'حدث خطأطŒ يرجى ط§ظ„ظ…ط­ط§ظˆظ„ط© ظ„ط§ط­ظ‚ظ‹ط§.');
+    await whatsappService.sendTextMessage(from, 'حدث خطأ، يرجى المحاولة لاحقاً.');
   }
 };
 
@@ -1457,7 +1480,7 @@ const handlePeriodSelectionLegacy = async (from, patient, periodType, dateString
     }
 
     if (filteredSlots.length === 0) {
-      return await whatsappService.sendTextMessage(from, 'عذراً ظ„ط§ طھظˆط¬ط¯ ظ…ظˆط§ط¹ظٹط¯ ظ…طھط§ط­ط© ظپظٹ ظ‡ط°ظ‡ ط§ظ„ظپطھط±ط©. يرجى ط§ط®طھظٹط§ط± ظپطھط±ط© ط£ط®ط±ظ‰.');
+      return await whatsappService.sendTextMessage(from, 'عذراً، لا توجد مواعيد متاحة في هذه الفترة. يرجى اختيار فترة أخرى.');
     }
 
     // Update session
@@ -1473,7 +1496,7 @@ const handlePeriodSelectionLegacy = async (from, patient, periodType, dateString
     await whatsappService.sendInteractiveMessage(slotMessage);
   } catch (error) {
     console.error('[Booking] handlePeriodSelection ERROR:', error.message);
-    await whatsappService.sendTextMessage(from, 'حدث خطأطŒ يرجى المحاولة لاحقاً.');
+    await whatsappService.sendTextMessage(from, 'حدث خطأ، يرجى المحاولة لاحقاً.');
   }
 };
 
@@ -1533,7 +1556,7 @@ const handlePeriodSelection = async (from, patient, periodType, dateString) => {
       .sort((first, second) => new Date(first.time) - new Date(second.time));
 
     if (filteredSlots.length === 0) {
-      return await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§ ظ„ط§ طھظˆط¬ط¯ ظ…ظˆط§ط¹ظٹط¯ ظ…طھط§ط­ط© ظپظٹ ظ‡ط°ظ‡ ط§ظ„ظپطھط±ط©. يرجى ط§ط®طھظٹط§ط± ظپطھط±ط© ط£ط®ط±ظ‰.');
+      return await whatsappService.sendTextMessage(from, 'عذراً، لا توجد مواعيد متاحة في هذه الفترة. يرجى اختيار فترة أخرى.');
     }
 
     session.step = 'select_time';
@@ -1546,7 +1569,7 @@ const handlePeriodSelection = async (from, patient, periodType, dateString) => {
     await whatsappService.sendInteractiveMessage(buildTimeSlotSelection(from, buildTimeSlotPage(filteredSlots), formatDateAr(targetDate)));
   } catch (error) {
     console.error('[Booking] handlePeriodSelection ERROR:', error.message);
-    await whatsappService.sendTextMessage(from, 'حدث خطأطŒ يرجى ط§ظ„ظ…ط­ط§ظˆظ„ط© ظ„ط§ط­ظ‚ظ‹ط§.');
+    await whatsappService.sendTextMessage(from, 'حدث خطأ، يرجى المحاولة لاحقاً.');
   }
 };
 
@@ -1559,7 +1582,7 @@ const handleMoreDays = async (from, patient, offset) => {
 
   const pageDays = buildDayPage(session.availableDays, offset);
   if (pageDays.length === 0) {
-    return await whatsappService.sendTextMessage(from, 'ظ„ط§ طھظˆط¬ط¯ ط£ظٹط§ظ… ط¥ط¶ط§ظپظٹط© ظ…طھط§ط­ط© ط­ط§ظ„ظٹط§ظ‹.');
+    return await whatsappService.sendTextMessage(from, 'لا توجد أيام إضافية متاحة حالياً.');
   }
 
   session.dayOffset = offset;
@@ -1581,7 +1604,7 @@ const handleMoreTimeSlots = async (from, patient, offset) => {
   const pageSlots = buildTimeSlotPage(futureSlots, offset);
 
   if (pageSlots.length === 0) {
-    return await whatsappService.sendTextMessage(from, 'لا توجد مواعيد إضافية متاحة حالياً. يرجى ط§ط®طھظٹط§ط± ظپطھط±ط© ط£ط®ط±ظ‰.');
+    return await whatsappService.sendTextMessage(from, 'لا توجد مواعيد إضافية متاحة حالياً. يرجى اختيار فترة أخرى.');
   }
 
   session.availableSlots = futureSlots;
@@ -1602,7 +1625,7 @@ const handleTimeSlotSelection = async (from, patient, timeISO) => {
   try {
     const minLeadMinutes = Number(process.env.MIN_BOOKING_LEAD_MINUTES || 10);
     if (new Date(timeISO) < new Date(Date.now() + minLeadMinutes * 60 * 1000)) {
-      await whatsappService.sendTextMessage(from, 'ظ‡ط°ط§ ط§ظ„ظ…ظˆط¹ط¯ ظ…ط±ظ‘ ط¨ط§ظ„ظپط¹ظ„ ط£ظˆ ظ‚ط±ظٹط¨ ط¬ط¯ط§ظ‹ ظ…ظ† ط§ظ„ظˆظ‚طھ ط§ظ„ط­ط§ظ„ظٹ. يرجى ط§ط®طھظٹط§ط± ظ…ظˆط¹ط¯ ظ„ط§ط­ظ‚.');
+      await whatsappService.sendTextMessage(from, 'هذا الموعد مر بالفعل أو قريب جداً من الوقت الحالي. يرجى اختيار موعد لاحق.');
       return await handleServiceSelection(from, patient, session.serviceId);
     }
 
@@ -1613,7 +1636,7 @@ const handleTimeSlotSelection = async (from, patient, timeISO) => {
       });
 
       if (availability.doctors.length === 0) {
-        await whatsappService.sendTextMessage(from, 'ط¹ط°ط±ظ‹ط§طŒ ظ„ط§ ظٹظˆط¬ط¯ ط£ط·ط¨ط§ط، ظ…طھط§ط­ظˆظ† ظپظٹ ظ‡ط°ط§ ط§ظ„ظˆظ‚طھ. يرجى ط§ط®طھظٹط§ط± ظˆظ‚طھ ط¢ط®ط±.');
+        await whatsappService.sendTextMessage(from, 'عذراً، لا يوجد أطباء متاحون في هذا الوقت. يرجى اختيار وقت آخر.');
         return await handleServiceSelection(from, patient, session.serviceId);
       }
 
@@ -1627,7 +1650,7 @@ const handleTimeSlotSelection = async (from, patient, timeISO) => {
           from,
           availability.doctors.map((doctor) => ({
             ...doctor,
-            description: doctor.specialization || 'طبيب متاح ظپظٹ ظ‡ط°ط§ ط§ظ„ظˆظ‚طھ',
+            description: doctor.specialization || 'طبيب متاح في هذا الوقت',
           })),
           availability.service.nameAr
         )
@@ -1645,7 +1668,7 @@ const handleTimeSlotSelection = async (from, patient, timeISO) => {
     clearBookingSession(from);
 
     if (result.conflict) {
-      await whatsappService.sendTextMessage(from, 'âڑ ï¸ڈ عذراًطŒ ظ‡ط°ط§ ط§ظ„ظ…ظˆط¹ط¯ ظ„ظ… ظٹط¹ط¯ ظ…طھط§ط­ط§ظ‹. يرجى ط§ط®طھظٹط§ط± ظ…ظˆط¹ط¯ ط¢ط®ط±.');
+      await whatsappService.sendTextMessage(from, 'عذراً، هذا الموعد لم يعد متاحاً. يرجى اختيار موعد آخر.');
       return await startBookingFlow(from, patient);
     }
 
@@ -1655,8 +1678,8 @@ const handleTimeSlotSelection = async (from, patient, timeISO) => {
     // Trigger Dashboard Notification
     await prisma.adminNotification.create({
       data: {
-        title: 'ط­ط¬ط² ظ…ظˆط¹ط¯ ط¬ط¯ظٹط¯ ًں“…',
-        message: `ط§ظ„ظ…ط±ظٹط¶ ${patient.name} ظ‚ط§ظ… ط¨ط­ط¬ط² ظ…ظˆط¹ط¯ ظˆظٹظ†طھط¸ط± ط§ظ„طھط£ظƒظٹط¯.`,
+        title: 'حجز موعد جديد',
+        message: `المريض ${patient.name} قام بحجز موعد وينتظر التأكيد.`,
         type: 'NEW_APPOINTMENT',
         link: `/appointments?doctorId=${result.appointment.doctorId}&appointmentId=${result.appointment.id}`,
       }
@@ -1664,7 +1687,7 @@ const handleTimeSlotSelection = async (from, patient, timeISO) => {
 
   } catch (error) {
     console.error('[Booking] Error:', error);
-    await whatsappService.sendTextMessage(from, 'عذراًطŒ حدث خطأ. يرجى المحاولة لاحقاً.');
+    await whatsappService.sendTextMessage(from, 'عذراً، حدث خطأ. يرجى المحاولة لاحقاً.');
     clearBookingSession(from);
   }
 };
@@ -1686,23 +1709,23 @@ const handleInquiry = async (from, patient, content) => {
     await whatsappService.sendTextMessage(from, aiResponse);
   } catch (error) {
     console.error('[WhatsApp] handleInquiry ERROR:', error.message);
-    await whatsappService.sendTextMessage(from, 'عذراًطŒ حدث خطأ طھظ‚ظ†ظٹ. يرجى المحاولة لاحقاً ط£ظˆ ط§ظ„تواصل ظ…ط¹ظ†ط§ ظ…ط¨ط§ط´ط±ط©.');
+    await whatsappService.sendTextMessage(from, 'عذراً، حدث خطأ تقني. يرجى المحاولة لاحقاً أو التواصل معنا مباشرة.');
   }
 };
 
 const handleTextBookingRequest = async (from, patient, content, session) => {
   const parsed = parseTextBookingRequest(content);
   if (!parsed) {
-    return await whatsappService.sendTextMessage(from, 'ظ„ظ… ط£ظپظ‡ظ… ط§ظ„ظ…ظˆط¹ط§ظƒطھط¨ ط§ظ„ظٹظˆظ… ظˆط§ظ„ط³ط§ط¹ط© ظˆط§ظ„طھط§ط±ظٹط® ط¨ظ‡ط°ط§ ط§ظ„ط´ظƒظ„:\nط§ظ„ط®ظ…ظٹط³ 9 ظ…ط³ط§ط، 28/6');
+    return await whatsappService.sendTextMessage(from, 'لم أفهم الموعد. اكتب اليوم والساعة والتاريخ بهذا الشكل:\nالخميس 9 مساءً 28/6');
   }
 
   const minLeadMinutes = Number(process.env.MIN_BOOKING_LEAD_MINUTES || 10);
   if (parsed.scheduledTime < new Date(Date.now() + minLeadMinutes * 60 * 1000)) {
-    return await whatsappService.sendTextMessage(from, 'ظ‡ط°ط§ ط§ظ„ظ…ظˆط¹ط¯ ظ…ط±ظ‘ ط¨ط§ظ„ظپط¹ظ„ ط£ظˆ ظ‚ط±ظٹط¨ ط¬ط¯ط§ظ‹ ظ…ظ† ط§ظ„ظˆظ‚طھ ط§ظ„ط­ط§ظ„ظٹ. ط§ظƒطھط¨ ظ…ظˆط¹ط¯ط§ظ‹ ظ„ط§ط­ظ‚ط§ظ‹.');
+    return await whatsappService.sendTextMessage(from, 'هذا الموعد مر بالفعل أو قريب جداً من الوقت الحالي. اكتب موعداً لاحقاً.');
   }
 
   if (parsed.mentionedDay !== null && parsed.mentionedDay !== parsed.scheduledTime.getDay()) {
-    return await whatsappService.sendTextMessage(from, 'ط§ظ„ظٹظˆظ… ط§ظ„ظ…ظƒطھظˆط¨ ظ„ط§ ظٹط·ط§ط¨ظ‚ ط§ظ„طھط§ط±ظٹط®. طھط£ظƒط¯ ظ…ظ† ط§ظ„ظٹظˆظ… ظˆط§ظ„طھط§ط±ظٹط® ظˆط§ظƒطھط¨ظ‡ظ… ظ…ط±ط© ط£ط®ط±ظ‰.');
+    return await whatsappService.sendTextMessage(from, 'اليوم المكتوب لا يطابق التاريخ. تأكد من اليوم والتاريخ واكتبهما مرة أخرى.');
   }
 
   const availability = await appointmentService.getAvailableDoctorsAt({
@@ -1711,7 +1734,7 @@ const handleTextBookingRequest = async (from, patient, content, session) => {
   });
 
   if (!availability.doctors.length) {
-    return await whatsappService.sendTextMessage(from, 'ظ„ط§ ظٹظˆط¬ط¯ طبيب متاح ظپظٹ ظ‡ط°ط§ ط§ظ„ظ…ظˆط¹ط¯ ط­ط³ط¨ ط¬ط¯ظˆظ„ ط§ظ„ط¹ظٹط§ط¯ط©. ط§ظƒطھط¨ ظ…ظˆط¹ط¯ط§ظ‹ ط¢ط®ط±.');
+    return await whatsappService.sendTextMessage(from, 'لا يوجد طبيب متاح في هذا الموعد حسب جدول العيادة. اكتب موعداً آخر.');
   }
 
   session.selectedTime = parsed.scheduledTime.toISOString();
@@ -1729,7 +1752,7 @@ const handleTextBookingRequest = async (from, patient, content, session) => {
       from,
       availability.doctors.map((doctor) => ({
         ...doctor,
-        description: doctor.specialization || 'ظ…طھط§ط­ ظپظٹ ط§ظ„ظ…ظˆط¹ط¯ ط§ظ„ظ…ط·ظ„ظˆط¨',
+        description: doctor.specialization || 'متاح في الموعد المطلوب',
       })),
       availability.service.nameAr || availability.service.name
     )
@@ -1755,7 +1778,7 @@ const handleSessionInput = async (from, patient, content, session) => {
     if (!matchedService) {
       await whatsappService.sendTextMessage(
         from,
-        `ظ„ظ… ط£طھط¹ط±ظپ ط¹ظ„ظ‰ ط§ظ„ط®ط¯ظ…ط© ط§ظ„ظ…ط·ظ„ظˆط¨ط©.\n\n${buildServicesPrompt(pricedServices)}`
+        `لم أتعرف على الخدمة المطلوبة.\n\n${buildServicesPrompt(pricedServices)}`
       );
       return;
     }
@@ -1772,7 +1795,7 @@ const handleSessionInput = async (from, patient, content, session) => {
     await prisma.consultation.create({
       data: {
         patientId: patient.id,
-        question: content || '[ط±ط³ط§ظ„ط© ظˆط³ط§ط¦ط· - طھظ… ط§ظ„ط¥ط±ط³ط§ظ„]',
+        question: content || '[رسالة وسائط - تم الإرسال]',
       }
     });
 
@@ -1780,13 +1803,13 @@ const handleSessionInput = async (from, patient, content, session) => {
     await prisma.adminNotification.create({
       data: {
         title: 'استشارة أونلاين جديدة',
-        message: `ط§ظ„ظ…ط±ظٹط¶ ${patient.name} أرسل طلب استشارة طبية.`,
+        message: `المريض ${patient.name} أرسل طلب استشارة طبية.`,
         type: 'CONSULTATION_REQUEST',
         link: `/consultations?patientId=${patient.id}`,
       }
     });
 
-    return await whatsappService.sendTextMessage(from, 'âœ… طھظ… ط§ط³طھظ„ط§ظ… ط§ط³طھط´ط§ط±طھظƒ ط¨ظ†ط¬ط§ط­. ط³ظٹظ‚ظˆظ… ط§ظ„طبيب ط¨ظ…ط±ط§ط¬ط¹طھظ‡ط§ ظˆط§ظ„ط±ط¯ ط¹ظ„ظٹظƒ ظپظٹ ط£ظ‚ط±ط¨ ظˆظ‚طھ ط¹ط¨ط± ط§ظ„ظˆط§طھط³ط§ط¨.');
+    return await whatsappService.sendTextMessage(from, 'تم استلام استشارتك بنجاح. سيقوم الطبيب بمراجعتها والرد عليك في أقرب وقت عبر الواتساب.');
   }
 
   if (session.step === 'check_appointment') {
@@ -1798,21 +1821,21 @@ const handleSessionInput = async (from, patient, content, session) => {
     });
 
     if (!appointment) {
-      return await whatsappService.sendTextMessage(from, 'â‌Œ عذراًطŒ ظ„ظ… ظ†طھظ…ظƒظ† ظ…ظ† ط§ظ„ط¹ط«ظˆط± ط¹ظ„ظ‰ ط­ط¬ط² ط¨ظ‡ط°ط§ ط§ظ„رقم. يرجى ط§ظ„طھط£ظƒط¯ ظ…ظ† ط§ظ„رقم (ط´ط§ظ…ظ„ط§ظ‹ ط§ظ„ظ€ BK-).');
+      return await whatsappService.sendTextMessage(from, 'عذراً، لم نتمكن من العثور على حجز بهذا الرقم. يرجى التأكد من الرقم شاملاً BK-.');
     }
 
     const statusMap = {
-      PENDING: 'âڈ³ ظ‚ظٹط¯ ط§ظ„ظ…ط±ط§ط¬ط¹ط©',
-      CONFIRMED: 'âœ… طھظ… ط§ظ„طھط£ظƒظٹط¯',
-      REJECTED: 'â‌Œ طھظ… ط§ظ„ط±ظپط¶',
-      COMPLETED: 'âœ”ï¸ڈ ظ…ظƒطھظ…ظ„',
-      CANCELLED: 'ًںڑ« ظ…ظ„ط؛ظٹ',
-      NO_SHOW: 'âڑ ï¸ڈ ظ„ظ… ظٹط­ط¶ط±',
-      BLOCKED: 'ًں”’ ظ…ط؛ظ„ظ‚'
+      PENDING: 'قيد المراجعة',
+      CONFIRMED: 'تم التأكيد',
+      REJECTED: 'تم الرفض',
+      COMPLETED: 'مكتمل',
+      CANCELLED: 'ملغي',
+      NO_SHOW: 'لم يحضر',
+      BLOCKED: 'مغلق'
     };
 
     const statusName = statusMap[appointment.status] || appointment.status;
-    const details = `ًں“‹ طھظپط§طµظٹظ„ ط§ظ„ط­ط¬ط² رقم: *${appointment.bookingRef}*\n\nط§ظ„ط®ط¯ظ…ط©: ${appointment.service?.nameAr}\nًں‘¨â€چâڑ•ï¸ڈ ط§ظ„ط¯ظƒطھظˆط±: ${appointment.doctor?.name}\nًں“… ط§ظ„ظ…ظˆط¹ط¯: ${formatDateAr(appointment.scheduledTime)}\nâڈ° ط§ظ„ظˆظ‚طھ: ${formatTimeAr(appointment.scheduledTime)}\n\nط­ط§ظ„ط© ط§ظ„ط­ط¬ط²: ${statusName}`;
+    const details = `تفاصيل الحجز رقم: *${appointment.bookingRef}*\n\nالخدمة: ${appointment.service?.nameAr}\nالطبيب: ${appointment.doctor?.name}\nالموعد: ${formatDateAr(appointment.scheduledTime)}\nالوقت: ${formatTimeAr(appointment.scheduledTime)}\n\nحالة الحجز: ${statusName}`;
 
     return await whatsappService.sendTextMessage(from, details);
   }
@@ -2630,6 +2653,3 @@ module.exports = {
   instagramVerify,
   instagramWebhook,
 };
-
-
-

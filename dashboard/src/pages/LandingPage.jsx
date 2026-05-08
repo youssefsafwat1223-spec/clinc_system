@@ -84,6 +84,17 @@ function getServiceIcon(service) {
   return Star;
 }
 
+function formatServicePrice(service) {
+  const from = service.priceFrom;
+  const to = service.priceTo;
+
+  if (from != null && to != null) return `${Number(from).toLocaleString('ar-IQ')} - ${Number(to).toLocaleString('ar-IQ')} د.ع`;
+  if (from != null) return `من ${Number(from).toLocaleString('ar-IQ')} د.ع`;
+  if (to != null) return `إلى ${Number(to).toLocaleString('ar-IQ')} د.ع`;
+  if (service.price != null) return `${Number(service.price).toLocaleString('ar-IQ')} د.ع`;
+  return '';
+}
+
 /* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
    Intersection Observer hook
    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -675,9 +686,9 @@ function ServicesSection({ services, loading, whatsappLink }) {
                     <div className={`rounded-2xl p-3.5 ${accent.iconBg} ${accent.iconColor} transition-transform duration-300 group-hover:scale-110`}>
                       <ServiceIcon className="h-7 w-7" />
                     </div>
-                    {service.price != null && (
+                    {formatServicePrice(service) && (
                       <div className={`rounded-xl ${accent.priceBg} px-3 py-1.5 text-sm font-bold ${accent.priceColor}`}>
-                        {service.price.toLocaleString()} د.ع
+                        {formatServicePrice(service)}
                       </div>
                     )}
                   </div>
