@@ -510,7 +510,7 @@ const handleWhatsAppMessage = async (message, contact) => {
       },
     });
 
-    // â”€â”€ Handle review rating buttons â”€â”€
+    // Handle review rating buttons
     let ratingValue = null;
     if (buttonId && buttonId.startsWith('review_')) {
       const parsed = parseInt(buttonId.replace('review_', ''), 10);
@@ -541,16 +541,16 @@ const handleWhatsAppMessage = async (message, contact) => {
         setBookingSession(from, { step: 'review_comment', reviewId: pendingReview.id, patientId: patient.id });
 
         const thankYouMsg = ratingValue >= 4
-          ? 'شكراً جزيلاً لتقييمك الرائع! نسعد بخدمتك دائماً.\n\nهل تحب تصقيق تعليق أو ملاحظات؟ (اكتبها أو أرسل “لا”)'
+          ? 'شكراً جزيلاً لتقييمك الرائع! نسعد بخدمتك دائماً.\n\nهل تحب إضافة تعليق أو ملاحظات؟ (اكتبها أو أرسل “لا”)'
           : ratingValue >= 2
-            ? 'شكراً لتقييمك! نعمل على تحسين خدماتنا باستمرار.\n\nهل تحب تصقيق تعليق أو ملاحظات؟ (اكتبها أو أرسل “لا”)'
-            : 'نأسف لعدم رضاك! رأيك مهم جداً لنا ونعمل على التحسين.\n\nهل تحب تصقيق تعليق أو ملاحظات؟ (اكتبها أو أرسل “لا”)';
+            ? 'شكراً لتقييمك! نعمل على تحسين خدماتنا باستمرار.\n\nهل تحب إضافة تعليق أو ملاحظات؟ (اكتبها أو أرسل “لا”)'
+            : 'نأسف لعدم رضاك! رأيك مهم جداً لنا ونعمل على التحسين.\n\nهل تحب إضافة تعليق أو ملاحظات؟ (اكتبها أو أرسل “لا”)';
 
         return await whatsappService.sendTextMessage(from, thankYouMsg);
       }
     }
 
-    // â”€â”€ Handle review comment (follow-up text after rating) â”€â”€
+    // Handle review comment after rating
     const reviewSession = getBookingSession(from);
     if (reviewSession?.step === 'review_comment' && content) {
       const isSkip = /^(لا|no|skip|تخطي)$/i.test(content.trim());
@@ -1986,10 +1986,7 @@ const handleFacebookComment = async (value) => {
     return;
 
     // 2. Send a private message (DM) follow-up
-    await messengerService.sendPrivateReply(
-      commentId,
-      "ظ…ط±ط­ط¨ط§ظ‹! ظ„ظ‚ط¯ ظ‚ظ…ظ†ط§ ط¨ط§ظ„ط±ط¯ ط¹ظ„ظ‰ طھط¹ظ„ظٹظ‚ظƒ. ظٹظ…ظƒظ†ظƒ ط§ظ„تواصل ظ…ط¹ظ†ط§ ظ‡ظ†ط§ ظ…ط¨ط§ط´ط±ط© ط¹ط¨ط± ط§ظ„ط±ط³ط§ط¦ظ„ ظ„ط­ط¬ط² ظ…ظˆط¹ط¯ظƒ ط£ظˆ ظ„ظ„ط§ط³طھظپط³ط§ط± ط¹ظ† ط£ظٹ طھظپط§طµظٹظ„."
-    );
+    await messengerService.sendPrivateReply(commentId, FACEBOOK_COMMENT_DM_FOLLOWUP);
     console.log('[Facebook Comment] Private reply sent:', commentId);
     writeWebhookDebugLog('facebook_comment_private_reply_sent', { commentId });
 
@@ -2107,7 +2104,7 @@ const handleMessengerInbound = async (event) => {
     const patient = await findOrCreateSocialPatient({
       platform: 'FACEBOOK',
       senderId,
-      fallbackName: 'ط¸â€¦ط·آ±ط¸ظ¹ط·آ¶ Facebook',
+      fallbackName: MESSENGER_FALLBACK_NAME,
     });
 
     await prisma.message.create({
@@ -2120,7 +2117,7 @@ const handleMessengerInbound = async (event) => {
       },
     });
 
-    if (/ط·آ­ط·آ¬ط·آ²|ط¸â€¦ط¸ث†ط·آ¹ط·آ¯|ط·آ§ط·آ­ط·آ¬ط·آ²|book|appointment|BOOK_APPOINTMENT/i.test(routingContent)) {
+    if (/حجز|موعد|احجز|book|appointment|BOOK_APPOINTMENT/i.test(routingContent)) {
       await messengerService.sendWhatsAppRedirect(senderId);
       return;
     }
@@ -2132,13 +2129,6 @@ const handleMessengerInbound = async (event) => {
         orderBy: { createdAt: 'desc' },
         take: 10,
       });
-
-      const quickReplies = [
-        { title: 'ظ‹ع؛â€œâ€¦ ط·آ§ط·آ­ط·آ¬ط·آ² ط¸â€¦ط¸ث†ط·آ¹ط·آ¯', payload: 'BOOK_APPOINTMENT' },
-        { title: 'أسعار الكشف', payload: 'أسعار الكشف ط¨ط§ظ„ط¹ظٹط§ط¯ط©' },
-        { title: 'مواعيد العمل', payload: 'ظ…ط§ ظ‡ظٹ مواعيد العملطں' },
-        { title: 'عنوان العيادة', payload: 'ظ…ط§ ظ‡ظˆ عنوان العيادةطں' },
-      ];
 
       const aiResponse = await openaiService.getInquiryResponse(content || routingContent, recentMessages.reverse());
       await messengerService.sendTextMessage(senderId, aiResponse, SOCIAL_QUICK_REPLIES);
@@ -2157,11 +2147,7 @@ const handleMessengerInbound = async (event) => {
 
     return await messengerService.sendTextMessage(senderId, SOCIAL_FALLBACK_REPLY, [SOCIAL_QUICK_REPLIES[0]]);
 
-    await messengerService.sendTextMessage(
-      senderId,
-      'ط´ظƒط±ط§ظ‹ ظ„تواصلظƒ! ط³ظٹطھظ… ط§ظ„ط±ط¯ ط¹ظ„ظٹظƒ ظ‚ط±ظٹط¨ظ‹ط§.',
-      [{ title: 'ظ‹ع؛â€œâ€¦ ط·آ§ط·آ­ط·آ¬ط·آ² ط¸â€¦ط¸ث†ط·آ¹ط·آ¯', payload: 'BOOK_APPOINTMENT' }]
-    );
+    await messengerService.sendTextMessage(senderId, SOCIAL_FALLBACK_REPLY, [SOCIAL_QUICK_REPLIES[0]]);
   } catch (error) {
     console.error('[Messenger] handleMessengerInbound ERROR:', error.message);
   }
@@ -2182,7 +2168,7 @@ const handleMessengerMessage = async (event) => {
     if (!patient) {
       patient = await prisma.patient.create({
         data: {
-          name: 'ظ…ط±ظٹط¶ Facebook',
+          name: MESSENGER_FALLBACK_NAME,
           phone: senderId,
           platform: 'FACEBOOK',
           whatsappId: senderId,
@@ -2215,15 +2201,8 @@ const handleMessengerMessage = async (event) => {
         take: 10,
       });
 
-      const quickReplies = [
-        { title: 'ًں“… ط§ط­ط¬ط² ظ…ظˆط¹ط¯', payload: 'BOOK_APPOINTMENT' },
-        { title: 'ًں’° أسعار الكشف', payload: 'أسعار الكشف ط¨ط§ظ„ط¹ظٹط§ط¯ط©' },
-        { title: 'âŒڑ مواعيد العمل', payload: 'ظ…ط§ ظ‡ظٹ مواعيد العملطں' },
-        { title: 'ًں“چ عنوان العيادة', payload: 'ظ…ط§ ظ‡ظˆ عنوان العيادةطں' }
-      ];
-
       const aiResponse = await openaiService.getInquiryResponse(content, recentMessages.reverse());
-      await messengerService.sendTextMessage(senderId, aiResponse, quickReplies);
+      await messengerService.sendTextMessage(senderId, aiResponse, SOCIAL_QUICK_REPLIES);
 
       await prisma.message.create({
         data: {
@@ -2234,9 +2213,7 @@ const handleMessengerMessage = async (event) => {
         },
       });
     } else {
-      await messengerService.sendTextMessage(senderId, 'ط´ظƒط±ط§ظ‹ ظ„تواصلظƒ! ط³ظٹطھظ… ط§ظ„ط±ط¯ ط¹ظ„ظٹظƒ ظ‚ط±ظٹط¨ط§ظ‹.', [
-        { title: 'ًں“… ط§ط­ط¬ط² ظ…ظˆط¹ط¯', payload: 'BOOK_APPOINTMENT' }
-      ]);
+      await messengerService.sendTextMessage(senderId, SOCIAL_FALLBACK_REPLY, [SOCIAL_QUICK_REPLIES[0]]);
     }
   } catch (error) {
     console.error('[Messenger] handleMessengerMessage ERROR:', error.message);
@@ -2373,7 +2350,7 @@ const handleInstagramInbound = async (event) => {
     const patient = await findOrCreateSocialPatient({
       platform: 'INSTAGRAM',
       senderId,
-      fallbackName: 'ط¸â€¦ط·آ±ط¸ظ¹ط·آ¶ Instagram',
+      fallbackName: INSTAGRAM_FALLBACK_NAME,
     });
 
     await prisma.message.create({
@@ -2386,7 +2363,7 @@ const handleInstagramInbound = async (event) => {
       },
     });
 
-    if (/ط·آ­ط·آ¬ط·آ²|ط¸â€¦ط¸ث†ط·آ¹ط·آ¯|ط·آ§ط·آ­ط·آ¬ط·آ²|book|appointment|BOOK_APPOINTMENT/i.test(routingContent)) {
+    if (/حجز|موعد|احجز|book|appointment|BOOK_APPOINTMENT/i.test(routingContent)) {
       await instagramService.sendWhatsAppRedirect(senderId);
       return;
     }
@@ -2398,13 +2375,6 @@ const handleInstagramInbound = async (event) => {
         orderBy: { createdAt: 'desc' },
         take: 10,
       });
-
-      const quickReplies = [
-        { title: 'ظ‹ع؛â€œâ€¦ ط·آ§ط·آ­ط·آ¬ط·آ² ط¸â€¦ط¸ث†ط·آ¹ط·آ¯', payload: 'BOOK_APPOINTMENT' },
-        { title: 'أسعار الكشف', payload: 'أسعار الكشف ط¨ط§ظ„ط¹ظٹط§ط¯ط©' },
-        { title: 'مواعيد العمل', payload: 'ظ…ط§ ظ‡ظٹ مواعيد العملطں' },
-        { title: 'عنوان العيادة', payload: 'ظ…ط§ ظ‡ظˆ عنوان العيادةطں' },
-      ];
 
       const aiResponse = await openaiService.getInquiryResponse(content || routingContent, recentMessages.reverse());
       await instagramService.sendTextMessage(senderId, aiResponse, SOCIAL_QUICK_REPLIES);
@@ -2421,11 +2391,7 @@ const handleInstagramInbound = async (event) => {
       return;
     }
 
-    await instagramService.sendTextMessage(
-      senderId,
-      'ط´ظƒط±ط§ظ‹ ظ„تواصلظƒ! ط³ظٹطھظ… ط§ظ„ط±ط¯ ط¹ظ„ظٹظƒ ظ‚ط±ظٹط¨ط§ظ‹.',
-      [{ title: 'ط§ط­ط¬ط² ظ…ظˆط¹ط¯', payload: 'BOOK_APPOINTMENT' }]
-    );
+    await instagramService.sendTextMessage(senderId, SOCIAL_FALLBACK_REPLY, [SOCIAL_QUICK_REPLIES[0]]);
   } catch (error) {
     console.error('[Instagram] handleInstagramInbound ERROR:', error.message);
   }
@@ -2444,7 +2410,7 @@ const handleInstagramMessage = async (event) => {
     if (!patient) {
       patient = await prisma.patient.create({
         data: {
-          name: 'ظ…ط±ظٹط¶ Instagram',
+          name: INSTAGRAM_FALLBACK_NAME,
           phone: senderId,
           platform: 'INSTAGRAM',
           whatsappId: senderId,
@@ -2477,15 +2443,8 @@ const handleInstagramMessage = async (event) => {
         take: 10,
       });
 
-      const quickReplies = [
-        { title: 'ًں“… ط§ط­ط¬ط² ظ…ظˆط¹ط¯', payload: 'BOOK_APPOINTMENT' },
-        { title: 'ًں’° أسعار الكشف', payload: 'أسعار الكشف ط¨ط§ظ„ط¹ظٹط§ط¯ط©' },
-        { title: 'âŒڑ مواعيد العمل', payload: 'ظ…ط§ ظ‡ظٹ مواعيد العملطں' },
-        { title: 'ًں“چ عنوان العيادة', payload: 'ظ…ط§ ظ‡ظˆ عنوان العيادةطں' }
-      ];
-
       const aiResponse = await openaiService.getInquiryResponse(content, recentMessages.reverse());
-      await instagramService.sendTextMessage(senderId, aiResponse, quickReplies);
+      await instagramService.sendTextMessage(senderId, aiResponse, SOCIAL_QUICK_REPLIES);
 
       await prisma.message.create({
         data: {
@@ -2496,9 +2455,7 @@ const handleInstagramMessage = async (event) => {
         },
       });
     } else {
-      await instagramService.sendTextMessage(senderId, 'ط´ظƒط±ط§ظ‹ ظ„تواصلظƒ! ط³ظٹطھظ… ط§ظ„ط±ط¯ ط¹ظ„ظٹظƒ ظ‚ط±ظٹط¨ط§ظ‹.', [
-        { title: 'ًں“… ط§ط­ط¬ط² ظ…ظˆط¹ط¯', payload: 'BOOK_APPOINTMENT' }
-      ]);
+      await instagramService.sendTextMessage(senderId, SOCIAL_FALLBACK_REPLY, [SOCIAL_QUICK_REPLIES[0]]);
     }
   } catch (error) {
     console.error('[Instagram] handleInstagramMessage ERROR:', error.message);
