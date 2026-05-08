@@ -460,6 +460,7 @@ const saveDiscount = async (req, res, next) => {
       name: req.body.name?.trim(),
       type: req.body.type === 'FIXED' ? 'FIXED' : 'PERCENT',
       value: Number(req.body.value),
+      imageUrl: req.body.imageUrl?.trim() || null,
       active: req.body.active !== undefined ? Boolean(req.body.active) : true,
       groupId: req.body.groupId || null,
       serviceId: req.body.serviceId || null,

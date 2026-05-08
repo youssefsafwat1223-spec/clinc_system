@@ -118,6 +118,7 @@ const getPublic = async (req, res, next) => {
         name: discount.name,
         type: discount.type,
         value: discount.value,
+        imageUrl: discount.imageUrl || null,
         serviceName: discount.serviceName || null,
         startsAt: discount.startsAt,
         endsAt: discount.endsAt,

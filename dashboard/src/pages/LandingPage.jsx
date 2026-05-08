@@ -524,15 +524,26 @@ function ActiveDiscountsSection({ discounts, promoImage }) {
             <div className="space-y-3">
               {discounts.slice(0, 3).map((discount) => (
                 <div key={discount.id} className="rounded-2xl border border-white/10 bg-[#0b1120]/60 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-base font-black text-white">{discount.name}</p>
-                    <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-sm font-bold text-emerald-300">
-                      {formatDiscountValue(discount)}
-                    </span>
+                  <div className="flex gap-4">
+                    {discount.imageUrl ? (
+                      <img
+                        src={discount.imageUrl}
+                        alt={discount.name}
+                        className="h-20 w-20 shrink-0 rounded-2xl object-cover"
+                      />
+                    ) : null}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-base font-black text-white">{discount.name}</p>
+                        <span className="rounded-full bg-emerald-500/15 px-3 py-1 text-sm font-bold text-emerald-300">
+                          {formatDiscountValue(discount)}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-300">
+                        {discount.serviceName ? `الخدمة: ${discount.serviceName}` : 'مطبق على كل الخدمات'}
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-1 text-sm text-slate-300">
-                    {discount.serviceName ? `الخدمة: ${discount.serviceName}` : 'مطبق على كل الخدمات'}
-                  </p>
                 </div>
               ))}
             </div>

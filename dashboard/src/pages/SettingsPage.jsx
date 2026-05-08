@@ -20,6 +20,7 @@ const emptyDiscountForm = {
   name: '',
   type: 'PERCENT',
   value: '',
+  imageUrl: '',
   targetMode: 'ALL',
   serviceId: '',
   startsAt: '',
@@ -65,6 +66,7 @@ export default function SettingsPage() {
   const [contactForm, setContactForm] = useState(emptyContactForm);
   const [discountForm, setDiscountForm] = useState(emptyDiscountForm);
   const promoImageInputRef = useRef(null);
+  const discountImageInputRef = useRef(null);
 
   const activeWorkingDays = useMemo(() => Object.values(settings?.workingHours || {}).filter(Boolean).length, [settings]);
 
@@ -185,6 +187,25 @@ export default function SettingsPage() {
       toast.success('تم رفع صورة العرض');
     } catch (error) {
       toast.error(error.response?.data?.error || 'فشل رفع صورة العرض');
+    }
+  };
+
+  const uploadDiscountImage = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await api.post('/upload/campaign-image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setDiscountForm((current) => ({ ...current, imageUrl: res.data.url }));
+      toast.success('تم رفع صورة الخصم');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'فشل رفع صورة الخصم');
     }
   };
 
@@ -456,6 +477,35 @@ export default function SettingsPage() {
                   ))}
                 </select>
               </Field>
+              <Field label="صورة الخصم">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <input
+                      className={inputClass}
+                      dir="ltr"
+                      value={discountForm.imageUrl}
+                      onChange={(event) => setDiscountForm((current) => ({ ...current, imageUrl: event.target.value }))}
+                      placeholder="/api/images/discount.jpg"
+                    />
+                    <SecondaryButton type="button" onClick={() => discountImageInputRef.current?.click()} className="shrink-0">
+                      <Upload className="h-4 w-4" />
+                      رفع
+                    </SecondaryButton>
+                    <input
+                      ref={discountImageInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={uploadDiscountImage}
+                    />
+                  </div>
+                  {discountForm.imageUrl ? (
+                    <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1225]">
+                      <img src={discountForm.imageUrl} alt="معاينة صورة الخصم" className="h-36 w-full object-cover" />
+                    </div>
+                  ) : null}
+                </div>
+              </Field>
               <Field label="المستفيدين من الخصم">
                 <select className={inputClass} value={discountForm.targetMode} onChange={(event) => setDiscountForm((current) => ({ ...current, targetMode: event.target.value }))}>
                   <option value="ALL">كل المرضى الحاليين والجدد</option>
@@ -565,6 +615,11 @@ export default function SettingsPage() {
                 discounts.map((discount) => (
                   <DataCard key={discount.id}>
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      {discount.imageUrl ? (
+                        <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1225] lg:w-40 lg:shrink-0">
+                          <img src={discount.imageUrl} alt={discount.name} className="h-28 w-full object-cover" />
+                        </div>
+                      ) : null}
                       <div className="min-w-0">
                         <div className="mb-3 flex flex-wrap gap-2">
                           <StatusBadge tone={discount.active ? 'green' : 'slate'}>{discount.active ? 'نشط' : 'متوقف'}</StatusBadge>
@@ -575,6 +630,7 @@ export default function SettingsPage() {
                         <div className="mt-2 grid gap-2 text-sm text-slate-400">
                           <p>المجموعة: <span className="text-slate-200">{discount.group?.name || 'كل المرضى'}</span></p>
                           <p>الخدمة: <span className="text-slate-200">{discount.serviceName || 'كل الخدمات'}</span></p>
+                          <p>الصورة: <span className="text-slate-200">{discount.imageUrl ? 'موجودة' : 'بدون'}</span></p>
                           <p>الفترة: <span className="text-slate-200">{formatDate(discount.startsAt)} - {formatDate(discount.endsAt)}</span></p>
                         </div>
                       </div>

@@ -278,6 +278,7 @@ model DiscountRule {
   name        String
   type        String        @default("PERCENT")
   value       Float
+  imageUrl    String?       @map("image_url")
   active      Boolean       @default(true)
   groupId     String?       @map("group_id")
   group       PatientGroup? @relation(fields: [groupId], references: [id], onDelete: SetNull)
