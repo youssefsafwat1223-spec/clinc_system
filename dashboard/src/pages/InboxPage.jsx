@@ -579,11 +579,19 @@ export default function InboxPage() {
                   <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
                     <PrimaryButton
                       type="button"
-                      onClick={() =>
+                      onClick={() => {
+                        const isSocialLead =
+                          selectedPatientData.platform === 'FACEBOOK' || selectedPatientData.platform === 'INSTAGRAM';
+
+                        if (isSocialLead) {
+                          navigate('/add-patient');
+                          return;
+                        }
+
                         navigate(
                           `/add-patient?patientId=${encodeURIComponent(selectedPatientData.id)}&phone=${encodeURIComponent(selectedPatientData.phone || '')}`
-                        )
-                      }
+                        );
+                      }}
                       className="w-full sm:w-auto"
                     >
                       حجز موعد لهذا المريض
