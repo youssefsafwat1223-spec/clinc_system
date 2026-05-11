@@ -86,7 +86,9 @@ export default function TodayPatientsPage() {
           <Field label="الحالة">
             <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}>
               {['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'BLOCKED'].map((item) => (
-                <option key={item} value={item}>{appointmentStatusLabels[item]}</option>
+                <option key={item} value={item}>
+                  {appointmentStatusLabels[item]}
+                </option>
               ))}
             </select>
           </Field>
@@ -94,7 +96,9 @@ export default function TodayPatientsPage() {
             <select className={inputClass} value={doctorFilter} onChange={(event) => setDoctorFilter(event.target.value)}>
               <option value="ALL">كل الأطباء</option>
               {doctors.map((doctor) => (
-                <option key={doctor.id} value={doctor.id}>د. {doctor.name}</option>
+                <option key={doctor.id} value={doctor.id}>
+                  د. {doctor.name}
+                </option>
               ))}
             </select>
           </Field>
@@ -102,7 +106,7 @@ export default function TodayPatientsPage() {
       </DataCard>
 
       {loading ? (
-        <DataCard>جاري تحميل مرضى اليوم...</DataCard>
+        <DataCard>جارٍ تحميل مرضى اليوم...</DataCard>
       ) : filteredAppointments.length === 0 ? (
         <DataCard className="text-center">
           <Filter className="mx-auto mb-3 h-10 w-10 text-slate-500" />

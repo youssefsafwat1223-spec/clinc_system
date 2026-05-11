@@ -31,6 +31,7 @@ const BOOKING_SESSION_TTL_MS = 30 * 60 * 1000;
 const processedWhatsAppMessages = new Map();
 const PROCESSED_WHATSAPP_MESSAGE_TTL_MS = 10 * 60 * 1000;
 const TIME_SLOT_PAGE_SIZE = 9;
+const ADDRESS_INTENT_PATTERN = /(عنوان|العنوان|الموقع|لوكيشن|location|map|maps|خرائط|جوجل\s*ماب|google\s*maps)/i;
 
 const hasWorkingHours = (workingHours) =>
   Boolean(workingHours && typeof workingHours === 'object' && Object.values(workingHours).some(Boolean));
@@ -1715,7 +1716,17 @@ const handleInquiry = async (from, patient, content) => {
 
     const aiResponse = await openaiService.getInquiryResponse(content, history, patient.id);
 
-    // Send AI response
+    if (ADDRESS_INTENT_PATTERN.test(String(content || ''))) {
+      const settings = await prisma.clinicSettings.findFirst({
+        select: { locationImageUrl: true },
+      });
+
+      if (settings?.locationImageUrl) {
+        await whatsappService.sendImageMessage(from, settings.locationImageUrl, aiResponse);
+        return;
+      }
+    }
+
     await whatsappService.sendTextMessage(from, aiResponse);
   } catch (error) {
     console.error('[WhatsApp] handleInquiry ERROR:', error.message);

@@ -2,6 +2,7 @@ const prisma = require('../lib/prisma');
 const { generateTimeSlots, formatDateAr, formatTimeAr } = require('../utils/helpers');
 
 const BLOCKING_STATUSES = ['CONFIRMED', 'PENDING', 'BLOCKED'];
+const PENDING_APPOINTMENT_EXPIRY_HOURS = Number(process.env.PENDING_APPOINTMENT_EXPIRY_HOURS || 24);
 
 const buildRange = (time, durationMinutes) => {
   const start = new Date(time).getTime();
@@ -154,7 +155,7 @@ const createAppointment = async ({ patientId, doctorId, serviceId, scheduledTime
     return { conflict: true, alternatives };
   }
 
-  const lockedUntil = new Date(Date.now() + 10 * 60 * 1000);
+  const lockedUntil = new Date(Date.now() + PENDING_APPOINTMENT_EXPIRY_HOURS * 60 * 60 * 1000);
 
   let appointment;
 

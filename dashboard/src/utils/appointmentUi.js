@@ -24,8 +24,22 @@ export const todayInputValue = () => new Date().toISOString().slice(0, 10);
 export const formatDateTime = (value) => {
   if (!value) return '-';
   return new Intl.DateTimeFormat('ar-EG', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+};
+
+export const formatDetailedDate = (value) => {
+  if (!value) return '-';
+  return new Intl.DateTimeFormat('ar-EG', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
   }).format(new Date(value));
 };
 

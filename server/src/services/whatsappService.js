@@ -4,9 +4,6 @@ const prisma = require('../lib/prisma');
 
 const WHATSAPP_API_URL = `https://graph.facebook.com/v18.0/${config.whatsapp.phoneNumberId}/messages`;
 
-/**
- * Send a WhatsApp message via Meta Cloud API
- */
 const sendMessage = async (messageData) => {
   if (!config.whatsapp.token) {
     console.log('[WhatsApp] Token not configured. Message:', JSON.stringify(messageData, null, 2));
@@ -22,14 +19,16 @@ const sendMessage = async (messageData) => {
     });
     console.log('[WhatsApp] Message sent successfully:', response.data);
 
-    // Automatically log outbound message to database
     try {
       if (messageData.to) {
         const patient = await prisma.patient.findFirst({ where: { phone: messageData.to } });
         if (patient) {
           let textContent = '[رد آلي]';
+
           if (messageData.type === 'text' && messageData.text) {
             textContent = messageData.text.body;
+          } else if (messageData.type === 'image' && messageData.image) {
+            textContent = `[صورة] ${messageData.image.caption || 'مرفق صورة'}`;
           } else if (messageData.type === 'document' && messageData.document) {
             textContent = `[ملف] ${messageData.document.caption || messageData.document.filename || 'مرفق'}`;
           } else if (messageData.type === 'interactive') {
@@ -40,8 +39,8 @@ const sendMessage = async (messageData) => {
             }
           } else if (messageData.type === 'template' && messageData.template) {
             const templateName = messageData.template.name || '';
-            const bodyComponent = (messageData.template.components || []).find((c) => c.type === 'body');
-            const params = (bodyComponent?.parameters || []).map((p) => p.text).filter(Boolean);
+            const bodyComponent = (messageData.template.components || []).find((component) => component.type === 'body');
+            const params = (bodyComponent?.parameters || []).map((param) => param.text).filter(Boolean);
             const paramsSuffix = params.length ? ` (${params.join(' • ')})` : '';
 
             if (/review/i.test(templateName)) {
@@ -80,21 +79,29 @@ const sendMessage = async (messageData) => {
   }
 };
 
-/**
- * Send a text message
- */
-const sendTextMessage = async (to, text) => {
-  return sendMessage({
+const sendTextMessage = async (to, text) =>
+  sendMessage({
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to,
     type: 'text',
     text: { body: text },
   });
-};
 
-const sendDocumentMessage = async (to, documentUrl, filename, caption = '') => {
-  return sendMessage({
+const sendImageMessage = async (to, imageUrl, caption = '') =>
+  sendMessage({
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to,
+    type: 'image',
+    image: {
+      link: imageUrl,
+      ...(caption ? { caption } : {}),
+    },
+  });
+
+const sendDocumentMessage = async (to, documentUrl, filename, caption = '') =>
+  sendMessage({
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
     to,
@@ -105,42 +112,32 @@ const sendDocumentMessage = async (to, documentUrl, filename, caption = '') => {
       ...(caption ? { caption } : {}),
     },
   });
-};
 
-/**
- * Send an interactive message (buttons, lists)
- */
-const sendInteractiveMessage = async (messageData) => {
-  return sendMessage(messageData);
-};
+const sendInteractiveMessage = async (messageData) => sendMessage(messageData);
 
-/**
- * Mark a message as read
- */
 const markAsRead = async (messageId) => {
   if (!config.whatsapp.token) return;
 
   try {
-    await axios.post(WHATSAPP_API_URL, {
-      messaging_product: 'whatsapp',
-      status: 'read',
-      message_id: messageId,
-    }, {
-      headers: {
-        Authorization: `Bearer ${config.whatsapp.token}`,
-        'Content-Type': 'application/json',
+    await axios.post(
+      WHATSAPP_API_URL,
+      {
+        messaging_product: 'whatsapp',
+        status: 'read',
+        message_id: messageId,
       },
-    });
+      {
+        headers: {
+          Authorization: `Bearer ${config.whatsapp.token}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
   } catch (error) {
     console.error('[WhatsApp] Mark read error:', error.message);
   }
 };
 
-/**
- * Send an approved Meta Message Template (for broadcasts outside 24h window)
- * @param bodyParams array of strings for variables {{1}}, {{2}}, etc. or objects for named variables { name, text }
- * @param headerMedia optional { type: 'image'|'document'|'video', link, filename? }
- */
 const sendTemplateMessage = async (
   to,
   templateName,
@@ -195,7 +192,6 @@ const sendTemplateMessage = async (
     }
   }
 
-  // If there are body variables (e.g., patientName, date, time), attach them
   if (bodyParams && bodyParams.length > 0) {
     components.push({
       type: 'body',
@@ -211,7 +207,7 @@ const sendTemplateMessage = async (
         }
 
         return { type: 'text', text: String(param) };
-      })
+      }),
     });
   }
 
@@ -231,6 +227,7 @@ const sendTemplateMessage = async (
 module.exports = {
   sendMessage,
   sendTextMessage,
+  sendImageMessage,
   sendDocumentMessage,
   sendInteractiveMessage,
   sendTemplateMessage,

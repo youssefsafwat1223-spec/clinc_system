@@ -2,6 +2,7 @@ const config = require('../config/env');
 const { formatCurrency, formatDateAr, formatTimeAr } = require('./helpers');
 
 const WHATSAPP_LIST_ROW_LIMIT = 10;
+const PENDING_APPOINTMENT_EXPIRY_HOURS = Number(process.env.PENDING_APPOINTMENT_EXPIRY_HOURS || 24);
 
 const formatServicePriceLabel = (service = {}) => {
   const from = service.priceFrom;
@@ -12,6 +13,13 @@ const formatServicePriceLabel = (service = {}) => {
   if (to != null) return `إلى ${formatCurrency(to)}`;
   if (service.price != null) return formatCurrency(service.price);
   return '';
+};
+
+const formatPendingExpiryLabel = () => {
+  if (PENDING_APPOINTMENT_EXPIRY_HOURS === 24) return 'خلال 24 ساعة';
+  if (PENDING_APPOINTMENT_EXPIRY_HOURS === 1) return 'خلال ساعة واحدة';
+  if (PENDING_APPOINTMENT_EXPIRY_HOURS === 2) return 'خلال ساعتين';
+  return `خلال ${PENDING_APPOINTMENT_EXPIRY_HOURS} ساعة`;
 };
 
 const buildWelcomeMessage = (to) => ({
@@ -62,15 +70,15 @@ const buildServiceSelection = (to, services, doctorNames = '') => ({
         {
           title: 'الخدمات المتاحة',
           rows: services.slice(0, WHATSAPP_LIST_ROW_LIMIT).map((service) => {
-            let desc = service.whatsappPriceDescription || formatServicePriceLabel(service);
+            let description = service.whatsappPriceDescription || formatServicePriceLabel(service);
             if (doctorNames) {
               const doctorDesc = `د. ${doctorNames}`;
-              desc = desc ? `${desc} - ${doctorDesc}` : doctorDesc;
+              description = description ? `${description} - ${doctorDesc}` : doctorDesc;
             }
             return {
               id: `service_${service.id}`,
-              title: service.nameAr.substring(0, 24),
-              description: String(desc || '').substring(0, 72),
+              title: String(service.nameAr || service.name || 'خدمة').substring(0, 24),
+              description: String(description || '').substring(0, 72),
             };
           }),
         },
@@ -87,9 +95,7 @@ const buildDoctorSelection = (to, doctors, serviceName = '') => ({
   interactive: {
     type: 'list',
     body: {
-      text: serviceName
-        ? `اختر الطبيب المناسب لخدمة ${serviceName}:`
-        : 'اختر الطبيب المناسب:',
+      text: serviceName ? `اختر الطبيب المناسب لخدمة ${serviceName}:` : 'اختر الطبيب المناسب:',
     },
     action: {
       button: 'عرض الأطباء',
@@ -98,7 +104,7 @@ const buildDoctorSelection = (to, doctors, serviceName = '') => ({
           title: 'الأطباء المتاحون',
           rows: doctors.slice(0, WHATSAPP_LIST_ROW_LIMIT).map((doctor) => ({
             id: `doctor_${doctor.id}`,
-            title: doctor.name.substring(0, 24),
+            title: String(doctor.name || 'طبيب').substring(0, 24),
             description: String(doctor.description || doctor.specialization || '').substring(0, 72),
           })),
         },
@@ -124,7 +130,7 @@ const buildDaySelection = (to, days) => ({
           title: 'الأيام المتاحة',
           rows: days.slice(0, WHATSAPP_LIST_ROW_LIMIT).map((day) => ({
             id: day.id,
-            title: day.title.length > 24 ? day.title.substring(0, 24) : day.title,
+            title: String(day.title || '').substring(0, 24),
             description: String(day.description || '').substring(0, 72),
           })),
         },
@@ -243,7 +249,9 @@ const buildPendingMessage = (to, bookingRef) => ({
       '',
       bookingRef ? `رقم الحجز: *${bookingRef}*` : null,
       bookingRef ? '' : null,
-      'سيتم مراجعته من قبل العيادة وإبلاغك بالتأكيد قريباً. شكراً لاختيارك عيادتنا.',
+      `سيتم مراجعة طلبك وإبلاغك بالتأكيد ${formatPendingExpiryLabel()} من الآن.`,
+      'إذا لم يتم تأكيد الطلب خلال هذه المدة فسيصبح منتهيًا تلقائيًا.',
+      'شكراً لاختيارك عيادتنا.',
     ].filter(Boolean).join('\n'),
   },
 });
@@ -328,7 +336,7 @@ const buildAppointmentsList = (to, appointments) => ({
             const dateStr = appointment.scheduledTime ? appointment.scheduledTime.toISOString().split('T')[0] : '';
             return {
               id: `manage_apt_${appointment.id}`,
-              title: `${appointment.service?.nameAr?.substring(0, 10)} - ${dateStr}`,
+              title: `${String(appointment.service?.nameAr || appointment.service?.name || 'موعد').substring(0, 10)} - ${dateStr}`,
               description: `رقم الحجز: ${appointment.bookingRef}`,
             };
           }),
@@ -348,8 +356,8 @@ const buildAppointmentOptions = (to, appointment) => ({
     body: {
       text: [
         'إدارة موعدك القادم:',
-        `الخدمة: ${appointment.service?.nameAr}`,
-        `الطبيب: ${appointment.doctor?.name}`,
+        `الخدمة: ${appointment.service?.nameAr || appointment.service?.name || '-'}`,
+        `الطبيب: ${appointment.doctor?.name || '-'}`,
         `اليوم: ${formatDateAr(appointment.scheduledTime)}`,
         `الوقت: ${formatTimeAr(appointment.scheduledTime)}`,
         '',

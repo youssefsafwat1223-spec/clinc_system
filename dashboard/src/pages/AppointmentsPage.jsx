@@ -6,11 +6,11 @@ import AppLayout from '../components/Layout';
 import ManualBookingPanel from '../components/appointments/ManualBookingPanel';
 import AppointmentCard from '../components/appointments/AppointmentCard';
 import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatCard, inputClass } from '../components/ui';
-import { appointmentStatusLabels, formatDate } from '../utils/appointmentUi';
+import { appointmentStatusLabels, formatDetailedDate } from '../utils/appointmentUi';
 
 const daysAr = {
   sunday: 'الأحد',
-  monday: 'الإثنين',
+  monday: 'الاثنين',
   tuesday: 'الثلاثاء',
   wednesday: 'الأربعاء',
   thursday: 'الخميس',
@@ -210,12 +210,12 @@ export default function AppointmentsPage() {
             </div>
             <PrimaryButton type="button" onClick={saveSchedule} disabled={savingSchedule || doctorLoading || !doctorProfile}>
               <Save className="h-4 w-4" />
-              {savingSchedule ? 'جاري الحفظ...' : 'حفظ الجدول'}
+              {savingSchedule ? 'جارٍ الحفظ...' : 'حفظ الجدول'}
             </PrimaryButton>
           </div>
 
           {doctorLoading ? (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-slate-300">جاري تحميل جدول الطبيب...</div>
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-slate-300">جارٍ تحميل جدول الطبيب...</div>
           ) : !doctorProfile ? (
             <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-200">لا يوجد ملف طبيب مرتبط بهذا الحساب.</div>
           ) : (
@@ -276,12 +276,12 @@ export default function AppointmentsPage() {
       </div>
 
       {loading ? (
-        <DataCard className="text-center text-slate-300">جاري تحميل المواعيد...</DataCard>
+        <DataCard className="text-center text-slate-300">جارٍ تحميل المواعيد...</DataCard>
       ) : appointments.length === 0 ? (
         <DataCard className="text-center">
           <CalendarDays className="mx-auto mb-4 h-12 w-12 text-slate-500" />
           <h2 className="text-lg font-black text-white">لا توجد مواعيد</h2>
-          <p className="mt-2 text-sm text-slate-400">غيّر الفلتر أو أنشئ موعداً يدوياً من لوحة الحجز بالأعلى.</p>
+          <p className="mt-2 text-sm text-slate-400">غيّر الفلتر أو أنشئ موعدًا يدويًا من لوحة الحجز بالأعلى.</p>
         </DataCard>
       ) : (
         <div className="space-y-5">
@@ -289,7 +289,7 @@ export default function AppointmentsPage() {
             <section key={date} className="space-y-3">
               <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
                 <div>
-                  <h2 className="text-base font-black text-white">{formatDate(date)}</h2>
+                  <h2 className="text-base font-black text-white">{formatDetailedDate(date)}</h2>
                   <p className="text-xs text-slate-400">{list.length} موعد في هذا اليوم</p>
                 </div>
                 <SecondaryButton type="button" onClick={() => setFilter('ALL')}>
