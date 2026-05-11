@@ -1,5 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bot, CheckCheck, HelpCircle, Inbox, MessageSquare, Pause, Phone, Play, Search, Send, User, X } from 'lucide-react';
+import {
+  Bot,
+  CheckCheck,
+  HelpCircle,
+  ImagePlus,
+  Inbox,
+  MessageSquare,
+  Pause,
+  Phone,
+  Play,
+  Search,
+  Send,
+  User,
+  X,
+} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../api/client';
@@ -18,19 +32,55 @@ const platformLabels = {
   INSTAGRAM: 'إنستجرام',
 };
 
-const chatStateLabels = {
-  HUMAN: 'بشري',
-  BOT: 'الرد الآلي',
+const parseQuickRepliesInput = (value) =>
+  String(value || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [caption = '', type = '', target = ''] = line.split('|').map((item) => item.trim());
+      if (!caption || !type) return null;
+      if (type === 'url') return { caption, type, url: target };
+      return { caption, type, target };
+    })
+    .filter(Boolean);
+
+const platformTone = {
+  WHATSAPP: 'green',
+  FACEBOOK: 'blue',
+  INSTAGRAM: 'amber',
 };
 
-function PlatformIcon({ platform, className = 'h-4 w-4' }) {
-  if (platform === 'WHATSAPP') return <Phone className={`${className} text-emerald-300`} />;
-  if (platform === 'FACEBOOK') return <MessageSquare className={`${className} text-sky-300`} />;
-  if (platform === 'INSTAGRAM') return <MessageSquare className={`${className} text-pink-400`} />;
-  return <MessageSquare className={`${className} text-slate-400`} />;
-}
+const getSourceLabel = (metadata) => {
+  const source = metadata?.source;
+  if (source === 'COMMENT') return 'تعليق';
+  if (source === 'COMMENT_REPLY') return 'رد تعليق';
+  if (source === 'MANUAL_REPLY') return 'رد بشري';
+  if (source === 'MANYCHAT') return 'ManyChat';
+  return null;
+};
 
-function formatDay(value) {
+const getPatientName = (patient = {}, metadata = null) =>
+  patient.displayName ||
+  patient.name ||
+  metadata?.fullName ||
+  metadata?.raw?.full_name ||
+  (patient.platform === 'INSTAGRAM'
+    ? 'عميل إنستجرام'
+    : patient.platform === 'FACEBOOK'
+      ? 'عميل فيسبوك'
+      : 'عميل');
+
+const getMessageText = (message) =>
+  String(
+    message?.metadata?.originalContent ||
+      message?.content ||
+      message?.metadata?.raw?.message_text ||
+      message?.metadata?.raw?.comment_text ||
+      ''
+  ).trim();
+
+const formatDay = (value) => {
   const date = new Date(value);
   const today = new Date();
   const yesterday = new Date();
@@ -44,16 +94,15 @@ function formatDay(value) {
     day: 'numeric',
     month: 'long',
   }).format(date);
-}
+};
 
-function formatTime(value) {
-  return new Intl.DateTimeFormat('ar-EG', {
+const formatTime = (value) =>
+  new Intl.DateTimeFormat('ar-EG', {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
-}
 
-function formatRelative(value) {
+const formatRelative = (value) => {
   if (!value) return '-';
   const minutes = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 60000));
   if (minutes < 1) return 'الآن';
@@ -61,66 +110,50 @@ function formatRelative(value) {
   const hours = Math.round(minutes / 60);
   if (hours < 24) return `منذ ${hours} ساعة`;
   return formatDay(value);
-}
-
-function getMessageSourceLabel(metadata) {
-  const source = metadata?.source;
-  if (source === 'COMMENT') return 'تعليق';
-  if (source === 'COMMENT_REPLY') return 'رد تعليق';
-  if (source === 'APPOINTMENT_CONFIRMATION') return 'تأكيد موعد';
-  if (source === 'APPOINTMENT_REJECTION') return 'تعديل موعد';
-  return null;
-}
-
-const isPlaceholderValue = (value) => /^\{\{[^}]+\}\}$/.test(String(value || '').trim());
-
-const pickReadableText = (...values) => {
-  for (const value of values) {
-    const text = String(value || '').trim();
-    if (text && !isPlaceholderValue(text)) return text;
-  }
-  return '';
 };
 
-function getPatientName(patient = {}, metadata = null) {
-  const raw = metadata?.raw || {};
-  return pickReadableText(
-    patient.displayName,
-    patient.name,
-    metadata?.fullName,
-    raw.full_name,
-    raw.name,
-    raw.full_contact_data?.full_name
-  ) || (patient.platform === 'INSTAGRAM' ? 'مريض إنستجرام' : patient.platform === 'FACEBOOK' ? 'مريض فيسبوك' : 'بدون اسم');
+function PlatformIcon({ platform, className = 'h-4 w-4' }) {
+  if (platform === 'WHATSAPP') return <Phone className={`${className} text-emerald-300`} />;
+  if (platform === 'FACEBOOK') return <MessageSquare className={`${className} text-sky-300`} />;
+  if (platform === 'INSTAGRAM') return <MessageSquare className={`${className} text-pink-400`} />;
+  return <MessageSquare className={`${className} text-slate-400`} />;
 }
 
-function getMessageText(content, metadata = null) {
-  const raw = metadata?.raw || {};
-  return pickReadableText(
-    content,
-    raw.message_text,
-    raw.comment_text,
-    raw.comment_message,
-    raw.last_comment_text,
-    raw.last_text_input,
-    raw.text,
-    raw.message,
-    raw.input,
-    raw.content,
-    raw.comment?.text,
-    raw.comment?.message,
-    raw.data?.comment_text,
-    raw.data?.text,
-    raw.full_contact_data?.last_text_input
-  ) || (metadata?.source === 'COMMENT' ? 'تعليق جديد بدون نص واضح' : 'رسالة بدون نص واضح');
-}
-
-function ChatStateBadge({ chatState }) {
-  const isHuman = chatState === 'HUMAN';
+function BotGuideModal({ onClose }) {
   return (
-    <StatusBadge tone={isHuman ? 'amber' : 'green'}>
-      {isHuman ? 'تدخل بشري' : 'البوت يعمل'}
-    </StatusBadge>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm">
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-3xl border border-white/10 bg-[#0b1020] shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
+          <div>
+            <h2 className="text-xl font-black text-white">شرح المتابعة البشرية</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-400">
+              من هذه الشاشة يمكنك الرد البشري، إرسال صورة، وإرسال Quick Replies عبر ManyChat عند توفر بيانات المشترك.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-2xl border border-white/10 bg-white/5 p-2 text-slate-300 hover:text-white">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="space-y-4 overflow-y-auto p-5 text-sm leading-7 text-slate-300">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <p className="font-bold text-white">إيقاف البوت</p>
+            <p>يحوّل المحادثة إلى وضع بشري حتى لا يرد البوت تلقائياً.</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <p className="font-bold text-white">الإرسال عبر ManyChat</p>
+            <p>إذا كان للمريض `manychatSubscriberId` وكان `MANYCHAT_API_KEY` مضبوطاً، سيتم إرسال رد الموظف عبر ManyChat بدلاً من الإرسال المباشر.</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <p className="font-bold text-white">صيغة Quick Replies</p>
+            <p dir="ltr">caption|type|target</p>
+            <p>مثال:</p>
+            <p dir="ltr">احجز الآن|flow|123456</p>
+            <p dir="ltr">العنوان|node|content_abc</p>
+            <p dir="ltr">افتح الموقع|url|https://maps.google.com/...</p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -130,11 +163,16 @@ export default function InboxPage() {
   const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [conversation, setConversation] = useState([]);
   const [replyText, setReplyText] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [quickRepliesText, setQuickRepliesText] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [loadingList, setLoadingList] = useState(true);
   const [loadingChat, setLoadingChat] = useState(false);
+  const [sending, setSending] = useState(false);
   const [activeTab, setActiveTab] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [showBotGuide, setShowBotGuide] = useState(false);
+  const imageInputRef = useRef(null);
   const messagesContainerRef = useRef(null);
 
   const fetchPatientsList = async (showLoading = true) => {
@@ -143,10 +181,10 @@ export default function InboxPage() {
       const res = await api.get('/messages', { params: { limit: 500 } });
       const uniquePatientsMap = new Map();
 
-      (res.data.messages || [])
-        .forEach((message) => {
-        const existing = uniquePatientsMap.get(message.patientId);
+      (res.data.messages || []).forEach((message) => {
         const patient = message.patient || {};
+        const existing = uniquePatientsMap.get(message.patientId);
+
         if (!existing) {
           uniquePatientsMap.set(message.patientId, {
             ...patient,
@@ -154,10 +192,9 @@ export default function InboxPage() {
             platform: message.platform || patient.platform,
             displayName: getPatientName(patient, message.metadata),
             name: getPatientName(patient, message.metadata),
-            lastMessage: getMessageText(message.content, message.metadata),
+            lastMessage: getMessageText(message),
             lastMessageTime: message.createdAt,
             lastMessageType: message.type,
-            lastMessageSource: getMessageSourceLabel(message.metadata),
             lastMessageMetadata: message.metadata,
             chatState: patient.chatState || 'BOT',
             messageCount: 1,
@@ -168,9 +205,9 @@ export default function InboxPage() {
         }
 
         existing.messageCount += 1;
-        if (message.type === 'INBOUND' && !message.readAt) existing.unreadCount = (existing.unreadCount || 0) + 1;
-        if (message.reviewedAt) existing.reviewedCount = (existing.reviewedCount || 0) + 1;
-        });
+        if (message.type === 'INBOUND' && !message.readAt) existing.unreadCount += 1;
+        if (message.reviewedAt) existing.reviewedCount += 1;
+      });
 
       const nextPatients = Array.from(uniquePatientsMap.values()).sort(
         (first, second) => new Date(second.lastMessageTime).getTime() - new Date(first.lastMessageTime).getTime()
@@ -201,8 +238,6 @@ export default function InboxPage() {
               ? {
                   ...patient,
                   ...res.data.patient,
-                  platform: res.data.patient.platform || patient.platform,
-                  chatState: res.data.patient.chatState || patient.chatState,
                   unreadCount: 0,
                 }
               : patient
@@ -239,56 +274,136 @@ export default function InboxPage() {
     container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
   }, [conversation.length, selectedPatientId]);
 
-  const updatePatientSummary = (patientId, content, createdAt) => {
-    setPatients((current) =>
-      current
-        .map((patient) =>
-          patient.id === patientId
-            ? {
-                ...patient,
-                lastMessage: content,
-                lastMessageTime: createdAt,
-                lastMessageType: 'OUTBOUND',
-                messageCount: (patient.messageCount || 0) + 1,
-              }
-            : patient
-        )
-        .sort((first, second) => new Date(second.lastMessageTime).getTime() - new Date(first.lastMessageTime).getTime())
-    );
+  const platformCounts = useMemo(
+    () =>
+      patients.reduce(
+        (accumulator, patient) => {
+          accumulator.ALL += 1;
+          if (patient.chatState === 'HUMAN') accumulator.HUMAN += 1;
+          if ((patient.unreadCount || 0) > 0) accumulator.UNREAD += 1;
+          if ((patient.reviewedCount || 0) > 0) accumulator.REVIEWED += 1;
+          if (patient.platform && accumulator[patient.platform] !== undefined) accumulator[patient.platform] += 1;
+          return accumulator;
+        },
+        { ALL: 0, HUMAN: 0, UNREAD: 0, REVIEWED: 0, WHATSAPP: 0, FACEBOOK: 0, INSTAGRAM: 0 }
+      ),
+    [patients]
+  );
+
+  const filteredPatients = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+
+    return patients.filter((patient) => {
+      const isStateTab = activeTab === 'HUMAN' || activeTab === 'UNREAD' || activeTab === 'REVIEWED';
+      const matchesPlatform = activeTab === 'ALL' || isStateTab || patient.platform === activeTab;
+      const matchesState =
+        activeTab === 'HUMAN'
+          ? patient.chatState === 'HUMAN'
+          : activeTab === 'UNREAD'
+            ? (patient.unreadCount || 0) > 0
+            : activeTab === 'REVIEWED'
+              ? (patient.reviewedCount || 0) > 0
+              : true;
+
+      const haystack = [patient.name, patient.phone, patient.lastMessage].filter(Boolean).join(' ').toLowerCase();
+      return matchesPlatform && matchesState && (!query || haystack.includes(query));
+    });
+  }, [activeTab, patients, searchTerm]);
+
+  useEffect(() => {
+    if (filteredPatients.length === 0) {
+      setSelectedPatientId(null);
+      return;
+    }
+
+    if (!selectedPatientId || !filteredPatients.some((patient) => patient.id === selectedPatientId)) {
+      setSelectedPatientId(filteredPatients[0].id);
+    }
+  }, [filteredPatients, selectedPatientId]);
+
+  const selectedPatientData = useMemo(
+    () => patients.find((patient) => patient.id === selectedPatientId) || null,
+    [patients, selectedPatientId]
+  );
+
+  const groupedMessages = useMemo(() => {
+    return conversation.reduce((groups, message) => {
+      const key = new Date(message.createdAt).toISOString().slice(0, 10);
+      const last = groups[groups.length - 1];
+      if (!last || last.key !== key) {
+        groups.push({ key, label: formatDay(message.createdAt), messages: [message] });
+      } else {
+        last.messages.push(message);
+      }
+      return groups;
+    }, []);
+  }, [conversation]);
+
+  const uploadMessageImage = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append('image', file);
+
+    try {
+      const res = await api.post('/upload/campaign-image', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      setImageUrl(res.data.url);
+      toast.success('تم رفع الصورة');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'فشل رفع الصورة');
+    }
   };
 
   const handleSend = async (event) => {
     event.preventDefault();
-    if (!replyText.trim() || !selectedPatientId) return;
+    if ((!replyText.trim() && !imageUrl.trim()) || !selectedPatientId) return;
 
+    setSending(true);
     try {
       const selectedPatient = patients.find((patient) => patient.id === selectedPatientId);
       const currentText = replyText.trim();
+      const currentImageUrl = imageUrl.trim();
+      const currentQuickReplies = parseQuickRepliesInput(quickRepliesText);
       const createdAt = new Date().toISOString();
+
       const tempMessage = {
         id: `temp_${Date.now()}`,
-        content: currentText,
+        content: currentText || '[image]',
         type: 'OUTBOUND',
         createdAt,
         platform: selectedPatient?.platform,
+        metadata: {
+          originalContent: currentText,
+          imageUrl: currentImageUrl || null,
+          quickReplies: currentQuickReplies,
+        },
       };
 
       setConversation((current) => [...current, tempMessage]);
-      updatePatientSummary(selectedPatientId, currentText, createdAt);
       setReplyText('');
+      setImageUrl('');
+      setQuickRepliesText('');
 
       await api.post('/messages/send', {
         patientId: selectedPatientId,
         content: currentText,
+        imageUrl: currentImageUrl,
+        quickReplies: currentQuickReplies,
         platform: selectedPatient?.platform,
       });
 
       fetchConversation(selectedPatientId, false);
       fetchPatientsList(false);
     } catch (error) {
-      toast.error('فشل إرسال الرسالة');
+      toast.error(error.message || 'فشل إرسال الرسالة');
       fetchConversation(selectedPatientId, false);
       fetchPatientsList(false);
+    } finally {
+      setSending(false);
     }
   };
 
@@ -320,77 +435,15 @@ export default function InboxPage() {
     }
   };
 
-  const platformCounts = useMemo(
-    () =>
-      patients.reduce(
-        (accumulator, patient) => {
-          accumulator.ALL += 1;
-          if (patient.chatState === 'HUMAN') accumulator.HUMAN += 1;
-          if ((patient.unreadCount || 0) > 0) accumulator.UNREAD += 1;
-          if ((patient.reviewedCount || 0) > 0) accumulator.REVIEWED += 1;
-          if (patient.platform && accumulator[patient.platform] !== undefined) accumulator[patient.platform] += 1;
-          return accumulator;
-        },
-        { ALL: 0, HUMAN: 0, UNREAD: 0, REVIEWED: 0, WHATSAPP: 0, FACEBOOK: 0 }
-      ),
-    [patients]
-  );
-
-  const filteredPatients = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    return patients.filter((patient) => {
-      const isStateTab = activeTab === 'HUMAN' || activeTab === 'UNREAD' || activeTab === 'REVIEWED';
-      const matchesPlatform = activeTab === 'ALL' || isStateTab || patient.platform === activeTab;
-      const matchesState =
-        activeTab === 'HUMAN'
-          ? patient.chatState === 'HUMAN'
-          : activeTab === 'UNREAD'
-            ? (patient.unreadCount || 0) > 0
-            : activeTab === 'REVIEWED'
-              ? (patient.reviewedCount || 0) > 0
-              : true;
-      const haystack = [getPatientName(patient, patient.lastMessageMetadata), patient.phone, getMessageText(patient.lastMessage, patient.lastMessageMetadata)].filter(Boolean).join(' ').toLowerCase();
-      return matchesPlatform && matchesState && (!query || haystack.includes(query));
-    });
-  }, [activeTab, patients, searchTerm]);
-
-  useEffect(() => {
-    if (filteredPatients.length === 0) {
-      setSelectedPatientId(null);
-      return;
-    }
-    if (!selectedPatientId || !filteredPatients.some((patient) => patient.id === selectedPatientId)) {
-      setSelectedPatientId(filteredPatients[0].id);
-    }
-  }, [filteredPatients, selectedPatientId]);
-
-  const selectedPatientData = useMemo(
-    () => patients.find((patient) => patient.id === selectedPatientId) || null,
-    [patients, selectedPatientId]
-  );
-
-  const groupedMessages = useMemo(() => {
-    return conversation.reduce((groups, message) => {
-      const key = new Date(message.createdAt).toISOString().slice(0, 10);
-      const last = groups[groups.length - 1];
-      if (!last || last.key !== key) {
-        groups.push({ key, label: formatDay(message.createdAt), messages: [message] });
-      } else {
-        last.messages.push(message);
-      }
-      return groups;
-    }, []);
-  }, [conversation]);
-
   return (
     <AppLayout>
       <PageHeader
         title="صندوق الوارد"
-        description="متابعة رسائل واتساب وفيسبوك، مع فصل المحادثات التي تحتاج تدخل بشري أو لم تتم قراءتها."
+        description="متابعة رسائل واتساب وFacebook وInstagram مع إمكانية الرد البشري عبر ManyChat عندما تكون بيانات المشترك متوفرة."
         actions={
           <SecondaryButton type="button" onClick={() => setShowBotGuide(true)}>
             <HelpCircle className="h-4 w-4" />
-            شرح البوت والمتابعة
+            شرح المتابعة
           </SecondaryButton>
         }
       />
@@ -436,11 +489,11 @@ export default function InboxPage() {
 
           <div className="min-h-0 flex-1 overflow-y-auto p-3">
             {loadingList ? (
-              <div className="p-8 text-center text-sm text-slate-400">جاري تحميل المحادثات...</div>
+              <div className="p-8 text-center text-sm text-slate-400">جارٍ تحميل المحادثات...</div>
             ) : filteredPatients.length === 0 ? (
               <div className="flex h-52 flex-col items-center justify-center text-center text-slate-400">
                 <Inbox className="mb-3 h-10 w-10 text-slate-600" />
-                لا توجد محادثات مطابقة للفلتر.
+                لا توجد محادثات مطابقة للفلاتر.
               </div>
             ) : (
               <div className="space-y-2">
@@ -469,19 +522,20 @@ export default function InboxPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
-                              <h3 className="text-sm font-black leading-6 text-white sm:truncate">{getPatientName(patient, patient.lastMessageMetadata)}</h3>
+                              <h3 className="text-sm font-black leading-6 text-white sm:truncate">{patient.name}</h3>
                               <p className="mt-0.5 text-xs text-slate-500" dir="ltr">{patient.phone || '-'}</p>
                             </div>
                             <span className="shrink-0 text-[11px] text-slate-500">{formatRelative(patient.lastMessageTime)}</span>
                           </div>
-                          <p className="mt-2 text-xs leading-5 text-slate-400 sm:truncate">{getMessageText(patient.lastMessage, patient.lastMessageMetadata)}</p>
+                          <p className="mt-2 text-xs leading-5 text-slate-400 sm:truncate">{patient.lastMessage || 'بدون نص'}</p>
                           <div className="mt-3 flex flex-wrap items-center gap-2">
-                            <ChatStateBadge chatState={patient.chatState} />
+                            <StatusBadge tone={patient.chatState === 'HUMAN' ? 'amber' : 'green'}>
+                              {patient.chatState === 'HUMAN' ? 'متابعة بشرية' : 'البوت يعمل'}
+                            </StatusBadge>
                             <span className="inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300">
                               <PlatformIcon platform={patient.platform} />
                               {platformLabels[patient.platform] || patient.platform || 'غير محدد'}
                             </span>
-                            {patient.reviewedCount ? <StatusBadge tone="blue">تمت مراجعة {patient.reviewedCount}</StatusBadge> : null}
                           </div>
                         </div>
                       </div>
@@ -503,11 +557,16 @@ export default function InboxPage() {
                       <User className="h-6 w-6" />
                     </div>
                     <div>
-                      <h2 className="text-lg font-black text-white">{getPatientName(selectedPatientData, selectedPatientData.lastMessageMetadata || conversation[0]?.metadata)}</h2>
+                      <h2 className="text-lg font-black text-white">{selectedPatientData.name}</h2>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-400">
                         <span dir="ltr">{selectedPatientData.phone || '-'}</span>
                         <PlatformIcon platform={selectedPatientData.platform} />
-                        <ChatStateBadge chatState={selectedPatientData.chatState} />
+                        <StatusBadge tone={platformTone[selectedPatientData.platform] || 'slate'}>
+                          {platformLabels[selectedPatientData.platform] || selectedPatientData.platform}
+                        </StatusBadge>
+                        <StatusBadge tone={selectedPatientData.chatState === 'HUMAN' ? 'amber' : 'green'}>
+                          {selectedPatientData.chatState === 'HUMAN' ? 'متابعة بشرية' : 'البوت يعمل'}
+                        </StatusBadge>
                       </div>
                     </div>
                   </div>
@@ -533,7 +592,7 @@ export default function InboxPage() {
 
               <div ref={messagesContainerRef} className="chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#080d1f] p-4 sm:p-5">
                 {loadingChat ? (
-                  <div className="flex h-full items-center justify-center text-slate-400">جاري تحميل المحادثة...</div>
+                  <div className="flex h-full items-center justify-center text-slate-400">جارٍ تحميل المحادثة...</div>
                 ) : groupedMessages.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center text-center text-slate-400">
                     <MessageSquare className="mb-3 h-10 w-10 text-slate-600" />
@@ -548,7 +607,11 @@ export default function InboxPage() {
                         </div>
                         {group.messages.map((message) => {
                           const outbound = message.type === 'OUTBOUND';
-                          const source = getMessageSourceLabel(message.metadata);
+                          const source = getSourceLabel(message.metadata);
+                          const text = getMessageText(message);
+                          const messageImageUrl = message.metadata?.imageUrl || null;
+                          const messageQuickReplies = Array.isArray(message.metadata?.quickReplies) ? message.metadata.quickReplies : [];
+
                           return (
                             <div key={message.id} className={`flex ${outbound ? 'justify-start' : 'justify-end'}`}>
                               <div
@@ -560,10 +623,28 @@ export default function InboxPage() {
                               >
                                 <div className="mb-2 flex items-center gap-2 text-[11px] opacity-80">
                                   {outbound ? <User className="h-3.5 w-3.5" /> : <Bot className="h-3.5 w-3.5" />}
-                                  <span>{outbound ? 'موظف' : 'مريض'}</span>
+                                  <span>{outbound ? 'موظف' : 'عميل'}</span>
                                   {source ? <span className="rounded-full bg-black/10 px-2 py-0.5">{source}</span> : null}
                                 </div>
-                                <p className="whitespace-pre-wrap break-words text-sm leading-7">{getMessageText(message.content, message.metadata)}</p>
+
+                                {messageImageUrl ? (
+                                  <div className="mb-3 overflow-hidden rounded-2xl border border-white/10 bg-black/10">
+                                    <img src={messageImageUrl} alt="attachment" className="max-h-72 w-full object-cover" />
+                                  </div>
+                                ) : null}
+
+                                {text ? <p className="whitespace-pre-wrap break-words text-sm leading-7">{text}</p> : null}
+
+                                {messageQuickReplies.length > 0 ? (
+                                  <div className="mt-3 flex flex-wrap gap-2">
+                                    {messageQuickReplies.map((reply, index) => (
+                                      <span key={`${message.id}_${index}`} className="rounded-full border border-white/15 bg-black/10 px-3 py-1 text-xs">
+                                        {reply.caption}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : null}
+
                                 <div className={`mt-2 flex items-center gap-1 text-[11px] ${outbound ? 'text-sky-100' : 'text-slate-400'}`}>
                                   <span>{formatTime(message.createdAt)}</span>
                                   {outbound ? <CheckCheck className="h-3.5 w-3.5" /> : null}
@@ -580,17 +661,70 @@ export default function InboxPage() {
               </div>
 
               <form onSubmit={handleSend} className="border-t border-white/10 p-4">
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <input
-                    value={replyText}
-                    onChange={(event) => setReplyText(event.target.value)}
-                    className={inputClass}
-                    placeholder="اكتب رسالتك هنا..."
-                  />
-                  <PrimaryButton type="submit" disabled={!replyText.trim()} className="w-full sm:w-auto">
-                    <Send className="h-4 w-4" />
-                    إرسال
-                  </PrimaryButton>
+                <div className="space-y-3">
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <input
+                      value={replyText}
+                      onChange={(event) => setReplyText(event.target.value)}
+                      className={inputClass}
+                      placeholder="اكتب رسالتك هنا..."
+                    />
+                    <PrimaryButton type="submit" disabled={sending || (!replyText.trim() && !imageUrl.trim())} className="w-full sm:w-auto">
+                      <Send className="h-4 w-4" />
+                      {sending ? 'جارٍ الإرسال...' : 'إرسال'}
+                    </PrimaryButton>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <SecondaryButton type="button" onClick={() => imageInputRef.current?.click()}>
+                      <ImagePlus className="h-4 w-4" />
+                      رفع صورة
+                    </SecondaryButton>
+                    <SecondaryButton type="button" onClick={() => setShowAdvanced((current) => !current)}>
+                      {showAdvanced ? 'إخفاء الخيارات' : 'خيارات متقدمة'}
+                    </SecondaryButton>
+                    <input ref={imageInputRef} type="file" accept="image/*" className="hidden" onChange={uploadMessageImage} />
+                  </div>
+
+                  {imageUrl ? (
+                    <div className="rounded-2xl border border-white/10 bg-[#0d1225] p-3">
+                      <p className="mb-2 text-xs font-bold text-slate-400">الصورة الحالية</p>
+                      <div className="overflow-hidden rounded-2xl border border-white/10">
+                        <img src={imageUrl} alt="preview" className="max-h-56 w-full object-cover" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setImageUrl('')}
+                        className="mt-3 text-xs font-bold text-rose-300 hover:text-rose-200"
+                      >
+                        إزالة الصورة
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {showAdvanced ? (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <label className="mb-1.5 block text-sm font-semibold text-slate-300">رابط الصورة</label>
+                        <input
+                          value={imageUrl}
+                          onChange={(event) => setImageUrl(event.target.value)}
+                          className={inputClass}
+                          dir="ltr"
+                          placeholder="/api/images/example.jpg"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1.5 block text-sm font-semibold text-slate-300">Quick Replies</label>
+                        <textarea
+                          value={quickRepliesText}
+                          onChange={(event) => setQuickRepliesText(event.target.value)}
+                          className={`${inputClass} min-h-28`}
+                          placeholder={'النص|flow|target\nالعنوان|node|content_id\nافتح الموقع|url|https://maps.google.com/...'}
+                        />
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               </form>
             </>
@@ -605,80 +739,5 @@ export default function InboxPage() {
 
       {showBotGuide ? <BotGuideModal onClose={() => setShowBotGuide(false)} /> : null}
     </AppLayout>
-  );
-}
-
-function BotGuideModal({ onClose }) {
-  const items = [
-    {
-      title: 'البوت يعمل',
-      badge: 'أخضر',
-      text: 'معناه أن الرد الآلي شغال على هذه المحادثة. لو المريض كتب رسالة عادية، البوت سيرد حسب إعدادات الذكاء الاصطناعي والحجز.',
-    },
-    {
-      title: 'إيقاف البوت',
-      badge: 'زر إيقاف البوت',
-      text: 'اضغطه لما تحتاج ترد بنفسك أو الحالة محتاجة متابعة بشرية. بعد الضغط، المحادثة تتحول إلى تدخل بشري والبوت لا يرد على هذا المريض.',
-    },
-    {
-      title: 'متابعة بشرية',
-      badge: 'برتقالي',
-      text: 'معناه أن الموظف أو الدكتور ماسك المحادثة. أي رد يدوي من الإنبوكس يوقف البوت تلقائياً لنفس المريض حتى لا يحصل تداخل في الكلام.',
-    },
-    {
-      title: 'إنهاء المتابعة',
-      badge: 'زر إنهاء المتابعة',
-      text: 'بعد ما تخلص مشكلة المريض، اضغط إنهاء المتابعة. هذا يرجع المحادثة لوضع البوت يعمل، ولو المريض كتب لاحقاً سيرد عليه البوت مرة أخرى.',
-    },
-    {
-      title: 'غير مقروء',
-      badge: 'فلتر غير مقروء',
-      text: 'يعرض المحادثات التي فيها رسائل واردة لم يتم فتحها أو قراءتها بعد. استخدمه أول اليوم لمراجعة الرسائل الجديدة بسرعة.',
-    },
-    {
-      title: 'تمت المراجعة',
-      badge: 'فلتر تمت المراجعة',
-      text: 'يعرض الرسائل التي تم التعامل معها أو الرد عليها يدوياً. يساعد الإدارة تعرف مين اتراجع ومين لسه محتاج متابعة.',
-    },
-    {
-      title: 'ملف المريض',
-      badge: 'زر ملف المريض',
-      text: 'يفتح صفحة المريض الكاملة: بياناته، مواعيده، الروشتات، المدفوعات، الاستشارات، الرسائل، والملاحظات.',
-    },
-  ];
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 backdrop-blur-sm">
-      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col rounded-3xl border border-white/10 bg-[#0b1020] shadow-2xl">
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
-          <div>
-            <h2 className="text-xl font-black text-white">شرح البوت والمتابعة البشرية</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-400">
-              استخدم هذا الشرح لمعرفة متى تترك البوت يرد، ومتى توقفه، ومتى ترجع المحادثة للوضع الآلي.
-            </p>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-2xl border border-white/10 bg-white/5 p-2 text-slate-300 hover:text-white" aria-label="إغلاق">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="overflow-y-auto p-5">
-          <div className="grid gap-4 md:grid-cols-2">
-            {items.map((item) => (
-              <div key={item.title} className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  <h3 className="font-black text-white">{item.title}</h3>
-                  <StatusBadge tone="blue">{item.badge}</StatusBadge>
-                </div>
-                <p className="text-sm leading-7 text-slate-300">{item.text}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-7 text-amber-100">
-            مهم: لا تترك محادثة في وضع متابعة بشرية بعد حل المشكلة. اضغط إنهاء المتابعة حتى يرجع البوت يخدم المريض في الرسائل القادمة.
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }

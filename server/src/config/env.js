@@ -31,5 +31,9 @@ module.exports = {
     verifyToken: process.env.IG_VERIFY_TOKEN || 'clinic_ig_verify',
   },
 
+  manychat: {
+    apiKey: process.env.MANYCHAT_API_KEY,
+  },
+
   clinicWhatsappNumber: process.env.CLINIC_WHATSAPP_NUMBER || '',
 };

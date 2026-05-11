@@ -29,7 +29,8 @@ const navItems = [
   { path: '/inbox', label: 'صندوق الوارد', icon: MessageSquare },
   { path: '/today-patients', label: 'مرضى اليوم', icon: Users },
   { path: '/add-patient', label: 'إضافة مريض / موعد', icon: UserPlus },
-  { path: '/appointment-requests', label: 'قبول الطلبات والكشف', icon: ClipboardCheck },
+  { path: '/appointment-requests', label: 'طلبات المواعيد', icon: ClipboardCheck },
+  { path: '/callback-requests', label: 'طلبات التواصل', icon: MessageSquare, allowedRoles: ['ADMIN', 'STAFF', 'RECEPTION'] },
   { path: '/appointments', label: 'المواعيد', icon: Calendar },
   { path: '/patients', label: 'المرضى', icon: Users },
   { path: '/prescriptions', label: 'الروشتات', icon: Pill, allowedRoles: ['ADMIN', 'DOCTOR'] },
@@ -58,16 +59,21 @@ export default function Sidebar({ isOpen = false, onClose }) {
     userRole = 'STAFF';
   }
 
-  const [counts, setCounts] = useState({ unreadMessages: 0, pendingAppointments: 0 });
+  const [counts, setCounts] = useState({
+    unreadMessages: 0,
+    pendingAppointments: 0,
+    callbackRequests: 0,
+  });
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchCounts = async () => {
       try {
-        const [notificationsRes, appointmentStatsRes] = await Promise.all([
+        const [notificationsRes, appointmentStatsRes, callbackRequestsRes] = await Promise.all([
           api.get('/notifications'),
           api.get('/appointments/stats'),
+          api.get('/callback-requests', { params: { status: 'NEW', limit: 1 } }).catch(() => ({ data: { stats: { NEW: 0 } } })),
         ]);
 
         if (cancelled) return;
@@ -76,9 +82,16 @@ export default function Sidebar({ isOpen = false, onClose }) {
         setCounts({
           unreadMessages: notifications.filter((notification) => notification.type === 'HUMAN_REQUEST' && !notification.read).length,
           pendingAppointments: appointmentStatsRes.data.PENDING || 0,
+          callbackRequests: callbackRequestsRes.data?.stats?.NEW || 0,
         });
       } catch {
-        if (!cancelled) setCounts({ unreadMessages: 0, pendingAppointments: 0 });
+        if (!cancelled) {
+          setCounts({
+            unreadMessages: 0,
+            pendingAppointments: 0,
+            callbackRequests: 0,
+          });
+        }
       }
     };
 
@@ -93,6 +106,7 @@ export default function Sidebar({ isOpen = false, onClose }) {
       '/inbox': counts.unreadMessages > 0 ? counts.unreadMessages : null,
       '/appointments': counts.pendingAppointments > 0 ? counts.pendingAppointments : null,
       '/appointment-requests': counts.pendingAppointments > 0 ? counts.pendingAppointments : null,
+      '/callback-requests': counts.callbackRequests > 0 ? counts.callbackRequests : null,
     }),
     [counts]
   );
@@ -146,11 +160,11 @@ export default function Sidebar({ isOpen = false, onClose }) {
               >
                 <Icon className="h-5 w-5 flex-shrink-0" />
                 <span className="flex-1">{item.label}</span>
-                {badge && (
+                {badge ? (
                   <span className="rounded-full bg-sky-500/20 px-2 py-1 text-xs font-bold text-sky-300">
                     {badge > 99 ? '+99' : badge}
                   </span>
-                )}
+                ) : null}
               </Link>
             );
           })}

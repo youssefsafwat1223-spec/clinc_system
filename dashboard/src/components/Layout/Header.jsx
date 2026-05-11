@@ -8,7 +8,8 @@ const routeTitles = {
   '/inbox': 'صندوق الوارد',
   '/today-patients': 'مرضى اليوم',
   '/add-patient': 'إضافة مريض / موعد',
-  '/appointment-requests': 'قبول الطلبات والكشف',
+  '/appointment-requests': 'طلبات المواعيد',
+  '/callback-requests': 'طلبات التواصل',
   '/appointments': 'المواعيد',
   '/patients': 'المرضى',
   '/prescriptions': 'الروشتات',
@@ -165,7 +166,7 @@ export default function Header({ onMenuClick }) {
 
               <div className="max-h-[calc(100vh-11rem)] overflow-y-auto sm:max-h-96">
                 {loading ? (
-                  <div className="p-5 text-sm text-slate-400">جاري تحميل الإشعارات...</div>
+                  <div className="p-5 text-sm text-slate-400">جارٍ تحميل الإشعارات...</div>
                 ) : recentNotifications.length === 0 ? (
                   <div className="p-5 text-sm text-slate-400">لا توجد إشعارات حالياً.</div>
                 ) : (

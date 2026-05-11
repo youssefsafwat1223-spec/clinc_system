@@ -33,6 +33,7 @@ const discountRoutes = require('./routes/discounts');
 const paymentRoutes = require('./routes/payments');
 const staffRoutes = require('./routes/staff');
 const treatmentRoutes = require('./routes/treatments');
+const callbackRequestRoutes = require('./routes/callbackRequests');
 
 const app = express();
 
@@ -97,6 +98,7 @@ app.use('/api/discounts', discountRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/staff', staffRoutes);
 app.use('/api/treatments', treatmentRoutes);
+app.use('/api/callback-requests', callbackRequestRoutes);
 
 app.use(errorHandler);
 

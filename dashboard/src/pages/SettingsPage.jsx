@@ -3,11 +3,20 @@ import { Plus, Save, Settings, Trash2, Upload } from 'lucide-react';
 import { toast } from 'react-toastify';
 import AppLayout from '../components/Layout';
 import api from '../api/client';
-import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import {
+  DataCard,
+  Field,
+  PageHeader,
+  PrimaryButton,
+  SecondaryButton,
+  StatCard,
+  StatusBadge,
+  inputClass,
+} from '../components/ui';
 
 const daysAr = {
   sunday: 'الأحد',
-  monday: 'الإثنين',
+  monday: 'الاثنين',
   tuesday: 'الثلاثاء',
   wednesday: 'الأربعاء',
   thursday: 'الخميس',
@@ -42,14 +51,15 @@ const discountPatientSortOptions = [
   { value: 'leastBooked', label: 'الأقل حجزاً' },
 ];
 
-function formatDate(value) {
+const formatDate = (value) => {
   if (!value) return 'بدون تاريخ';
   return new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium' }).format(new Date(value));
-}
+};
 
-function discountValue(discount) {
-  return discount.type === 'FIXED' ? `${Number(discount.value || 0).toLocaleString('ar-IQ')} د.ع` : `${Number(discount.value || 0).toLocaleString('ar-IQ')}%`;
-}
+const discountValue = (discount) =>
+  discount.type === 'FIXED'
+    ? `${Number(discount.value || 0).toLocaleString('ar-IQ')} د.ع`
+    : `${Number(discount.value || 0).toLocaleString('ar-IQ')}%`;
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('clinic');
@@ -65,10 +75,38 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [contactForm, setContactForm] = useState(emptyContactForm);
   const [discountForm, setDiscountForm] = useState(emptyDiscountForm);
+
   const promoImageInputRef = useRef(null);
   const discountImageInputRef = useRef(null);
+  const locationImageInputRef = useRef(null);
 
-  const activeWorkingDays = useMemo(() => Object.values(settings?.workingHours || {}).filter(Boolean).length, [settings]);
+  const activeWorkingDays = useMemo(
+    () => Object.values(settings?.workingHours || {}).filter(Boolean).length,
+    [settings]
+  );
+
+  const loadDiscountPatients = async (overrides = {}) => {
+    const search = overrides.search ?? discountPatientSearch;
+    const period = overrides.period ?? discountPatientPeriod;
+    const sortBy = overrides.sortBy ?? discountPatientSort;
+
+    try {
+      const res = await api.get('/patients', {
+        params: {
+          limit: 500,
+          search: search || undefined,
+          period: period || undefined,
+          sortBy: sortBy || undefined,
+        },
+      });
+
+      setDiscountPatients(
+        (res.data.patients || []).filter((patient) => patient.platform === 'WHATSAPP' && patient.phone)
+      );
+    } catch (error) {
+      toast.error('فشل تحميل المرضى لاختيار الخصم');
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -79,6 +117,7 @@ export default function SettingsPage() {
         api.get('/discounts').catch(() => ({ data: { discounts: [] } })),
         api.get('/services').catch(() => ({ data: { services: [] } })),
       ]);
+
       setSettings(settingsRes.data.settings);
       setContacts(contactsRes.data.contacts || []);
       setDiscounts(discountsRes.data.discounts || []);
@@ -88,25 +127,6 @@ export default function SettingsPage() {
       toast.error('فشل تحميل الإعدادات');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadDiscountPatients = async (overrides = {}) => {
-    const search = overrides.search ?? discountPatientSearch;
-    const period = overrides.period ?? discountPatientPeriod;
-    const sortBy = overrides.sortBy ?? discountPatientSort;
-    try {
-      const res = await api.get('/patients', {
-        params: {
-          limit: 500,
-          search: search || undefined,
-          period: period || undefined,
-          sortBy: sortBy || undefined,
-        },
-      });
-      setDiscountPatients((res.data.patients || []).filter((patient) => patient.platform === 'WHATSAPP' && patient.phone));
-    } catch (error) {
-      toast.error('فشل تحميل المرضى لاختيار الخصم');
     }
   };
 
@@ -156,19 +176,16 @@ export default function SettingsPage() {
     }
   };
 
-  const saveContact = async () => {
-    if (!contactForm.name.trim() || !contactForm.phone.trim()) {
-      toast.warn('اكتب اسم جهة الاتصال ورقم الهاتف');
-      return;
-    }
-    try {
-      const res = await api.post('/contacts', contactForm);
-      setContacts((current) => [res.data.contact, ...current]);
-      setContactForm(emptyContactForm);
-      toast.success('تمت إضافة جهة الاتصال');
-    } catch (error) {
-      toast.error(error.response?.data?.error || 'فشل حفظ جهة الاتصال');
-    }
+  const uploadImageToField = async (file, fieldName, successMessage) => {
+    const formData = new FormData();
+    formData.append('image', file);
+
+    const res = await api.post('/upload/campaign-image', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+
+    updateField(fieldName, res.data.url);
+    toast.success(successMessage);
   };
 
   const uploadPromoImage = async (event) => {
@@ -176,17 +193,22 @@ export default function SettingsPage() {
     event.target.value = '';
     if (!file) return;
 
-    const formData = new FormData();
-    formData.append('image', file);
-
     try {
-      const res = await api.post('/upload/campaign-image', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-      updateField('logoUrl', res.data.url);
-      toast.success('تم رفع صورة العرض');
+      await uploadImageToField(file, 'logoUrl', 'تم رفع صورة العرض');
     } catch (error) {
       toast.error(error.response?.data?.error || 'فشل رفع صورة العرض');
+    }
+  };
+
+  const uploadLocationImage = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    try {
+      await uploadImageToField(file, 'locationImageUrl', 'تم رفع صورة موقع العيادة');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'فشل رفع صورة موقع العيادة');
     }
   };
 
@@ -209,8 +231,25 @@ export default function SettingsPage() {
     }
   };
 
+  const saveContact = async () => {
+    if (!contactForm.name.trim() || !contactForm.phone.trim()) {
+      toast.warn('اكتب اسم جهة الاتصال ورقم الهاتف');
+      return;
+    }
+
+    try {
+      const res = await api.post('/contacts', contactForm);
+      setContacts((current) => [res.data.contact, ...current]);
+      setContactForm(emptyContactForm);
+      toast.success('تمت إضافة جهة الاتصال');
+    } catch (error) {
+      toast.error(error.response?.data?.error || 'فشل حفظ جهة الاتصال');
+    }
+  };
+
   const removeContact = async (contact) => {
     if (!window.confirm(`حذف جهة الاتصال "${contact.name}"؟`)) return;
+
     try {
       await api.delete(`/contacts/${contact.id}`);
       setContacts((current) => current.filter((item) => item.id !== contact.id));
@@ -228,10 +267,12 @@ export default function SettingsPage() {
 
     const service = services.find((item) => item.id === discountForm.serviceId);
     const filteredPhones = discountPatients.map((patient) => patient.phone).filter(Boolean);
+
     if (discountForm.targetMode === 'FILTERED' && filteredPhones.length === 0) {
-      toast.warn('لا يوجد مرضى مطابقين للفلاتر الحالية');
+      toast.warn('لا يوجد مرضى مطابقون للفلاتر الحالية');
       return;
     }
+
     try {
       const res = await api.post('/discounts', {
         ...discountForm,
@@ -242,11 +283,12 @@ export default function SettingsPage() {
             ? []
             : discountForm.targetMode === 'FILTERED'
               ? filteredPhones
-            : discountForm.phoneNumbers
-                .split(/[\n,،]+/)
-                .map((item) => item.trim())
-                .filter(Boolean),
+              : discountForm.phoneNumbers
+                  .split(/[\n,،]+/)
+                  .map((item) => item.trim())
+                  .filter(Boolean),
       });
+
       setDiscounts((current) => [res.data.discount, ...current]);
       setDiscountForm(emptyDiscountForm);
       toast.success('تم حفظ الخصم');
@@ -257,6 +299,7 @@ export default function SettingsPage() {
 
   const removeDiscount = async (discount) => {
     if (!window.confirm(`حذف خصم "${discount.name}"؟`)) return;
+
     try {
       await api.delete(`/discounts/${discount.id}`);
       setDiscounts((current) => current.filter((item) => item.id !== discount.id));
@@ -285,7 +328,7 @@ export default function SettingsPage() {
     <AppLayout>
       <PageHeader
         title="الإعدادات"
-        description="إدارة بيانات العيادة والبراند وجهات الاتصال والخصومات."
+        description="إدارة بيانات العيادة، البراند، العنوان، صورة الموقع، ونص طلب رقم العميل في الردود الاجتماعية."
         actions={
           <PrimaryButton type="button" onClick={saveSettings} disabled={saving}>
             <Save className="h-4 w-4" />
@@ -338,7 +381,7 @@ export default function SettingsPage() {
             <Field label="رابط شعار الروشتة">
               <input className={inputClass} dir="ltr" value={settings?.brandLogoUrl || settings?.logoUrl || ''} onChange={(event) => updateField('brandLogoUrl', event.target.value)} placeholder="/api/images/logo.png" />
             </Field>
-            <Field label="صورة العرض الحالي">
+            <Field label="صورة العرض الحالية">
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <input className={inputClass} dir="ltr" value={settings?.logoUrl || ''} onChange={(event) => updateField('logoUrl', event.target.value)} placeholder="/api/images/promo.jpg" />
@@ -361,8 +404,36 @@ export default function SettingsPage() {
             <Field label="العنوان">
               <input className={inputClass} value={settings?.address || ''} onChange={(event) => updateField('address', event.target.value)} />
             </Field>
+            <Field label="رابط Google Maps">
+              <input className={inputClass} dir="ltr" value={settings?.googleMapsLink || ''} onChange={(event) => updateField('googleMapsLink', event.target.value)} />
+            </Field>
             <Field label="رابط واتساب مباشر">
               <input className={inputClass} dir="ltr" value={settings?.whatsappChatLink || ''} onChange={(event) => updateField('whatsappChatLink', event.target.value)} />
+            </Field>
+            <Field label="صورة موقع العيادة">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <input className={inputClass} dir="ltr" value={settings?.locationImageUrl || ''} onChange={(event) => updateField('locationImageUrl', event.target.value)} placeholder="/api/images/location-map.jpg" />
+                  <SecondaryButton type="button" onClick={() => locationImageInputRef.current?.click()} className="shrink-0">
+                    <Upload className="h-4 w-4" />
+                    رفع
+                  </SecondaryButton>
+                  <input ref={locationImageInputRef} type="file" accept="image/*" className="hidden" onChange={uploadLocationImage} />
+                </div>
+                {settings?.locationImageUrl ? (
+                  <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1225]">
+                    <img src={settings.locationImageUrl} alt="Location" className="h-36 w-full object-cover" />
+                  </div>
+                ) : null}
+              </div>
+            </Field>
+            <Field label="نص طلب رقم العميل في الردود الاجتماعية">
+              <textarea
+                className={`${inputClass} min-h-28`}
+                value={settings?.socialContactPrompt || ''}
+                onChange={(event) => updateField('socialContactPrompt', event.target.value)}
+                placeholder="إذا تحب نخلي الاستقبال يتواصل وياك، ابعت رقمك هنا وسنتواصل معك."
+              />
             </Field>
           </div>
         </DataCard>
@@ -449,11 +520,8 @@ export default function SettingsPage() {
           <DataCard>
             <h2 className="mb-2 text-lg font-black text-white">إضافة خصم</h2>
             <p className="mb-5 text-sm leading-6 text-slate-400">
-              اختر كل المرضى أو أرقام محددة. عند الحجز لاحقاً يظهر الخصم في المدفوعات وردود الأسعار على واتساب.
+              يمكنك تحديد الخصم لكل المرضى أو لأرقام محددة. يظهر الخصم في المدفوعات وردود الأسعار على واتساب والردود الاجتماعية.
             </p>
-            <div className="mb-5 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-7 text-amber-100">
-              لو هتعمل خصم عام جديد على نفس الخدمة، احذف الخصم القديم الأول من قائمة الخصومات الحالية حتى لا تتداخل الخصومات. النظام يختار أعلى خصم مناسب، لكن حذف القديم أوضح للإدارة والحسابات.
-            </div>
             <div className="space-y-4">
               <Field label="اسم الخصم">
                 <input className={inputClass} value={discountForm.name} onChange={(event) => setDiscountForm((current) => ({ ...current, name: event.target.value }))} />
@@ -480,33 +548,21 @@ export default function SettingsPage() {
               <Field label="صورة الخصم">
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
-                    <input
-                      className={inputClass}
-                      dir="ltr"
-                      value={discountForm.imageUrl}
-                      onChange={(event) => setDiscountForm((current) => ({ ...current, imageUrl: event.target.value }))}
-                      placeholder="/api/images/discount.jpg"
-                    />
+                    <input className={inputClass} dir="ltr" value={discountForm.imageUrl} onChange={(event) => setDiscountForm((current) => ({ ...current, imageUrl: event.target.value }))} placeholder="/api/images/discount.jpg" />
                     <SecondaryButton type="button" onClick={() => discountImageInputRef.current?.click()} className="shrink-0">
                       <Upload className="h-4 w-4" />
                       رفع
                     </SecondaryButton>
-                    <input
-                      ref={discountImageInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={uploadDiscountImage}
-                    />
+                    <input ref={discountImageInputRef} type="file" accept="image/*" className="hidden" onChange={uploadDiscountImage} />
                   </div>
                   {discountForm.imageUrl ? (
                     <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d1225]">
-                      <img src={discountForm.imageUrl} alt="معاينة صورة الخصم" className="h-36 w-full object-cover" />
+                      <img src={discountForm.imageUrl} alt="Discount" className="h-36 w-full object-cover" />
                     </div>
                   ) : null}
                 </div>
               </Field>
-              <Field label="المستفيدين من الخصم">
+              <Field label="المستفيدون من الخصم">
                 <select className={inputClass} value={discountForm.targetMode} onChange={(event) => setDiscountForm((current) => ({ ...current, targetMode: event.target.value }))}>
                   <option value="ALL">كل المرضى الحاليين والجدد</option>
                   <option value="FILTERED">مرضى حسب الفلاتر</option>
@@ -521,16 +577,12 @@ export default function SettingsPage() {
                   <input className={inputClass} type="date" value={discountForm.endsAt} onChange={(event) => setDiscountForm((current) => ({ ...current, endsAt: event.target.value }))} />
                 </Field>
               </div>
+
               {discountForm.targetMode === 'FILTERED' ? (
                 <div className="space-y-3 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-4">
                   <div className="grid gap-3 md:grid-cols-3">
                     <Field label="بحث">
-                      <input
-                        className={inputClass}
-                        value={discountPatientSearch}
-                        onChange={(event) => setDiscountPatientSearch(event.target.value)}
-                        placeholder="اسم أو رقم المريض"
-                      />
+                      <input className={inputClass} value={discountPatientSearch} onChange={(event) => setDiscountPatientSearch(event.target.value)} placeholder="اسم أو رقم المريض" />
                     </Field>
                     <Field label="الفترة">
                       <select className={inputClass} value={discountPatientPeriod} onChange={(event) => setDiscountPatientPeriod(event.target.value)}>
@@ -549,16 +601,13 @@ export default function SettingsPage() {
                   </div>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <p className="text-sm font-bold text-sky-100">سيتم تطبيق الخصم على {discountPatients.length} مريض مطابق للفلاتر.</p>
-                    <SecondaryButton
-                      type="button"
-                      onClick={() => loadDiscountPatients({ search: discountPatientSearch, period: discountPatientPeriod, sortBy: discountPatientSort })}
-                    >
+                    <SecondaryButton type="button" onClick={() => loadDiscountPatients({ search: discountPatientSearch, period: discountPatientPeriod, sortBy: discountPatientSort })}>
                       تطبيق الفلاتر
                     </SecondaryButton>
                   </div>
                   <div className="max-h-44 overflow-y-auto rounded-xl border border-white/10 bg-black/10 p-3 text-sm text-slate-200">
                     {discountPatients.length === 0 ? (
-                      <p className="text-slate-400">لا يوجد مرضى مطابقين حالياً.</p>
+                      <p className="text-slate-400">لا يوجد مرضى مطابقون حالياً.</p>
                     ) : (
                       <div className="grid gap-2">
                         {discountPatients.slice(0, 40).map((patient) => (
@@ -572,7 +621,9 @@ export default function SettingsPage() {
                     )}
                   </div>
                 </div>
-              ) : discountForm.targetMode === 'PHONES' ? (
+              ) : null}
+
+              {discountForm.targetMode === 'PHONES' ? (
                 <Field label="أرقام المرضى">
                   <textarea
                     className={`${inputClass} min-h-32`}
@@ -582,11 +633,8 @@ export default function SettingsPage() {
                     dir="ltr"
                   />
                 </Field>
-              ) : (
-                <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm leading-7 text-emerald-100">
-                  اختيار كل المرضى يعني أن الخصم سيطبق على أي مريض موجود حالياً، وأي مريض جديد يتكلم على واتساب أو يتم إضافته لاحقاً.
-                </div>
-              )}
+              ) : null}
+
               <label className="flex items-center gap-2 text-sm font-bold text-slate-300">
                 <input
                   type="checkbox"
@@ -608,6 +656,7 @@ export default function SettingsPage() {
               </div>
               <StatusBadge tone="amber">{discounts.length} خصم</StatusBadge>
             </div>
+
             <div className="grid gap-4">
               {discounts.length === 0 ? (
                 <DataCard className="text-center text-slate-400">لا توجد خصومات محفوظة.</DataCard>
@@ -630,7 +679,6 @@ export default function SettingsPage() {
                         <div className="mt-2 grid gap-2 text-sm text-slate-400">
                           <p>المجموعة: <span className="text-slate-200">{discount.group?.name || 'كل المرضى'}</span></p>
                           <p>الخدمة: <span className="text-slate-200">{discount.serviceName || 'كل الخدمات'}</span></p>
-                          <p>الصورة: <span className="text-slate-200">{discount.imageUrl ? 'موجودة' : 'بدون'}</span></p>
                           <p>الفترة: <span className="text-slate-200">{formatDate(discount.startsAt)} - {formatDate(discount.endsAt)}</span></p>
                         </div>
                       </div>

@@ -21,6 +21,7 @@ const CampaignsPage = lazy(() => import('./pages/CampaignsPage.jsx'));
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage.jsx'));
 const PrescriptionsPage = lazy(() => import('./pages/PrescriptionsPage.jsx'));
 const PaymentsPage = lazy(() => import('./pages/PaymentsPage.jsx'));
+const CallbackRequestsPage = lazy(() => import('./pages/CallbackRequestsPage.jsx'));
 const RescheduleDoctorPage = lazy(() => import('./pages/RescheduleDoctorPage.jsx'));
 const DoctorTasksPage = lazy(() => import('./pages/DoctorTasksPage.jsx'));
 const SendOffersPage = lazy(() => import('./pages/SendOffersPage.jsx'));
@@ -161,6 +162,15 @@ function App() {
             element={
               <ProtectedRoute allowedRoles={['ADMIN', 'STAFF', 'RECEPTION']}>
                 <PaymentsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/callback-requests"
+            element={
+              <ProtectedRoute allowedRoles={['ADMIN', 'STAFF', 'RECEPTION']}>
+                <CallbackRequestsPage />
               </ProtectedRoute>
             }
           />

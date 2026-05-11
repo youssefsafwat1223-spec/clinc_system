@@ -1,12 +1,14 @@
 /**
- * Format date to Arabic readable format
+ * Format date to Arabic readable format with full weekday and date details.
  */
 const formatDateAr = (date) => {
-  const d = new Date(date);
-  const days = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
-  const day = d.getDate();
-  const month = d.getMonth() + 1;
-  return `${days[d.getDay()]} ${day}/${month}`;
+  const value = new Date(date);
+  return new Intl.DateTimeFormat('ar-EG', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(value);
 };
 
 const formatDateKey = (date) => {
@@ -18,7 +20,7 @@ const formatDateKey = (date) => {
 };
 
 /**
- * Format time to Arabic readable format (12-hour)
+ * Format time to Arabic readable format (12-hour).
  */
 const formatTimeAr = (date) => {
   const d = new Date(date);
@@ -29,9 +31,6 @@ const formatTimeAr = (date) => {
   return `${hours}:${minutes}${period}`;
 };
 
-/**
- * Generate available time slots for a given date & doctor's working hours
- */
 const normalizeWorkingPeriods = (hours) => {
   if (!hours) return [];
   if (Array.isArray(hours)) {
@@ -80,7 +79,7 @@ const generateTimeSlots = (date, workingHours, duration = 30, bookedSlots = []) 
       if (!isBooked && slotTime >= earliestBookableTime && slotEnd <= end) {
         slots.push({
           time: slotTime.toISOString(),
-          label: `${formatDateAr(slotTime)} ${formatTimeAr(slotTime)}`,
+          label: `${formatDateAr(slotTime)} - ${formatTimeAr(slotTime)}`,
         });
       }
 
@@ -91,9 +90,6 @@ const generateTimeSlots = (date, workingHours, duration = 30, bookedSlots = []) 
   return slots;
 };
 
-/**
- * Check if two time ranges overlap
- */
 const hasConflict = (newTime, existingTimes, duration = 30) => {
   const newStart = new Date(newTime).getTime();
   const newEnd = newStart + duration * 60 * 1000;
@@ -113,9 +109,6 @@ const formatCurrency = (value, fallback = 'غير محدد') => {
   return `${Number(value).toLocaleString('ar-IQ')} د.ع`;
 };
 
-/**
- * Paginate query results
- */
 const paginate = (page = 1, limit = 20) => {
   const skip = (Math.max(1, page) - 1) * limit;
   return { skip, take: limit };

@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const config = require('../config/env');
 const { paginate } = require('../utils/helpers');
 
 const getScopedDoctor = async (req) => {
@@ -42,9 +43,45 @@ const getDoctorPatientIds = async (doctorId) => {
   return [...new Set([...appointments, ...consultations, ...prescriptions].map((item) => item.patientId))];
 };
 
-const getScopedPatientIds = async () => null;
+const getScopedPatientIds = async (req) => {
+  const doctor = await getScopedDoctor(req);
+  if (!doctor) return null;
+  return getDoctorPatientIds(doctor.id);
+};
 
-const getScopedPatient = async (req, patientId) => prisma.patient.findUnique({ where: { id: patientId } });
+const getScopedPatient = async (req, patientId) => {
+  const scopedPatientIds = await getScopedPatientIds(req);
+  if (scopedPatientIds && !scopedPatientIds.includes(patientId)) {
+    return null;
+  }
+
+  return prisma.patient.findUnique({ where: { id: patientId } });
+};
+
+const normalizeQuickReplies = (quickReplies = []) =>
+  Array.isArray(quickReplies)
+    ? quickReplies
+        .map((reply) => {
+          if (!reply || typeof reply !== 'object') return null;
+          const caption = String(reply.caption || '').trim();
+          const type = String(reply.type || '').trim();
+          const target = String(reply.target || '').trim();
+          const url = String(reply.url || '').trim();
+
+          if (!caption || !type) return null;
+          if (type === 'url' && url) return { caption, type, url };
+          if (target) return { caption, type, target };
+          return null;
+        })
+        .filter(Boolean)
+    : [];
+
+const shouldUseManychat = (patient, platform) =>
+  Boolean(
+    config.manychat.apiKey &&
+      patient?.manychatSubscriberId &&
+      (platform === 'FACEBOOK' || platform === 'INSTAGRAM')
+  );
 
 const extractCommentTarget = (metadata) => {
   if (!metadata || typeof metadata !== 'object') {
@@ -64,10 +101,7 @@ const extractCommentTarget = (metadata) => {
 
 const getLatestCommentTarget = async (patientId, platform) => {
   const recentMessages = await prisma.message.findMany({
-    where: {
-      patientId,
-      platform,
-    },
+    where: { patientId, platform },
     orderBy: { createdAt: 'desc' },
     take: 5,
   });
@@ -87,7 +121,13 @@ const getLatestCommentTarget = async (patientId, platform) => {
   return null;
 };
 
-const createOutboundMessage = async ({ patientId, platform, content, metadata = null, reviewedById = null }) =>
+const createOutboundMessage = async ({
+  patientId,
+  platform,
+  content,
+  metadata = null,
+  reviewedById = null,
+}) =>
   prisma.message.create({
     data: {
       patientId,
@@ -116,15 +156,11 @@ const getAll = async (req, res, next) => {
     }
 
     const where = {};
-    if (platform) {
-      where.platform = platform;
-    }
-
+    if (platform) where.platform = platform;
     if (unread === 'true') {
       where.type = 'INBOUND';
       where.readAt = null;
     }
-
     if (reviewed === 'true') {
       where.reviewedAt = { not: null };
     } else if (reviewed === 'false') {
@@ -140,9 +176,11 @@ const getAll = async (req, res, next) => {
     }
 
     const patientWhere = humanOnly === 'true' ? { chatState: 'HUMAN' } : undefined;
+    const finalWhere = patientWhere ? { ...where, patient: patientWhere } : where;
+
     const [messages, total] = await Promise.all([
       prisma.message.findMany({
-        where: patientWhere ? { ...where, patient: patientWhere } : where,
+        where: finalWhere,
         skip,
         take,
         orderBy: { createdAt: 'desc' },
@@ -160,7 +198,7 @@ const getAll = async (req, res, next) => {
           reviewedBy: { select: { id: true, name: true, displayName: true } },
         },
       }),
-      prisma.message.count({ where: patientWhere ? { ...where, patient: patientWhere } : where }),
+      prisma.message.count({ where: finalWhere }),
     ]);
 
     res.json({
@@ -199,7 +237,15 @@ const getConversation = async (req, res, next) => {
       }),
       prisma.patient.findUnique({
         where: { id: patientId },
-        select: { id: true, name: true, displayName: true, phone: true, platform: true, chatState: true },
+        select: {
+          id: true,
+          name: true,
+          displayName: true,
+          phone: true,
+          platform: true,
+          chatState: true,
+          manychatSubscriberId: true,
+        },
       }),
     ]);
 
@@ -216,14 +262,26 @@ const getConversation = async (req, res, next) => {
 
 const sendManual = async (req, res, next) => {
   try {
-    const { patientId, content, platform, replyToComment = false } = req.body;
+    const {
+      patientId,
+      content,
+      platform,
+      imageUrl = '',
+      quickReplies = [],
+      replyToComment = false,
+    } = req.body;
+
     const whatsappService = require('../services/whatsappService');
     const messengerService = require('../services/messengerService');
     const instagramService = require('../services/instagramService');
+    const manychatService = require('../services/manychatService');
 
-    const trimmedContent = content?.trim();
-    if (!trimmedContent) {
-      return res.status(400).json({ error: 'محتوى الرسالة مطلوب' });
+    const trimmedContent = String(content || '').trim();
+    const trimmedImageUrl = String(imageUrl || '').trim();
+    const normalizedQuickReplies = normalizeQuickReplies(quickReplies);
+
+    if (!trimmedContent && !trimmedImageUrl) {
+      return res.status(400).json({ error: 'محتوى الرسالة أو الصورة مطلوب' });
     }
 
     const patient = await getScopedPatient(req, patientId);
@@ -233,7 +291,8 @@ const sendManual = async (req, res, next) => {
 
     const sendPlatform = platform || patient.platform;
     const senderName = req.user?.displayName || req.user?.name || '';
-    const deliveredContent = senderName ? `${senderName}: ${trimmedContent}` : trimmedContent;
+    const deliveredContent = senderName && trimmedContent ? `${senderName}: ${trimmedContent}` : trimmedContent;
+
     let message = null;
     let metadata = null;
 
@@ -244,6 +303,7 @@ const sendManual = async (req, res, next) => {
 
       case 'FACEBOOK': {
         const commentTarget = replyToComment ? await getLatestCommentTarget(patientId, 'FACEBOOK') : null;
+
         if (commentTarget?.commentId) {
           await messengerService.sendCommentReply(commentTarget.commentId, deliveredContent);
           metadata = {
@@ -253,15 +313,39 @@ const sendManual = async (req, res, next) => {
             postId: commentTarget.postId,
             manual: true,
           };
+        } else if (shouldUseManychat(patient, 'FACEBOOK')) {
+          await manychatService.sendContent({
+            subscriberId: patient.manychatSubscriberId,
+            platform: 'FACEBOOK',
+            text: deliveredContent,
+            imageUrl: trimmedImageUrl,
+            quickReplies: normalizedQuickReplies,
+          });
+          metadata = {
+            source: 'MANUAL_REPLY',
+            delivery: 'MANYCHAT_MANUAL',
+            manual: true,
+          };
         } else {
           await messengerService.sendTextMessage(patient.facebookId || patient.phone, deliveredContent);
+          metadata = {
+            source: 'MANUAL_REPLY',
+            delivery: 'DIRECT_MESSAGE',
+            manual: true,
+          };
         }
 
         message = await createOutboundMessage({
           patientId,
           platform: 'FACEBOOK',
-          content: deliveredContent,
-          metadata: { ...(metadata || {}), originalContent: trimmedContent, senderName },
+          content: deliveredContent || '[image]',
+          metadata: {
+            ...(metadata || {}),
+            originalContent: trimmedContent || null,
+            senderName: senderName || null,
+            imageUrl: trimmedImageUrl || null,
+            quickReplies: normalizedQuickReplies,
+          },
           reviewedById: req.user?.id,
         });
         break;
@@ -269,6 +353,7 @@ const sendManual = async (req, res, next) => {
 
       case 'INSTAGRAM': {
         const commentTarget = replyToComment ? await getLatestCommentTarget(patientId, 'INSTAGRAM') : null;
+
         if (commentTarget?.commentId) {
           await instagramService.sendCommentReply(commentTarget.commentId, deliveredContent);
           metadata = {
@@ -278,15 +363,39 @@ const sendManual = async (req, res, next) => {
             postId: commentTarget.postId,
             manual: true,
           };
+        } else if (shouldUseManychat(patient, 'INSTAGRAM')) {
+          await manychatService.sendContent({
+            subscriberId: patient.manychatSubscriberId,
+            platform: 'INSTAGRAM',
+            text: deliveredContent,
+            imageUrl: trimmedImageUrl,
+            quickReplies: normalizedQuickReplies,
+          });
+          metadata = {
+            source: 'MANUAL_REPLY',
+            delivery: 'MANYCHAT_MANUAL',
+            manual: true,
+          };
         } else {
           await instagramService.sendTextMessage(patient.instagramId || patient.phone, deliveredContent);
+          metadata = {
+            source: 'MANUAL_REPLY',
+            delivery: 'DIRECT_MESSAGE',
+            manual: true,
+          };
         }
 
         message = await createOutboundMessage({
           patientId,
           platform: 'INSTAGRAM',
-          content: deliveredContent,
-          metadata: { ...(metadata || {}), originalContent: trimmedContent, senderName },
+          content: deliveredContent || '[image]',
+          metadata: {
+            ...(metadata || {}),
+            originalContent: trimmedContent || null,
+            senderName: senderName || null,
+            imageUrl: trimmedImageUrl || null,
+            quickReplies: normalizedQuickReplies,
+          },
           reviewedById: req.user?.id,
         });
         break;
@@ -353,6 +462,7 @@ const endConversation = async (req, res, next) => {
     const whatsappChannel = require('../services/whatsappService');
     const messengerChannel = require('../services/messengerService');
     const instagramChannel = require('../services/instagramService');
+    const manychatService = require('../services/manychatService');
 
     switch (patient.platform) {
       case 'WHATSAPP':
@@ -360,20 +470,42 @@ const endConversation = async (req, res, next) => {
         break;
 
       case 'FACEBOOK':
-        await messengerChannel.sendTextMessage(patient.facebookId || patient.phone, closureMessage);
+        if (shouldUseManychat(patient, 'FACEBOOK')) {
+          await manychatService.sendContent({
+            subscriberId: patient.manychatSubscriberId,
+            platform: 'FACEBOOK',
+            text: closureMessage,
+          });
+        } else {
+          await messengerChannel.sendTextMessage(patient.facebookId || patient.phone, closureMessage);
+        }
         await createOutboundMessage({
           patientId,
           platform: 'FACEBOOK',
           content: closureMessage,
+          metadata: {
+            delivery: shouldUseManychat(patient, 'FACEBOOK') ? 'MANYCHAT_MANUAL' : 'DIRECT_MESSAGE',
+          },
         });
         break;
 
       case 'INSTAGRAM':
-        await instagramChannel.sendTextMessage(patient.instagramId || patient.phone, closureMessage);
+        if (shouldUseManychat(patient, 'INSTAGRAM')) {
+          await manychatService.sendContent({
+            subscriberId: patient.manychatSubscriberId,
+            platform: 'INSTAGRAM',
+            text: closureMessage,
+          });
+        } else {
+          await instagramChannel.sendTextMessage(patient.instagramId || patient.phone, closureMessage);
+        }
         await createOutboundMessage({
           patientId,
           platform: 'INSTAGRAM',
           content: closureMessage,
+          metadata: {
+            delivery: shouldUseManychat(patient, 'INSTAGRAM') ? 'MANYCHAT_MANUAL' : 'DIRECT_MESSAGE',
+          },
         });
         break;
 
@@ -394,7 +526,9 @@ const markRead = async (req, res, next) => {
   try {
     const { patientId } = req.params;
     const existingPatient = await getScopedPatient(req, patientId);
-    if (!existingPatient) return res.status(404).json({ error: 'المريض غير موجود' });
+    if (!existingPatient) {
+      return res.status(404).json({ error: 'المريض غير موجود' });
+    }
 
     await prisma.message.updateMany({
       where: { patientId, type: 'INBOUND', readAt: null },
@@ -407,4 +541,11 @@ const markRead = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, getConversation, sendManual, endConversation, pauseBot, markRead };
+module.exports = {
+  getAll,
+  getConversation,
+  sendManual,
+  endConversation,
+  pauseBot,
+  markRead,
+};

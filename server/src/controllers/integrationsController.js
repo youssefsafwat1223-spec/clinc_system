@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const prisma = require('../lib/prisma');
 const openaiService = require('../services/openaiService');
+const { getDiscountForService } = require('../services/discountService');
 const { formatCurrency } = require('../utils/helpers');
 const { resolveWhatsAppChatLink } = require('../utils/clinicLinks');
 
@@ -11,8 +12,8 @@ const DEFAULT_QUICK_REPLIES = [
   'أسعار الخدمات',
   'عنوان العيادة',
   'مواعيد العمل',
-  'مواعيد الدكاتره',
-  'استفسار سريع عن مشكلة',
+  'الدكاترة',
+  'عاوز حد يتواصل معايا',
 ];
 
 const DAY_LABELS = {
@@ -25,6 +26,7 @@ const DAY_LABELS = {
   saturday: 'السبت',
 };
 
+const DEFAULT_CALLBACK_PROMPT = 'إذا تحب نخلي الاستقبال يتواصل وياك، ابعت رقمك هنا وسنتواصل معك.';
 const manychatLogPath = path.join(process.cwd(), 'manychat-debug.log');
 const PLATFORM_MAP = {
   facebook: 'FACEBOOK',
@@ -34,6 +36,7 @@ const PLATFORM_MAP = {
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 const normalizePlatform = (value) => PLATFORM_MAP[String(value || '').trim().toLowerCase()] || 'FACEBOOK';
 const isTemplatePlaceholder = (value) => /^\{\{[^}]+\}\}$/.test(String(value || '').trim());
+
 const pickFirstString = (...values) => {
   for (const value of values) {
     if (typeof value === 'string' && value.trim() && !isTemplatePlaceholder(value)) {
@@ -92,6 +95,9 @@ const readSubscriberId = (body) =>
     body?.full_contact_data?.contact_id
   );
 
+const readManychatContactId = (body) =>
+  pickFirstString(body?.contact_id, body?.full_contact_data?.contact_id);
+
 const readFullName = (body) =>
   pickFirstString(
     body?.full_name,
@@ -114,7 +120,257 @@ const isPlaceholderName = (value) => {
   return isTemplatePlaceholder(normalized) || normalized.toLowerCase() === 'full name';
 };
 
-const findOrCreateSocialPatient = async ({ platform, senderId, fallbackName }) => {
+const normalizeDigits = (value = '') =>
+  String(value)
+    .replace(/[٠-٩]/g, (digit) => String('٠١٢٣٤٥٦٧٨٩'.indexOf(digit)))
+    .replace(/[^\d+]/g, '');
+
+const extractPhoneNumber = (value = '') => {
+  const raw = String(value || '');
+  const normalized = normalizeDigits(raw);
+  const match = normalized.match(/(?:\+?\d){7,15}/);
+  if (!match) {
+    return null;
+  }
+
+  return match[0];
+};
+
+const formatWorkingHours = (workingHours = {}, heading = 'مواعيد العمل') => {
+  if (!workingHours || typeof workingHours !== 'object') {
+    return `${heading} غير متاحة حالياً.`;
+  }
+
+  const lines = Object.entries(DAY_LABELS)
+    .map(([dayKey, label]) => {
+      const slot = workingHours?.[dayKey];
+      if (!slot?.start || !slot?.end) {
+        return `- ${label}: مغلق`;
+      }
+      return `- ${label}: ${slot.start} إلى ${slot.end}`;
+    })
+    .filter(Boolean);
+
+  if (!lines.length) {
+    return `${heading} غير متاحة حالياً.`;
+  }
+
+  return `${heading}:\n${lines.join('\n')}`;
+};
+
+const formatBaseServicePrice = (service = {}) => {
+  const from = service.priceFrom;
+  const to = service.priceTo;
+
+  if (from != null && to != null) return `من ${formatCurrency(from)} إلى ${formatCurrency(to)}`;
+  if (from != null) return `يبدأ من ${formatCurrency(from)}`;
+  if (to != null) return `حتى ${formatCurrency(to)}`;
+  if (service.price != null) return formatCurrency(service.price);
+  return '';
+};
+
+const formatServicePriceForPatient = async (service, patientId) => {
+  if (service?.price == null) {
+    return formatBaseServicePrice(service);
+  }
+
+  if (!patientId) {
+    return formatCurrency(service.price);
+  }
+
+  const discount = await getDiscountForService({ patientId, service });
+  if (!discount.discountAmount) {
+    return formatCurrency(discount.amount);
+  }
+
+  const discountLabel = discount.rule?.name ? `عرض ${discount.rule.name}` : 'عرض خاص';
+  const valueLabel =
+    discount.rule?.type === 'PERCENT'
+      ? `خصم ${Number(discount.rule.value).toLocaleString('ar-EG')}%`
+      : `خصم ${formatCurrency(discount.discountAmount)}`;
+
+  return `السعر بعد الخصم ${formatCurrency(discount.finalAmount)} بدلاً من ${formatCurrency(discount.amount)} (${discountLabel} - ${valueLabel})`;
+};
+
+const buildServicesText = async (services, patientId) => {
+  if (!services.length) {
+    return 'لا توجد خدمات منشورة حالياً.';
+  }
+
+  const lines = [];
+  for (const service of services.slice(0, 12)) {
+    const name = service.nameAr || service.name || 'خدمة';
+    const price = await formatServicePriceForPatient(service, patientId);
+    lines.push(`- ${name}${price ? `: ${price}` : ''}`);
+  }
+
+  return `أسعار الخدمات المتاحة:\n${lines.join('\n')}`;
+};
+
+const buildDoctorsText = (doctors) => {
+  if (!doctors.length) {
+    return 'لا يوجد أطباء متاحون حالياً.';
+  }
+
+  const lines = doctors.slice(0, 12).map((doctor) => {
+    const specialization = doctor.specialization ? ` (${doctor.specialization})` : '';
+    return `- ${doctor.name}${specialization}`;
+  });
+
+  return `الأطباء المتاحون:\n${lines.join('\n')}`;
+};
+
+const buildDoctorsSchedulesText = (doctors) => {
+  if (!doctors.length) {
+    return 'لا توجد مواعيد أطباء متاحة حالياً.';
+  }
+
+  const sections = doctors.map((doctor) => {
+    const specialization = doctor.specialization ? ` - ${doctor.specialization}` : '';
+    return formatWorkingHours(doctor.workingHours || {}, `مواعيد ${doctor.name}${specialization}`);
+  });
+
+  return `مواعيد الدكاترة:\n\n${sections.join('\n\n')}`;
+};
+
+const buildAddressReply = (settings) => {
+  const address = settings?.address || 'العنوان غير متاح حالياً.';
+  const mapsLink = settings?.googleMapsLink || '';
+  if (mapsLink) {
+    return `عنوان العيادة:\n${address}\n\nرابط الموقع:\n${mapsLink}`;
+  }
+
+  return `عنوان العيادة:\n${address}`;
+};
+
+const buildDefaultReply = (clinicName) =>
+  `أهلاً بك في ${clinicName}.\nاكتب:\n- احجز موعد\n- أسعار الخدمات\n- عنوان العيادة\n- مواعيد العمل\n- الدكاترة\n- عاوز حد يتواصل معايا`;
+
+const buildCallbackPrompt = (settings) =>
+  String(settings?.socialContactPrompt || '').trim() || DEFAULT_CALLBACK_PROMPT;
+
+const appendCallbackPrompt = (replyText, settings, { skip = false } = {}) => {
+  if (skip) {
+    return replyText;
+  }
+
+  const prompt = buildCallbackPrompt(settings);
+  if (!prompt) {
+    return replyText;
+  }
+
+  if (String(replyText || '').includes(prompt)) {
+    return replyText;
+  }
+
+  return [String(replyText || '').trim(), prompt].filter(Boolean).join('\n\n');
+};
+
+const detectIntent = (text) => {
+  if (!text) {
+    return 'default';
+  }
+
+  if (/(اتصلوا|اتواصلوا|حد\s*يكلمني|حد\s*يتواصل|اكلم\s*الدعم|عاوز\s*رقم|عاوز\s*حد)/i.test(text)) {
+    return 'callback_request';
+  }
+  if (/(استفسار|مشكلة|الم|ألم|تورم|نزيف|حساسية|كسر|رائحة|شكوى)/i.test(text)) {
+    return 'problem_inquiry';
+  }
+  if (/(احجز|حجز|موعد|appointment|book)/i.test(text)) {
+    return 'booking';
+  }
+  if (/(اسعار|أسعار|سعر|تكلفة|الكشف|الخدمات|service|price)/i.test(text)) {
+    return 'prices';
+  }
+  if (/(عنوان|العنوان|لوكيشن|location|map|maps|google maps)/i.test(text)) {
+    return 'address';
+  }
+  if (/(مواعيد\s*الدكاتره|مواعيد\s*الدكاترة|مواعيد\s*الأطباء|دوام\s*الدكاتره|دوام\s*الدكاترة|doctor schedules?)/i.test(text)) {
+    return 'doctor_schedules';
+  }
+  if (/(مواعيد|ساعات|دوام|working|hours)/i.test(text)) {
+    return 'hours';
+  }
+  if (/(دكتور|دكاترة|دكاتره|أطباء|اطباء|doctor)/i.test(text)) {
+    return 'doctors';
+  }
+  if (/(مرحبا|أهلا|اهلا|السلام عليكم|سلام|هاي|hello|hi|hey|start)/i.test(text)) {
+    return 'greeting';
+  }
+
+  return 'default';
+};
+
+const isMissingServicePriceRangeColumnError = (error) => {
+  const message = String(error?.message || '').toLowerCase();
+  return message.includes('price_from') || message.includes('price_to');
+};
+
+const fetchActiveServices = async () => {
+  try {
+    return await prisma.service.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        name: true,
+        nameAr: true,
+        price: true,
+        priceFrom: true,
+        priceTo: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+  } catch (error) {
+    if (!isMissingServicePriceRangeColumnError(error)) {
+      throw error;
+    }
+
+    const services = await prisma.service.findMany({
+      where: { active: true },
+      select: {
+        id: true,
+        name: true,
+        nameAr: true,
+        price: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return services.map((service) => ({
+      ...service,
+      priceFrom: null,
+      priceTo: null,
+    }));
+  }
+};
+
+const fetchClinicSettings = async () => {
+  return prisma.clinicSettings.findFirst({
+    select: {
+      id: true,
+      clinicName: true,
+      clinicNameAr: true,
+      botName: true,
+      phone: true,
+      address: true,
+      whatsappChatLink: true,
+      googleMapsLink: true,
+      locationImageUrl: true,
+      socialContactPrompt: true,
+      workingHours: true,
+      aiEnabled: true,
+    },
+  });
+};
+
+const findOrCreateSocialPatient = async ({
+  platform,
+  senderId,
+  fallbackName,
+  manychatSubscriberId = '',
+  manychatContactId = '',
+}) => {
   const idField = platform === 'FACEBOOK' ? 'facebookId' : 'instagramId';
 
   let patient = await prisma.patient.findFirst({
@@ -128,6 +384,14 @@ const findOrCreateSocialPatient = async ({ platform, senderId, fallbackName }) =
 
     if (patient[idField] !== senderId) {
       updates[idField] = senderId;
+    }
+
+    if (manychatSubscriberId && patient.manychatSubscriberId !== manychatSubscriberId) {
+      updates.manychatSubscriberId = manychatSubscriberId;
+    }
+
+    if (manychatContactId && patient.manychatContactId !== manychatContactId) {
+      updates.manychatContactId = manychatContactId;
     }
 
     if (
@@ -153,6 +417,8 @@ const findOrCreateSocialPatient = async ({ platform, senderId, fallbackName }) =
       phone: senderId,
       platform,
       [idField]: senderId,
+      ...(manychatSubscriberId ? { manychatSubscriberId } : {}),
+      ...(manychatContactId ? { manychatContactId } : {}),
     },
   });
 };
@@ -168,126 +434,54 @@ const persistSocialMessage = async ({ patientId, platform, content, type, metada
     },
   });
 
-const formatWorkingHours = (workingHours = {}, heading = 'مواعيد العمل') => {
-  if (!workingHours || typeof workingHours !== 'object') {
-    return `${heading} غير متاحة الآن.`;
-  }
-
-  const lines = Object.entries(DAY_LABELS)
-    .map(([dayKey, label]) => {
-      const slot = workingHours?.[dayKey];
-      if (!slot?.start || !slot?.end) {
-        return null;
-      }
-      return `- ${label}: ${slot.start} - ${slot.end}`;
-    })
-    .filter(Boolean);
-
-  if (!lines.length) {
-    return `${heading} غير متاحة الآن.`;
-  }
-
-  return `${heading}:\n${lines.join('\n')}`;
-};
-
-const buildServicesText = (services) => {
-  if (!services.length) {
-    return 'لا توجد خدمات منشورة حالياً.';
-  }
-
-  const lines = services.slice(0, 12).map((service) => {
-    const name = service.nameAr || service.name || 'خدمة';
-    return `- ${name}: ${formatCurrency(service.price)}`;
+const createCallbackRequest = async ({
+  patient,
+  platform,
+  senderId,
+  fullName,
+  phone,
+  sourceType,
+  requestMessage,
+  rawBody,
+}) => {
+  const existing = await prisma.callbackRequest.findFirst({
+    where: {
+      phone,
+      platform,
+      status: { in: ['NEW', 'CONTACTED'] },
+      createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
   });
 
-  return `أسعار الخدمات المتاحة:\n${lines.join('\n')}`;
-};
-
-const buildDoctorsText = (doctors) => {
-  if (!doctors.length) {
-    return 'لا يوجد أطباء متاحون حالياً.';
+  if (existing) {
+    return existing;
   }
 
-  const lines = doctors.slice(0, 12).map((doctor) => {
-    const specialization = doctor.specialization ? ` (${doctor.specialization})` : '';
-    return `- ${doctor.name}${specialization}`;
+  const request = await prisma.callbackRequest.create({
+    data: {
+      patientId: patient?.id || null,
+      platform,
+      senderId: senderId || null,
+      name: fullName || patient?.displayName || patient?.name || null,
+      phone,
+      requestMessage: requestMessage || null,
+      source: sourceType === 'comment' ? 'MANYCHAT_COMMENT' : 'MANYCHAT_CHAT',
+      metadata: rawBody || null,
+    },
   });
 
-  return `الأطباء المتاحون:\n${lines.join('\n')}`;
+  await prisma.adminNotification.create({
+    data: {
+      title: 'طلب تواصل جديد',
+      message: `${request.name || 'عميل'} طلب أن يتواصل معه الاستقبال على الرقم ${phone}`,
+      type: 'HUMAN_REQUEST',
+      link: '/callback-requests',
+    },
+  }).catch(() => null);
+
+  return request;
 };
-
-const buildDoctorsSchedulesText = (doctors) => {
-  if (!doctors.length) {
-    return 'لا توجد مواعيد أطباء متاحة حالياً.';
-  }
-
-  const sections = doctors.map((doctor) => {
-    const specialization = doctor.specialization ? ` - ${doctor.specialization}` : '';
-    const schedule = formatWorkingHours(doctor.workingHours || {}, `مواعيد ${doctor.name}${specialization}`);
-    return schedule;
-  });
-
-  return `مواعيد الدكاترة:\n\n${sections.join('\n\n')}`;
-};
-
-const detectIntent = (text) => {
-  if (!text) {
-    return 'default';
-  }
-
-  // Prefer actionable intents over greeting so messages like "اهلا عاوز احجز" route correctly.
-  if (/(\u0627\u0633\u062a\u0641\u0633\u0627\u0631|\u0645\u0634\u0643\u0644\u0629|\u0627\u0644\u0645|\u0623\u0644\u0645|\u062a\u0648\u0631\u0645|\u0646\u0632\u064a\u0641|\u062d\u0633\u0627\u0633\u064a\u0629|\u0634\u0643\u0648\u0649)/i.test(text)) {
-    return 'problem_inquiry';
-  }
-  if (/(\u0627\u062d\u062c\u0632|\u062d\u062c\u0632|\u0645\u0648\u0639\u062f|appointment|book)/i.test(text)) {
-    return 'booking';
-  }
-  if (/(\u0627\u0633\u0639\u0627\u0631|\u0623\u0633\u0639\u0627\u0631|\u0633\u0639\u0631|\u062a\u0643\u0644\u0641\u0629|\u0627\u0644\u0643\u0634\u0641|\u0627\u0644\u062e\u062f\u0645\u0627\u062a|service|price)/i.test(text)) {
-    return 'prices';
-  }
-  if (/(\u0639\u0646\u0648\u0627\u0646|\u0644\u0648\u0643\u064a\u0634\u0646|location|map|maps|google maps)/i.test(text)) {
-    return 'address';
-  }
-  if (/(\u0645\u0648\u0627\u0639\u064a\u062f\s+\u0627\u0644\u062f\u0643\u0627\u062a\u0631|\u062f\u0648\u0627\u0645\s+\u0627\u0644\u062f\u0643\u0627\u062a\u0631|doctor schedules?)/i.test(text)) {
-    return 'doctor_schedules';
-  }
-  if (/(\u0645\u0648\u0627\u0639\u064a\u062f|\u0633\u0627\u0639\u0627\u062a|\u062f\u0648\u0627\u0645|working|hours)/i.test(text)) {
-    return 'hours';
-  }
-  if (/(\u062f\u0643\u062a\u0648\u0631|\u062f\u0643\u0627\u062a\u0631|\u0627\u0637\u0628\u0627\u0621|\u0623\u0637\u0628\u0627\u0621|doctor)/i.test(text)) {
-    return 'doctors';
-  }
-
-  if (/(مرحبا|أهلا|اهلا|السلام عليكم|سلام|هاي|hello|hi|hey|start)/i.test(text)) {
-    return 'greeting';
-  }
-  if (/(استفسار سريع عن مشكلة|عندي مشكلة بالاسنان|عندي مشكلة بالأسنان|عندي مشكلة|عندي ألم|اعاني من مشكلة|أعاني من مشكلة|استشارة سريعة|شكوى)/i.test(text)) {
-    return 'problem_inquiry';
-  }
-  if (/(احجز|حجز|موعد|appointment|book)/i.test(text)) {
-    return 'booking';
-  }
-  if (/(اسعار|أسعار|سعر|تكلفة|الكشف|الخدمات|service|price)/i.test(text)) {
-    return 'prices';
-  }
-  if (/(عنوان|العنوان|لوكيشن|location|map|maps|خرائط|google maps)/i.test(text)) {
-    return 'address';
-  }
-  if (/(مواعيد الدكاتره|مواعيد الدكاترة|مواعيد الأطباء|دوام الدكاتره|دوام الدكاترة|doctor schedules?)/i.test(text)) {
-    return 'doctor_schedules';
-  }
-  if (/(مواعيد|ساعات|دوام|working|hours)/i.test(text)) {
-    return 'hours';
-  }
-  if (/(دكتور|دكاترة|دكاتره|اطباء|أطباء|doctor)/i.test(text)) {
-    return 'doctors';
-  }
-
-  return 'default';
-};
-
-const buildDefaultReply = (clinicName) =>
-  `أهلاً بك في ${clinicName}.\nاكتب:\n- احجز موعد\n- أسعار الخدمات\n- عنوان العيادة\n- مواعيد العمل\n- مواعيد الدكاتره\n- استفسار سريع عن مشكلة`;
 
 const manychatWebhook = async (req, res) => {
   try {
@@ -314,18 +508,15 @@ const manychatWebhook = async (req, res) => {
 
     const platform = normalizePlatform(req.body?.platform);
     const senderId = readSubscriberId(req.body);
+    const manychatContactId = readManychatContactId(req.body);
     const fullName = readFullName(req.body);
     const sourceType = readSourceType(req.body);
     const commentMeta = readCommentMetadata(req.body);
     const fallbackName = fullName || (platform === 'FACEBOOK' ? 'مريض Facebook' : 'مريض Instagram');
 
     const [settings, services, doctors, patient] = await Promise.all([
-      prisma.clinicSettings.findFirst(),
-      prisma.service.findMany({
-        where: { active: true },
-        select: { name: true, nameAr: true, price: true },
-        orderBy: { createdAt: 'asc' },
-      }),
+      fetchClinicSettings(),
+      fetchActiveServices(),
       prisma.doctor.findMany({
         where: { active: true },
         select: { name: true, specialization: true, workingHours: true },
@@ -336,6 +527,8 @@ const manychatWebhook = async (req, res) => {
             platform,
             senderId,
             fallbackName,
+            manychatSubscriberId: senderId,
+            manychatContactId,
           })
         : Promise.resolve(null),
     ]);
@@ -348,26 +541,27 @@ const manychatWebhook = async (req, res) => {
       whatsappChatLink: settings?.whatsappChatLink,
       phone: settings?.phone,
     });
-    const mapsLink = settings?.googleMapsLink || '';
-    const address = settings?.address || 'العنوان غير متاح حالياً.';
+    const extractedPhone = extractPhoneNumber(incomingTextRaw);
 
     let replyText = '';
+    let imageUrl = null;
+    let callbackSaved = false;
 
     if (intent === 'greeting') {
       replyText = buildDefaultReply(clinicName);
+    } else if (intent === 'callback_request') {
+      replyText = 'أكيد، ابعت رقمك هنا وسنسجل الطلب فوراً لكي يتواصل معك الاستقبال.';
     } else if (intent === 'problem_inquiry') {
-      replyText =
-        'أكيد، اكتب لي المشكلة أو الأعراض باختصار، مثل: ألم، تورم، نزيف، حساسية، كسر، أو رائحة، وسأعطيك ردًا مبدئيًا مناسبًا.';
+      replyText = await openaiService.getInquiryResponse(String(incomingTextRaw || '').trim(), [], patient?.id || null);
     } else if (intent === 'booking') {
       replyText = whatsappLink
-        ? `تمام، للحجز مباشرة تواصل معنا عبر الرابط:\n${whatsappLink}`
-        : `تمام، للحجز اكتب اسم الطبيب والخدمة واليوم المناسب لك، وفريق ${clinicName} سيتابع معك.`;
+        ? `تمام، للحجز المباشر تواصل معنا عبر الرابط:\n${whatsappLink}`
+        : `تمام، اكتب اسم الخدمة أو الدكتور المناسب لك وسنسجل طلبك ثم يتابع معك الفريق.`;
     } else if (intent === 'prices') {
-      replyText = buildServicesText(services);
+      replyText = await buildServicesText(services, patient?.id || null);
     } else if (intent === 'address') {
-      replyText = mapsLink
-        ? `عنوان العيادة:\n${address}\n\nرابط الموقع:\n${mapsLink}`
-        : `عنوان العيادة:\n${address}`;
+      replyText = buildAddressReply(settings);
+      imageUrl = settings?.locationImageUrl || null;
     } else if (intent === 'hours') {
       replyText = formatWorkingHours(settings?.workingHours);
     } else if (intent === 'doctors') {
@@ -375,14 +569,38 @@ const manychatWebhook = async (req, res) => {
     } else if (intent === 'doctor_schedules') {
       replyText = buildDoctorsSchedulesText(doctors);
     } else if (settings?.aiEnabled && incomingText) {
-      replyText = await openaiService.getInquiryResponse(incomingText, []);
+      replyText = await openaiService.getInquiryResponse(String(incomingTextRaw || '').trim(), [], patient?.id || null);
     } else {
       replyText = buildDefaultReply(clinicName);
+    }
+
+    if (extractedPhone) {
+      await createCallbackRequest({
+        patient,
+        platform,
+        senderId,
+        fullName,
+        phone: extractedPhone,
+        sourceType,
+        requestMessage: incomingTextRaw || null,
+        rawBody: req.body,
+      });
+      callbackSaved = true;
+      replyText = [
+        replyText,
+        `تم استلام رقمك ${extractedPhone} وسيتواصل معك الاستقبال في أقرب وقت.`,
+      ]
+        .filter(Boolean)
+        .join('\n\n');
     }
 
     if (!replyText) {
       replyText = buildDefaultReply(clinicName);
     }
+
+    replyText = appendCallbackPrompt(replyText, settings, {
+      skip: callbackSaved || intent === 'callback_request',
+    });
 
     if (patient && (incomingTextRaw || sourceType === 'comment')) {
       const inboundContent = incomingTextRaw || 'تعليق جديد بدون نص واضح';
@@ -393,6 +611,7 @@ const manychatWebhook = async (req, res) => {
         subscriberId: senderId,
         fullName: fullName || null,
         intent,
+        extractedPhone,
         ...(commentMeta.commentId ? { commentId: commentMeta.commentId } : {}),
         ...(commentMeta.postId ? { postId: commentMeta.postId } : {}),
         raw: req.body,
@@ -414,6 +633,8 @@ const manychatWebhook = async (req, res) => {
         metadata: {
           ...baseMetadata,
           delivery: 'MANYCHAT_AUTOMATION',
+          imageUrl,
+          callbackSaved,
         },
       });
     }
@@ -427,6 +648,8 @@ const manychatWebhook = async (req, res) => {
       patientId: patient?.id || null,
       senderId: senderId || null,
       commentId: commentMeta.commentId || null,
+      imageUrl,
+      callbackSaved,
     });
 
     return res.json({
@@ -434,10 +657,13 @@ const manychatWebhook = async (req, res) => {
       intent,
       reply_text: replyText,
       quick_replies: DEFAULT_QUICK_REPLIES,
+      image_url: imageUrl,
+      callback_saved: callbackSaved,
+      callback_prompt: buildCallbackPrompt(settings),
       meta: {
         clinic_name: clinicName,
         has_whatsapp_link: !!whatsappLink,
-        has_google_maps_link: !!mapsLink,
+        has_google_maps_link: !!settings?.googleMapsLink,
       },
     });
   } catch (error) {

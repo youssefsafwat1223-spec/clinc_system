@@ -1,5 +1,5 @@
 const config = require('../config/env');
-const { formatCurrency } = require('./helpers');
+const { formatCurrency, formatDateAr, formatTimeAr } = require('./helpers');
 
 const WHATSAPP_LIST_ROW_LIMIT = 10;
 
@@ -350,7 +350,8 @@ const buildAppointmentOptions = (to, appointment) => ({
         'إدارة موعدك القادم:',
         `الخدمة: ${appointment.service?.nameAr}`,
         `الطبيب: ${appointment.doctor?.name}`,
-        `الموعد: ${appointment.scheduledTime.toLocaleString('ar-EG')}`,
+        `اليوم: ${formatDateAr(appointment.scheduledTime)}`,
+        `الوقت: ${formatTimeAr(appointment.scheduledTime)}`,
         '',
         'ماذا تود أن تفعل؟',
       ].join('\n'),

@@ -54,6 +54,12 @@ enum PaymentStatus {
   PAID
 }
 
+enum CallbackRequestStatus {
+  NEW
+  CONTACTED
+  CLOSED
+}
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -103,6 +109,8 @@ model Patient {
   whatsappId    String?        @unique @map("whatsapp_id")
   facebookId    String?        @unique @map("facebook_id")
   instagramId   String?        @unique @map("instagram_id")
+  manychatSubscriberId String? @map("manychat_subscriber_id")
+  manychatContactId String?    @map("manychat_contact_id")
   chatState     ChatState      @default(BOT) @map("chat_state")
   notes         String?
   accountNotes  String?        @map("account_notes")
@@ -118,6 +126,7 @@ model Patient {
   consultations Consultation[]
   prescriptions Prescription[]
   reviews       Review[]
+  callbackRequests CallbackRequest[]
   groups        PatientGroupMember[]
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
@@ -206,8 +215,10 @@ model ClinicSettings {
   address      String?
   whatsappChatLink String? @map("whatsapp_chat_link")
   googleMapsLink String? @map("google_maps_link")
+  locationImageUrl String? @map("location_image_url")
   workingHours Json    @default("{}") @map("working_hours")
   systemPrompt String  @default("") @map("system_prompt")
+  socialContactPrompt String? @map("social_contact_prompt")
   faqData      Json    @default("[]") @map("faq_data")
   aiEnabled    Boolean @default(true) @map("ai_enabled")
   logoUrl      String? @map("logo_url")
@@ -369,6 +380,25 @@ model AdminNotification {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("admin_notifications")
+}
+
+model CallbackRequest {
+  id             String                @id @default(uuid())
+  patientId      String?               @map("patient_id")
+  patient        Patient?              @relation(fields: [patientId], references: [id], onDelete: SetNull)
+  platform       Platform
+  senderId       String?               @map("sender_id")
+  name           String?
+  phone          String
+  requestMessage String?               @map("request_message")
+  source         String                @default("MANYCHAT")
+  status         CallbackRequestStatus @default(NEW)
+  notes          String?
+  metadata       Json?
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+
+  @@map("callback_requests")
 }
 
 model Review {
