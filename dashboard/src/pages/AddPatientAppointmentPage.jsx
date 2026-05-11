@@ -14,6 +14,7 @@ export default function AddPatientAppointmentPage() {
   const [doctorProfile, setDoctorProfile] = useState(null);
   const [createdCount, setCreatedCount] = useState(0);
   const initialPhone = searchParams.get('phone') || '';
+  const initialPatientId = searchParams.get('patientId') || '';
 
   useEffect(() => {
     if (!isDoctor) return;
@@ -46,6 +47,7 @@ export default function AddPatientAppointmentPage() {
           isDoctor={isDoctor}
           doctorProfile={doctorProfile}
           initialPhone={initialPhone}
+          initialPatientId={initialPatientId}
           onCreated={() => setCreatedCount((count) => count + 1)}
         />
       </DataCard>

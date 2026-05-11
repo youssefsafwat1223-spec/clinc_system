@@ -14,7 +14,7 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
@@ -159,6 +159,7 @@ function BotGuideModal({ onClose }) {
 
 export default function InboxPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [patients, setPatients] = useState([]);
   const [selectedPatientId, setSelectedPatientId] = useState(null);
   const [conversation, setConversation] = useState([]);
@@ -174,6 +175,7 @@ export default function InboxPage() {
   const [showBotGuide, setShowBotGuide] = useState(false);
   const imageInputRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const requestedPatientId = searchParams.get('patientId') || '';
 
   const fetchPatientsList = async (showLoading = true) => {
     try {
@@ -215,6 +217,9 @@ export default function InboxPage() {
 
       setPatients(nextPatients);
       setSelectedPatientId((current) => {
+        if (requestedPatientId && nextPatients.some((patient) => patient.id === requestedPatientId)) {
+          return requestedPatientId;
+        }
         if (current && nextPatients.some((patient) => patient.id === current)) return current;
         return nextPatients[0]?.id || null;
       });
@@ -319,7 +324,7 @@ export default function InboxPage() {
     if (!selectedPatientId || !filteredPatients.some((patient) => patient.id === selectedPatientId)) {
       setSelectedPatientId(filteredPatients[0].id);
     }
-  }, [filteredPatients, selectedPatientId]);
+  }, [filteredPatients, requestedPatientId, selectedPatientId]);
 
   const selectedPatientData = useMemo(
     () => patients.find((patient) => patient.id === selectedPatientId) || null,
@@ -572,6 +577,17 @@ export default function InboxPage() {
                   </div>
 
                   <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
+                    <PrimaryButton
+                      type="button"
+                      onClick={() =>
+                        navigate(
+                          `/add-patient?patientId=${encodeURIComponent(selectedPatientData.id)}&phone=${encodeURIComponent(selectedPatientData.phone || '')}`
+                        )
+                      }
+                      className="w-full sm:w-auto"
+                    >
+                      حجز موعد لهذا المريض
+                    </PrimaryButton>
                     <SecondaryButton type="button" onClick={() => navigate(`/patients/${selectedPatientData.id}`)} className="w-full sm:w-auto">
                       ملف المريض
                     </SecondaryButton>

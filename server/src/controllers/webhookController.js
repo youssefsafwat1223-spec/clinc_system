@@ -63,7 +63,7 @@ const createWhatsAppCallbackRequest = async (patient, requestMessage) => {
     where: {
       phone,
       platform: 'WHATSAPP',
-      status: { in: ['NEW', 'CONTACTED'] },
+      status: 'NEW',
       createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
     },
     orderBy: { createdAt: 'desc' },

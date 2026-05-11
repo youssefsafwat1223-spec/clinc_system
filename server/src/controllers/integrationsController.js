@@ -29,6 +29,23 @@ const DAY_LABELS = {
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 const normalizePlatform = (value) => PLATFORM_MAP[String(value || '').trim().toLowerCase()] || 'FACEBOOK';
 const isTemplatePlaceholder = (value) => /^\{\{[^}]+\}\}$/.test(String(value || '').trim());
+const parseJsonObject = (value) => {
+  if (!value) return null;
+  if (typeof value === 'object') return value;
+  if (typeof value !== 'string') return null;
+
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+};
+const getFullContactData = (body) => parseJsonObject(body?.full_contact_data);
 
 const pickFirstString = (...values) => {
   for (const value of values) {
@@ -83,6 +100,7 @@ const walkStrings = (value, pathName = '', depth = 0, results = []) => {
 };
 
 const readIncomingText = (body) => {
+  const fullContactData = getFullContactData(body);
   const direct = pickFirstString(
     body?.message_text,
     body?.comment_text,
@@ -100,12 +118,20 @@ const readIncomingText = (body) => {
     body?.data?.message,
     body?.trigger?.comment_text,
     body?.trigger?.message_text,
-    body?.full_contact_data?.last_text_input
+    fullContactData?.last_text_input,
+    fullContactData?.comment_text,
+    fullContactData?.comment?.text,
+    fullContactData?.comment?.message,
+    fullContactData?.message_text,
+    fullContactData?.text
   );
 
   if (direct) return direct;
 
-  const candidates = walkStrings(body)
+  const candidates = walkStrings({
+    ...body,
+    ...(fullContactData ? { full_contact_data: fullContactData } : {}),
+  })
     .filter(({ path, value }) => {
       if (value.length < 2) return false;
       if (/token|authorization|verify|webhook|subscriber_id|contact_id|platform|channel|full_name/i.test(path)) return false;
@@ -118,25 +144,32 @@ const readIncomingText = (body) => {
 
 const readSourceType = (body) => pickFirstString(body?.source_type, body?.trigger_type).toLowerCase() || 'chat';
 
-const readSubscriberId = (body) =>
-  pickFirstString(
+const readSubscriberId = (body) => {
+  const fullContactData = getFullContactData(body);
+  return pickFirstString(
     body?.subscriber_id,
     body?.contact_id,
     body?.user_id,
     body?.sender_id,
     body?.id,
-    body?.full_contact_data?.contact_id
+    fullContactData?.contact_id
   );
+};
 
-const readManychatContactId = (body) => pickFirstString(body?.contact_id, body?.full_contact_data?.contact_id);
+const readManychatContactId = (body) => {
+  const fullContactData = getFullContactData(body);
+  return pickFirstString(body?.contact_id, fullContactData?.contact_id);
+};
 
-const readFullName = (body) =>
-  pickFirstString(
+const readFullName = (body) => {
+  const fullContactData = getFullContactData(body);
+  return pickFirstString(
     body?.full_name,
     body?.name,
     [body?.first_name, body?.last_name].filter(Boolean).join(' '),
-    body?.full_contact_data?.full_name
+    fullContactData?.full_name
   );
+};
 
 const readCommentMetadata = (body) => ({
   commentId: pickFirstString(
@@ -452,7 +485,7 @@ const createCallbackRequest = async ({
     where: {
       phone,
       platform,
-      status: { in: ['NEW', 'CONTACTED'] },
+      status: 'NEW',
       createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
     },
     orderBy: { createdAt: 'desc' },
@@ -546,7 +579,9 @@ const manychatWebhook = async (req, res) => {
     let imageUrl = null;
     let callbackSaved = false;
 
-    if (intent === 'greeting') {
+    if (sourceType === 'comment') {
+      replyText = buildDefaultReply(clinicName);
+    } else if (intent === 'greeting') {
       replyText = buildDefaultReply(clinicName);
     } else if (intent === 'inquiry_menu') {
       replyText = buildInquiryMenuReply();
@@ -567,8 +602,6 @@ const manychatWebhook = async (req, res) => {
       replyText = buildDoctorsSchedulesText(doctors);
     } else if (settings?.aiEnabled && incomingText) {
       replyText = await openaiService.getInquiryResponse(String(incomingTextRaw || '').trim(), [], patient?.id || null);
-    } else if (sourceType === 'comment' && !incomingText) {
-      replyText = 'وصلنا تعليق جديد، لكن نص التعليق لم يصل واضحاً من ManyChat. اربط نص التعليق في الـ External Request وسنرد مباشرة على السؤال.';
     } else {
       replyText = buildDefaultReply(clinicName);
     }

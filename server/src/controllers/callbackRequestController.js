@@ -8,13 +8,17 @@ const statusLabels = {
 
 const list = async (req, res, next) => {
   try {
-    const { status = 'ALL', search = '', limit = 200 } = req.query;
+    const { status = 'ALL', platform = 'ALL', search = '', limit = 200 } = req.query;
     const normalizedLimit = Math.min(Math.max(Number(limit) || 50, 1), 500);
     const trimmedSearch = String(search || '').trim();
+    const normalizedPlatform = ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'].includes(String(platform || '').toUpperCase())
+      ? String(platform).toUpperCase()
+      : 'ALL';
 
     const requests = await prisma.callbackRequest.findMany({
       where: {
         ...(status !== 'ALL' ? { status } : {}),
+        ...(normalizedPlatform !== 'ALL' ? { platform: normalizedPlatform } : {}),
         ...(trimmedSearch
           ? {
               OR: [
@@ -60,6 +64,7 @@ const list = async (req, res, next) => {
       requests,
       stats,
       statusLabels,
+      platform: normalizedPlatform,
     });
   } catch (error) {
     next(error);

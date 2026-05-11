@@ -18,7 +18,7 @@ const BOOKING_MODES = {
   WHATSAPP_CONTACT: 'whatsapp_contact',
 };
 
-export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated, initialPhone = '' }) {
+export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated, initialPhone = '', initialPatientId = '' }) {
   const [doctors, setDoctors] = useState([]);
   const [patients, setPatients] = useState([]);
   const [services, setServices] = useState([]);
@@ -150,6 +150,15 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
   };
 
   useEffect(() => {
+    if (initialPatientId && patients.some((patient) => patient.id === initialPatientId)) {
+      setForm((current) => ({
+        ...current,
+        patientId: current.patientId || initialPatientId,
+      }));
+      setBookingMode(BOOKING_MODES.WHATSAPP_CONTACT);
+      return;
+    }
+
     if (!patients.length || !initialPhone) return;
 
     const normalizedTarget = normalizePhone(initialPhone);
@@ -168,7 +177,7 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
       ...current,
       phone: current.phone || initialPhone,
     }));
-  }, [initialPhone, patients]);
+  }, [initialPatientId, initialPhone, patients]);
 
   const switchBookingMode = (mode) => {
     setBookingMode(mode);
