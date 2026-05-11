@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { CalendarPlus, UserPlus } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
@@ -9,8 +10,10 @@ import { DataCard, PageHeader, StatCard } from '../components/ui';
 export default function AddPatientAppointmentPage() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const isDoctor = user.role === 'DOCTOR';
+  const [searchParams] = useSearchParams();
   const [doctorProfile, setDoctorProfile] = useState(null);
   const [createdCount, setCreatedCount] = useState(0);
+  const initialPhone = searchParams.get('phone') || '';
 
   useEffect(() => {
     if (!isDoctor) return;
@@ -42,6 +45,7 @@ export default function AddPatientAppointmentPage() {
         <ManualBookingPanel
           isDoctor={isDoctor}
           doctorProfile={doctorProfile}
+          initialPhone={initialPhone}
           onCreated={() => setCreatedCount((count) => count + 1)}
         />
       </DataCard>

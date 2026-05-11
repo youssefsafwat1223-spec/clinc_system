@@ -32,9 +32,90 @@ const processedWhatsAppMessages = new Map();
 const PROCESSED_WHATSAPP_MESSAGE_TTL_MS = 10 * 60 * 1000;
 const TIME_SLOT_PAGE_SIZE = 9;
 const ADDRESS_INTENT_PATTERN = /(عنوان|العنوان|الموقع|لوكيشن|location|map|maps|خرائط|جوجل\s*ماب|google\s*maps)/i;
+const WHATSAPP_BOOKING_TEXT_PATTERN = /(?:حجز|موعد|احجز|حابه احجز|عاوز احجز|عايزة احجز|book|appointment)/i;
+const WHATSAPP_INQUIRY_TEXT_PATTERN = /(?:استفسار|سؤال|اسال|اسأل|عاوز اسال|عايز اسال|عاوز أعرف|عايز أعرف|عاوزه اعرف|اريد الاستفسار)/i;
+const WELCOME_GREETING_PATTERN = /مرحبا|سلام|السلام|أهلا|اهلا|هاي|hello|hi|start/i;
+const RETURN_TO_MENU_PATTERN = /رجوع|عودة|القائمة|بداية|إلغاء|الغاء|cancel/i;
+const WHATSAPP_INQUIRY_PROMPT =
+  'تفضل، يمكنك الاستفسار عن الأسعار أو الخدمات أو عنوان العيادة أو المواعيد أو أي مشكلة لديك، وسأساعدك فوراً.';
+const WHATSAPP_BOOKING_REQUEST_REPLY =
+  'تم تسجيل رغبتك في الحجز، وسيتواصل معك موظف من الاستقبال لترتيب الموعد. إذا رغبت يمكننا أيضاً متابعة الحجز عبر نفس رقم الواتساب الحالي.';
+const LEGACY_WHATSAPP_BOOKING_STEPS = new Set([
+  'select_service',
+  'text_booking_request',
+  'select_doctor',
+  'select_doctor_after_time',
+  'select_day',
+  'select_period',
+  'select_time',
+]);
 
 const hasWorkingHours = (workingHours) =>
   Boolean(workingHours && typeof workingHours === 'object' && Object.values(workingHours).some(Boolean));
+
+const createWhatsAppCallbackRequest = async (patient, requestMessage) => {
+  const phone = String(patient?.phone || '').trim();
+  if (!phone) {
+    return null;
+  }
+
+  const existing = await prisma.callbackRequest.findFirst({
+    where: {
+      phone,
+      platform: 'WHATSAPP',
+      status: { in: ['NEW', 'CONTACTED'] },
+      createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+    },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  const request = await prisma.callbackRequest.create({
+    data: {
+      patientId: patient?.id || null,
+      platform: 'WHATSAPP',
+      senderId: patient?.whatsappId || phone,
+      name: patient?.displayName || patient?.name || null,
+      phone,
+      requestMessage: requestMessage || 'طلب حجز من واتساب',
+      source: 'WHATSAPP_CHAT',
+      metadata: {
+        chatState: patient?.chatState || 'BOT',
+      },
+    },
+  });
+
+  await prisma.adminNotification.create({
+    data: {
+      title: 'طلب حجز من واتساب',
+      message: `${request.name || 'عميل'} طلب أن يتواصل معه الاستقبال على الرقم ${phone}`,
+      type: 'HUMAN_REQUEST',
+      link: '/callback-requests',
+    },
+  }).catch(() => null);
+
+  return request;
+};
+
+const isWhatsAppBookingFlowSelection = (selectedId = '') =>
+  [
+    'whatsapp_booking_request',
+    'book_appointment',
+    'cancel_text_booking',
+    'confirm_text_booking',
+    'service_',
+    'doctor_',
+    'day_',
+    'more_days_',
+    'period_',
+    'more_slots_',
+    'slot_',
+    'alt_slot_',
+    'resch_apt_',
+  ].some((prefix) => selectedId === prefix || selectedId.startsWith(prefix));
 
 const resolveDoctorWorkingHours = (doctor, clinicWorkingHours = {}) =>
   hasWorkingHours(doctor?.workingHours) ? doctor.workingHours : clinicWorkingHours || {};
@@ -588,8 +669,8 @@ const handleWhatsAppMessage = async (message, contact) => {
       }
     }
 
-    // If this is a new patient or first-time message (no session), send welcome message
-    if (isNewPatient && message.type === 'text') {
+    // If this is a new patient and the first message is only a greeting, show the main menu.
+    if (isNewPatient && message.type === 'text' && (!content || WELCOME_GREETING_PATTERN.test(content))) {
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
 
@@ -603,6 +684,12 @@ const handleWhatsAppMessage = async (message, contact) => {
     if (selectedId === 'return_main') {
       clearBookingSession(from);
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
+    }
+
+    if (isWhatsAppBookingFlowSelection(selectedId) || (session && LEGACY_WHATSAPP_BOOKING_STEPS.has(session.step))) {
+      clearBookingSession(from);
+      await createWhatsAppCallbackRequest(patient, content || 'طلب حجز من واتساب');
+      return await whatsappService.sendTextMessage(from, WHATSAPP_BOOKING_REQUEST_REPLY);
     }
 
     if (selectedId === 'cancel_text_booking') {
@@ -627,9 +714,15 @@ const handleWhatsAppMessage = async (message, contact) => {
       return await handleTimeSlotSelection(from, patient, session.selectedTime);
     }
 
-    if (selectedId === 'book_appointment') {
+    if (selectedId === 'whatsapp_booking_request' || selectedId === 'book_appointment') {
       clearBookingSession(from);
-      return await startBookingFlow(from, patient);
+      await createWhatsAppCallbackRequest(patient, 'طلب حجز من واتساب');
+      return await whatsappService.sendTextMessage(from, WHATSAPP_BOOKING_REQUEST_REPLY);
+    }
+
+    if (selectedId === 'whatsapp_inquiry_mode') {
+      setBookingSession(from, { step: 'whatsapp_inquiry', patientId: patient.id });
+      return await whatsappService.sendTextMessage(from, WHATSAPP_INQUIRY_PROMPT);
     }
 
     if (selectedId === 'manage_bookings') {
@@ -719,7 +812,8 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     if (selectedId === 'inquiry') {
-      return await handleInquiry(from, patient, content);
+      setBookingSession(from, { step: 'whatsapp_inquiry', patientId: patient.id });
+      return await whatsappService.sendTextMessage(from, WHATSAPP_INQUIRY_PROMPT);
     }
 
     if (selectedId === 'call_doctor') {
@@ -799,12 +893,12 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     // Handle greetings explicitly to show the Welcome Menu
-    if (content && /مرحبا|سلام|السلام|أهلا|اهلا|هاي|hello|hi|start/i.test(content)) {
+    if (content && WELCOME_GREETING_PATTERN.test(content)) {
       clearBookingSession(from);
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
 
-    if (session && content && /رجوع|عودة|القائمة|بداية|إلغاء|الغاء|cancel/i.test(content)) {
+    if (session && content && RETURN_TO_MENU_PATTERN.test(content)) {
       clearBookingSession(from);
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
@@ -815,13 +909,15 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     // Text message keywords for returning patients
-    if (content && /حجز|موعد|احجز/i.test(content)) {
+    if (content && WHATSAPP_BOOKING_TEXT_PATTERN.test(content)) {
       clearBookingSession(from);
-      return await startBookingFlow(from, patient);
+      await createWhatsAppCallbackRequest(patient, content);
+      return await whatsappService.sendTextMessage(from, WHATSAPP_BOOKING_REQUEST_REPLY);
     }
 
-    if (content && /استفسار|سؤال/i.test(content)) {
-      return await handleInquiry(from, patient, content);
+    if (content && WHATSAPP_INQUIRY_TEXT_PATTERN.test(content)) {
+      setBookingSession(from, { step: 'whatsapp_inquiry', patientId: patient.id });
+      return await whatsappService.sendTextMessage(from, WHATSAPP_INQUIRY_PROMPT);
     }
 
     // Default: Check if AI is enabled for general inquiries
@@ -1781,6 +1877,15 @@ const handleTextBookingRequest = async (from, patient, content, session) => {
 };
 
 const handleSessionInput = async (from, patient, content, session) => {
+  if (session.step === 'whatsapp_inquiry') {
+    if (content && WHATSAPP_BOOKING_TEXT_PATTERN.test(content)) {
+      clearBookingSession(from);
+      await createWhatsAppCallbackRequest(patient, content);
+      return await whatsappService.sendTextMessage(from, WHATSAPP_BOOKING_REQUEST_REPLY);
+    }
+    return await handleInquiry(from, patient, content);
+  }
+
   // Generic session handler for text input during booking
   if (session.step === 'select_service') {
     const services = await prisma.service.findMany({ where: { active: true } });

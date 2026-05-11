@@ -296,9 +296,35 @@ const sendManual = async (req, res, next) => {
     let message = null;
     let metadata = null;
 
-    switch (sendPlatform) {
+      switch (sendPlatform) {
       case 'WHATSAPP':
-        await whatsappService.sendTextMessage(patient.phone, deliveredContent);
+        if (trimmedImageUrl) {
+          await whatsappService.sendImageMessage(patient.phone, trimmedImageUrl, deliveredContent || '');
+          if (deliveredContent) {
+            metadata = {
+              source: 'MANUAL_REPLY',
+              delivery: 'DIRECT_MESSAGE',
+              manual: true,
+              imageUrl: trimmedImageUrl,
+            };
+          }
+        } else {
+          await whatsappService.sendTextMessage(patient.phone, deliveredContent);
+        }
+
+        message = await createOutboundMessage({
+          patientId,
+          platform: 'WHATSAPP',
+          content: deliveredContent || '[image]',
+          metadata: {
+            ...(metadata || {}),
+            originalContent: trimmedContent || null,
+            senderName: senderName || null,
+            imageUrl: trimmedImageUrl || null,
+            quickReplies: [],
+          },
+          reviewedById: req.user?.id,
+        });
         break;
 
       case 'FACEBOOK': {

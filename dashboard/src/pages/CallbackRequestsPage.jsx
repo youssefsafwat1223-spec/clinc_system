@@ -1,9 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MessageSquareShare, Phone, Search, CheckCircle2, CircleDashed, Archive } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Archive, CheckCircle2, CircleDashed, MessageSquareShare, Phone, Search } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
-import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import {
+  DataCard,
+  Field,
+  PageHeader,
+  PrimaryButton,
+  SecondaryButton,
+  StatCard,
+  StatusBadge,
+  inputClass,
+} from '../components/ui';
 
 const statusOptions = [
   { value: 'ALL', label: 'كل الطلبات' },
@@ -24,6 +34,12 @@ const statusIcon = {
   CLOSED: Archive,
 };
 
+const fallbackStatusLabels = {
+  NEW: 'جديد',
+  CONTACTED: 'تم التواصل',
+  CLOSED: 'مغلق',
+};
+
 const formatDateTime = (value) => {
   if (!value) return '-';
   return new Intl.DateTimeFormat('ar-EG', {
@@ -33,9 +49,10 @@ const formatDateTime = (value) => {
 };
 
 export default function CallbackRequestsPage() {
+  const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
   const [stats, setStats] = useState({ total: 0, NEW: 0, CONTACTED: 0, CLOSED: 0 });
-  const [statusLabels, setStatusLabels] = useState({});
+  const [statusLabels, setStatusLabels] = useState(fallbackStatusLabels);
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -53,9 +70,9 @@ export default function CallbackRequestsPage() {
       });
       setRequests(res.data.requests || []);
       setStats(res.data.stats || { total: 0, NEW: 0, CONTACTED: 0, CLOSED: 0 });
-      setStatusLabels(res.data.statusLabels || {});
+      setStatusLabels({ ...fallbackStatusLabels, ...(res.data.statusLabels || {}) });
     } catch (error) {
-      toast.error(error.message || 'فشل تحميل طلبات التواصل');
+      toast.error(error.message || 'فشل في تحميل طلبات التواصل');
     } finally {
       setLoading(false);
     }
@@ -84,12 +101,10 @@ export default function CallbackRequestsPage() {
         notes: request.notes || '',
       });
 
-      setRequests((current) =>
-        current.map((item) => (item.id === request.id ? res.data.request : item))
-      );
+      setRequests((current) => current.map((item) => (item.id === request.id ? res.data.request : item)));
       toast.success('تم تحديث حالة الطلب');
     } catch (error) {
-      toast.error(error.message || 'فشل تحديث الحالة');
+      toast.error(error.message || 'فشل في تحديث الحالة');
     } finally {
       setSavingId('');
     }
@@ -99,7 +114,7 @@ export default function CallbackRequestsPage() {
     <AppLayout>
       <PageHeader
         title="طلبات التواصل"
-        description="أي عميل يرسل رقمه من Facebook أو Instagram عبر ManyChat سيظهر هنا لكي يتابع معه الاستقبال."
+        description="تظهر هنا طلبات الحجز والمتابعة القادمة من السوشيال أو واتساب حتى يتابعها الاستقبال بسرعة."
         actions={
           <PrimaryButton type="button" onClick={loadData}>
             <MessageSquareShare className="h-4 w-4" />
@@ -133,7 +148,7 @@ export default function CallbackRequestsPage() {
                 className={`${inputClass} pr-10`}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="اسم العميل أو الرقم أو نص الرسالة"
+                placeholder="ابحث بالاسم أو الرقم أو نص الرسالة"
               />
             </div>
           </Field>
@@ -174,9 +189,19 @@ export default function CallbackRequestsPage() {
                         <Phone className="h-4 w-4 text-sky-300" />
                         {request.phone}
                       </p>
-                      <p>تاريخ الطلب: <span className="text-slate-400">{formatDateTime(request.createdAt)}</span></p>
-                      {request.senderId ? <p dir="ltr">Sender ID: <span className="text-slate-400">{request.senderId}</span></p> : null}
-                      {request.patient?.id ? <p>المريض المرتبط: <span className="text-slate-400">{request.patient.displayName || request.patient.name}</span></p> : null}
+                      <p>
+                        تاريخ الطلب: <span className="text-slate-400">{formatDateTime(request.createdAt)}</span>
+                      </p>
+                      {request.senderId ? (
+                        <p dir="ltr">
+                          Sender ID: <span className="text-slate-400">{request.senderId}</span>
+                        </p>
+                      ) : null}
+                      {request.patient?.id ? (
+                        <p>
+                          المريض المرتبط: <span className="text-slate-400">{request.patient.displayName || request.patient.name}</span>
+                        </p>
+                      ) : null}
                     </div>
 
                     {request.requestMessage ? (
@@ -193,6 +218,12 @@ export default function CallbackRequestsPage() {
                       <span>{statusLabels[request.status] || request.status}</span>
                     </div>
                     <div className="grid gap-2">
+                      <PrimaryButton
+                        type="button"
+                        onClick={() => navigate(`/add-patient?phone=${encodeURIComponent(request.phone || '')}`)}
+                      >
+                        متابعة الحجز
+                      </PrimaryButton>
                       <SecondaryButton type="button" disabled={savingId === request.id} onClick={() => updateStatus(request, 'CONTACTED')}>
                         تم التواصل
                       </SecondaryButton>

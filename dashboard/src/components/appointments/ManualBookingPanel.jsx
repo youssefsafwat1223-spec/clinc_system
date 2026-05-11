@@ -12,7 +12,9 @@ const emptyPatientForm = {
   notes: '',
 };
 
-export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated }) {
+const normalizePhone = (value = '') => String(value || '').replace(/\D/g, '');
+
+export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated, initialPhone = '' }) {
   const [doctors, setDoctors] = useState([]);
   const [patients, setPatients] = useState([]);
   const [services, setServices] = useState([]);
@@ -35,6 +37,7 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated 
   });
 
   const [patientForm, setPatientForm] = useState(emptyPatientForm);
+  const [patientSearch, setPatientSearch] = useState(initialPhone || '');
 
   useEffect(() => {
     fetchSupportData();
@@ -49,6 +52,10 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated 
       }));
     }
   }, [isDoctor, doctorProfile]);
+
+  useEffect(() => {
+    setPatientSearch(initialPhone || '');
+  }, [initialPhone]);
 
   const fetchSupportData = async () => {
     try {
@@ -96,6 +103,21 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated 
     [form.patientId, patients]
   );
 
+  const filteredPatients = useMemo(() => {
+    const term = patientSearch.trim().toLowerCase();
+    if (!term) return patients;
+
+    const normalizedTerm = normalizePhone(term);
+    return patients.filter((patient) => {
+      const nameMatch = String(patient.name || '').toLowerCase().includes(term);
+      const displayNameMatch = String(patient.displayName || '').toLowerCase().includes(term);
+      const phoneMatch = normalizedTerm
+        ? normalizePhone(patient.phone || '').includes(normalizedTerm)
+        : String(patient.phone || '').toLowerCase().includes(term);
+      return nameMatch || displayNameMatch || phoneMatch;
+    });
+  }, [patientSearch, patients]);
+
   const selectedDoctor = useMemo(() => {
     if (isDoctor) {
       return doctorProfile || null;
@@ -107,6 +129,27 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated 
   const handleFormChange = (field, value) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
+
+  useEffect(() => {
+    if (!patients.length || !initialPhone) return;
+
+    const normalizedTarget = normalizePhone(initialPhone);
+    const matchedPatient = patients.find((patient) => normalizePhone(patient.phone || '') === normalizedTarget);
+
+    if (matchedPatient) {
+      setForm((current) => ({
+        ...current,
+        patientId: current.patientId || matchedPatient.id,
+      }));
+      return;
+    }
+
+    setShowPatientCreator(true);
+    setPatientForm((current) => ({
+      ...current,
+      phone: current.phone || initialPhone,
+    }));
+  }, [initialPhone, patients]);
 
   const handlePatientCreate = async (event) => {
     event.preventDefault();
@@ -123,6 +166,7 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated 
 
       setPatients((current) => [createdPatient, ...current]);
       setForm((current) => ({ ...current, patientId: createdPatient.id }));
+      setPatientSearch(createdPatient.phone || '');
       setPatientForm(emptyPatientForm);
       setShowPatientCreator(false);
       toast.success('تم إنشاء المريض واختياره للحجز');
@@ -270,6 +314,16 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated 
 
       <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <div className="space-y-2">
+          <label className="text-xs font-bold text-dark-muted">بحث باسم المريض أو الرقم</label>
+          <input
+            value={patientSearch}
+            onChange={(event) => setPatientSearch(event.target.value)}
+            className="input-field"
+            placeholder="ابحث بالاسم أو رقم الهاتف"
+          />
+        </div>
+
+        <div className="space-y-2">
           <label className="text-xs font-bold text-dark-muted">المريض</label>
           <select
             value={form.patientId}
@@ -278,7 +332,7 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated 
             disabled={loading}
           >
             <option value="">اختر المريض</option>
-            {patients.map((patient) => (
+            {filteredPatients.map((patient) => (
               <option key={patient.id} value={patient.id}>
                 {patient.name} {patient.phone ? `- ${patient.phone}` : ''}
               </option>

@@ -28,27 +28,17 @@ const buildWelcomeMessage = (to) => ({
   to,
   type: 'interactive',
   interactive: {
-    type: 'list',
+    type: 'button',
     body: {
-      text: 'مرحباً بك في عيادتنا.\nاختر من القائمة الخدمة التي تحتاجها وسنساعدك خطوة بخطوة.',
+      text: 'مرحباً بك في عيادتنا.\nاختر نوع الطلب:',
     },
     footer: {
-      text: 'ابدأ بالحجز أو اختر استفسار سريع',
+      text: 'الحجز يتم عبر متابعة من الاستقبال',
     },
     action: {
-      button: 'القائمة الرئيسية',
-      sections: [
-        {
-          title: 'الخدمات السريعة',
-          rows: [
-            { id: 'book_appointment', title: 'احجز موعد جديد', description: 'ابدأ الحجز وحدد الخدمة والطبيب' },
-            { id: 'check_appointment', title: 'استعلام عن حجز', description: 'اعرف حالة الحجز برقم المرجع' },
-            { id: 'request_consultation', title: 'استشارة أولية', description: 'أرسل سؤالك أو وصف الحالة' },
-            { id: 'manage_bookings', title: 'إدارة حجوزاتي', description: 'عرض أو تعديل أو إلغاء موعد' },
-            { id: 'request_reception', title: 'التحدث مع الاستقبال', description: 'تحويل المحادثة لموظف مختص' },
-            { id: 'inquiry', title: 'استفسار سريع', description: 'أسئلة عامة عن الخدمات أو المواعيد' },
-          ],
-        },
+      buttons: [
+        { type: 'reply', reply: { id: 'whatsapp_booking_request', title: 'احجز' } },
+        { type: 'reply', reply: { id: 'whatsapp_inquiry_mode', title: 'استفسار' } },
       ],
     },
   },
@@ -61,9 +51,7 @@ const buildServiceSelection = (to, services, doctorNames = '') => ({
   type: 'interactive',
   interactive: {
     type: 'list',
-    body: {
-      text: 'اختر الخدمة المطلوبة:',
-    },
+    body: { text: 'اختر الخدمة المطلوبة:' },
     action: {
       button: 'عرض الخدمات',
       sections: [
@@ -75,6 +63,7 @@ const buildServiceSelection = (to, services, doctorNames = '') => ({
               const doctorDesc = `د. ${doctorNames}`;
               description = description ? `${description} - ${doctorDesc}` : doctorDesc;
             }
+
             return {
               id: `service_${service.id}`,
               title: String(service.nameAr || service.name || 'خدمة').substring(0, 24),
@@ -120,9 +109,7 @@ const buildDaySelection = (to, days) => ({
   type: 'interactive',
   interactive: {
     type: 'list',
-    body: {
-      text: 'اختر اليوم المناسب للحجز:',
-    },
+    body: { text: 'اختر اليوم المناسب للحجز:' },
     action: {
       button: 'عرض الأيام',
       sections: [
@@ -146,9 +133,7 @@ const buildPeriodSelection = (to, dateLabel, periods) => ({
   type: 'interactive',
   interactive: {
     type: 'list',
-    body: {
-      text: `اختر الفترة المناسبة ليوم ${dateLabel}:`,
-    },
+    body: { text: `اختر الفترة المناسبة ليوم ${dateLabel}:` },
     action: {
       button: 'عرض الفترات',
       sections: [
@@ -172,9 +157,7 @@ const buildTimeSlotSelection = (to, slots, dateLabel = '') => ({
   type: 'interactive',
   interactive: {
     type: 'list',
-    body: {
-      text: `اختر الوقت المناسب${dateLabel ? ` ليوم ${dateLabel}` : ''}:`,
-    },
+    body: { text: `اختر الوقت المناسب${dateLabel ? ` ليوم ${dateLabel}` : ''}:` },
     action: {
       button: 'عرض الأوقات',
       sections: [
@@ -288,13 +271,7 @@ const buildWhatsAppRedirectButton = (recipientId, platform = 'facebook') => {
           payload: {
             template_type: 'button',
             text: 'لحجز موعد، يرجى التواصل معنا عبر WhatsApp:',
-            buttons: [
-              {
-                type: 'web_url',
-                url: whatsappUrl,
-                title: 'احجز عبر WhatsApp',
-              },
-            ],
+            buttons: [{ type: 'web_url', url: whatsappUrl, title: 'احجز عبر WhatsApp' }],
           },
         },
       },
@@ -303,9 +280,7 @@ const buildWhatsAppRedirectButton = (recipientId, platform = 'facebook') => {
 
   return {
     recipient: { id: recipientId },
-    message: {
-      text: `لحجز موعد، تواصل معنا عبر WhatsApp:\n${whatsappUrl}`,
-    },
+    message: { text: `لحجز موعد، تواصل معنا عبر WhatsApp:\n${whatsappUrl}` },
   };
 };
 
@@ -324,9 +299,7 @@ const buildAppointmentsList = (to, appointments) => ({
   type: 'interactive',
   interactive: {
     type: 'list',
-    body: {
-      text: 'إليك قائمة بمواعيدك القادمة. يرجى اختيار الموعد الذي تود إدارته:',
-    },
+    body: { text: 'إليك قائمة بمواعيدك القادمة. يرجى اختيار الموعد الذي تود إدارته:' },
     action: {
       button: 'عرض المواعيد',
       sections: [
@@ -381,9 +354,7 @@ const buildCancelConfirmation = (to, appointmentId) => ({
   type: 'interactive',
   interactive: {
     type: 'button',
-    body: {
-      text: 'هل أنت متأكد من رغبتك في إلغاء هذا الحجز نهائياً؟',
-    },
+    body: { text: 'هل أنت متأكد من رغبتك في إلغاء هذا الحجز نهائياً؟' },
     action: {
       buttons: [
         { type: 'reply', reply: { id: `confirm_cancel_${appointmentId}`, title: 'نعم، متأكد' } },

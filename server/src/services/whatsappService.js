@@ -4,6 +4,21 @@ const prisma = require('../lib/prisma');
 
 const WHATSAPP_API_URL = `https://graph.facebook.com/v18.0/${config.whatsapp.phoneNumberId}/messages`;
 
+const resolvePublicUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const base = String(config.publicBaseUrl || '').trim();
+  if (!base) return raw;
+
+  try {
+    return new URL(raw, base.endsWith('/') ? base : `${base}/`).toString();
+  } catch (error) {
+    return raw;
+  }
+};
+
 const sendMessage = async (messageData) => {
   if (!config.whatsapp.token) {
     console.log('[WhatsApp] Token not configured. Message:', JSON.stringify(messageData, null, 2));
@@ -95,7 +110,7 @@ const sendImageMessage = async (to, imageUrl, caption = '') =>
     to,
     type: 'image',
     image: {
-      link: imageUrl,
+      link: resolvePublicUrl(imageUrl),
       ...(caption ? { caption } : {}),
     },
   });
@@ -107,7 +122,7 @@ const sendDocumentMessage = async (to, documentUrl, filename, caption = '') =>
     to,
     type: 'document',
     document: {
-      link: documentUrl,
+      link: resolvePublicUrl(documentUrl),
       filename,
       ...(caption ? { caption } : {}),
     },
