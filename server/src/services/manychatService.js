@@ -3,6 +3,21 @@ const config = require('../config/env');
 
 const MANYCHAT_SEND_URL = 'https://api.manychat.com/fb/sending/sendContent';
 
+const resolvePublicUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const base = String(config.publicBaseUrl || '').trim();
+  if (!base) return raw;
+
+  try {
+    return new URL(raw, base.endsWith('/') ? base : `${base}/`).toString();
+  } catch (error) {
+    return raw;
+  }
+};
+
 const sanitizeQuickReplies = (quickReplies = []) =>
   quickReplies
     .map((reply) => {
@@ -30,7 +45,7 @@ const sanitizeQuickReplies = (quickReplies = []) =>
 
 const buildMessages = ({ text, imageUrl, buttons = [] }) => {
   const messages = [];
-  const trimmedImageUrl = String(imageUrl || '').trim();
+  const trimmedImageUrl = resolvePublicUrl(imageUrl);
   const trimmedText = String(text || '').trim();
 
   if (trimmedImageUrl) {

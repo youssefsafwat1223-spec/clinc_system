@@ -8,6 +8,12 @@ module.exports = {
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   dashboardUrl: process.env.DASHBOARD_URL || 'http://localhost:5173',
+  publicBaseUrl:
+    process.env.PUBLIC_BASE_URL ||
+    process.env.APP_URL ||
+    process.env.API_BASE_URL ||
+    process.env.DASHBOARD_URL ||
+    '',
 
   openai: {
     apiKey: process.env.OPENAI_API_KEY,
