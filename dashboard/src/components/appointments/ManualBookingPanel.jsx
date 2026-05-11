@@ -13,6 +13,10 @@ const emptyPatientForm = {
 };
 
 const normalizePhone = (value = '') => String(value || '').replace(/\D/g, '');
+const BOOKING_MODES = {
+  NEW_PATIENT: 'new_patient',
+  WHATSAPP_CONTACT: 'whatsapp_contact',
+};
 
 export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated, initialPhone = '' }) {
   const [doctors, setDoctors] = useState([]);
@@ -24,6 +28,9 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
   const [showPatientCreator, setShowPatientCreator] = useState(false);
   const [alternatives, setAlternatives] = useState([]);
   const [lastBooking, setLastBooking] = useState(null);
+  const [bookingMode, setBookingMode] = useState(
+    initialPhone ? BOOKING_MODES.WHATSAPP_CONTACT : BOOKING_MODES.NEW_PATIENT
+  );
 
   const [form, setForm] = useState({
     patientId: '',
@@ -55,7 +62,19 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
 
   useEffect(() => {
     setPatientSearch(initialPhone || '');
+    setBookingMode(initialPhone ? BOOKING_MODES.WHATSAPP_CONTACT : BOOKING_MODES.NEW_PATIENT);
   }, [initialPhone]);
+
+  useEffect(() => {
+    setShowPatientCreator(bookingMode === BOOKING_MODES.NEW_PATIENT);
+    if (bookingMode === BOOKING_MODES.NEW_PATIENT) {
+      setPatientForm((current) => ({
+        ...current,
+        platform: 'WHATSAPP',
+        phone: current.phone || initialPhone,
+      }));
+    }
+  }, [bookingMode, initialPhone]);
 
   const fetchSupportData = async () => {
     try {
@@ -141,15 +160,25 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
         ...current,
         patientId: current.patientId || matchedPatient.id,
       }));
+      setBookingMode(BOOKING_MODES.WHATSAPP_CONTACT);
       return;
     }
 
-    setShowPatientCreator(true);
     setPatientForm((current) => ({
       ...current,
       phone: current.phone || initialPhone,
     }));
   }, [initialPhone, patients]);
+
+  const switchBookingMode = (mode) => {
+    setBookingMode(mode);
+    if (mode === BOOKING_MODES.NEW_PATIENT) {
+      setForm((current) => ({ ...current, patientId: '' }));
+      return;
+    }
+
+    setPatientSearch(initialPhone || '');
+  };
 
   const handlePatientCreate = async (event) => {
     event.preventDefault();
@@ -244,14 +273,40 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setShowPatientCreator((current) => !current)}
-          className="inline-flex items-center gap-2 rounded-xl border border-primary-500/20 bg-primary-500/10 px-4 py-2 text-sm font-bold text-primary-300 transition hover:bg-primary-500/20"
-        >
-          <UserPlus className="w-4 h-4" />
-          {showPatientCreator ? 'إخفاء إنشاء المريض' : 'إنشاء مريض سريع'}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => switchBookingMode(BOOKING_MODES.NEW_PATIENT)}
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition ${
+              bookingMode === BOOKING_MODES.NEW_PATIENT
+                ? 'border-primary-400 bg-primary-500/20 text-primary-200'
+                : 'border-primary-500/20 bg-primary-500/10 text-primary-300 hover:bg-primary-500/20'
+            }`}
+          >
+            <UserPlus className="w-4 h-4" />
+            مريض جديد
+          </button>
+          <button
+            type="button"
+            onClick={() => switchBookingMode(BOOKING_MODES.WHATSAPP_CONTACT)}
+            className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition ${
+              bookingMode === BOOKING_MODES.WHATSAPP_CONTACT
+                ? 'border-sky-400 bg-sky-500/20 text-sky-200'
+                : 'border-sky-500/20 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20'
+            }`}
+          >
+            <Phone className="w-4 h-4" />
+            مريض تواصل من الواتساب
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-dark-border bg-dark-bg/40 p-4 text-sm text-slate-300">
+        {bookingMode === BOOKING_MODES.NEW_PATIENT ? (
+          <p>هذا الوضع لمريض جديد. اكتب رقم الهاتف مع كود الدولة مثل <span dir="ltr">9647xxxxxxxxx</span> ثم أنشئ الموعد وسيصل له التأكيد تلقائياً.</p>
+        ) : (
+          <p>هذا الوضع لمريض تواصل من الواتساب. ابحث بالرقم أو الاسم، ثم اختر المريض مباشرة لإكمال الحجز وإرسال التأكيد.</p>
+        )}
       </div>
 
       {showPatientCreator && (
@@ -272,21 +327,13 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
               value={patientForm.phone}
               onChange={(event) => setPatientForm((current) => ({ ...current, phone: event.target.value }))}
               className="input-field"
-              placeholder="9665xxxxxxx+"
+              placeholder="9647xxxxxxxxx"
             />
           </div>
 
           <div className="space-y-2">
             <label className="text-xs font-bold text-dark-muted">القناة الأساسية</label>
-            <select
-              value={patientForm.platform}
-              onChange={(event) => setPatientForm((current) => ({ ...current, platform: event.target.value }))}
-              className="input-field"
-            >
-              <option value="WHATSAPP">واتساب</option>
-              <option value="FACEBOOK">Messenger</option>
-              <option value="INSTAGRAM">Instagram</option>
-            </select>
+            <input value="واتساب" className="input-field" disabled />
           </div>
 
           <div className="space-y-2">
@@ -313,15 +360,15 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
       )}
 
       <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-dark-muted">بحث باسم المريض أو الرقم</label>
-          <input
-            value={patientSearch}
-            onChange={(event) => setPatientSearch(event.target.value)}
-            className="input-field"
-            placeholder="ابحث بالاسم أو رقم الهاتف"
-          />
-        </div>
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-dark-muted">بحث باسم المريض أو الرقم</label>
+            <input
+              value={patientSearch}
+              onChange={(event) => setPatientSearch(event.target.value)}
+              className="input-field"
+              placeholder={bookingMode === BOOKING_MODES.WHATSAPP_CONTACT ? 'ابحث برقم الواتساب أو الاسم' : 'ابحث بالاسم أو رقم الهاتف'}
+            />
+          </div>
 
         <div className="space-y-2">
           <label className="text-xs font-bold text-dark-muted">المريض</label>
