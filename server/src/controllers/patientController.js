@@ -248,6 +248,23 @@ const create = async (req, res, next) => {
 
     res.status(201).json({ patient });
   } catch (error) {
+    if (error?.code === 'P2002') {
+      try {
+        const existingPatient = await prisma.patient.findUnique({
+          where: { phone: String(req.body?.phone || '').trim() },
+          include: { groups: { include: { group: true } } },
+        });
+
+        if (existingPatient) {
+          return res.status(409).json({
+            error: 'يوجد مريض مسجل بالفعل بنفس رقم الهاتف',
+            patient: existingPatient,
+          });
+        }
+      } catch (lookupError) {
+        console.error('Patient duplicate lookup error:', lookupError.message);
+      }
+    }
     next(error);
   }
 };

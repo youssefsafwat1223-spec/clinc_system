@@ -188,6 +188,16 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
       return;
     }
 
+    const normalizedPhone = normalizePhone(patientForm.phone);
+    const existingPatient = patients.find((patient) => normalizePhone(patient.phone || '') === normalizedPhone);
+    if (existingPatient) {
+      setForm((current) => ({ ...current, patientId: existingPatient.id }));
+      setPatientSearch(existingPatient.phone || patientForm.phone);
+      setShowPatientCreator(false);
+      toast.info('هذا الرقم مسجل بالفعل، وتم اختيار المريض الموجود.');
+      return;
+    }
+
     try {
       setCreatingPatient(true);
       const response = await api.post('/patients', patientForm);
@@ -200,6 +210,18 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
       setShowPatientCreator(false);
       toast.success('تم إنشاء المريض واختياره للحجز');
     } catch (error) {
+      const duplicatePatient = error.data?.patient;
+      if (duplicatePatient?.id) {
+        setPatients((current) => {
+          const exists = current.some((item) => item.id === duplicatePatient.id);
+          return exists ? current : [duplicatePatient, ...current];
+        });
+        setForm((current) => ({ ...current, patientId: duplicatePatient.id }));
+        setPatientSearch(duplicatePatient.phone || patientForm.phone);
+        setShowPatientCreator(false);
+        toast.info('هذا الرقم مسجل بالفعل، وتم اختيار المريض الموجود.');
+        return;
+      }
       toast.error(error.message || 'فشل في إنشاء المريض');
     } finally {
       setCreatingPatient(false);

@@ -100,7 +100,13 @@ const createWhatsAppCallbackRequest = async (patient, requestMessage) => {
   return request;
 };
 
-const isWhatsAppBookingFlowSelection = (selectedId = '') =>
+const isWhatsAppBookingFlowSelection = (selectedId = '') => {
+  const safeSelectedId = String(selectedId || '');
+  if (!safeSelectedId) {
+    return false;
+  }
+
+  return (
   [
     'whatsapp_booking_request',
     'book_appointment',
@@ -115,7 +121,9 @@ const isWhatsAppBookingFlowSelection = (selectedId = '') =>
     'slot_',
     'alt_slot_',
     'resch_apt_',
-  ].some((prefix) => selectedId === prefix || selectedId.startsWith(prefix));
+  ].some((prefix) => safeSelectedId === prefix || safeSelectedId.startsWith(prefix))
+  );
+};
 
 const resolveDoctorWorkingHours = (doctor, clinicWorkingHours = {}) =>
   hasWorkingHours(doctor?.workingHours) ? doctor.workingHours : clinicWorkingHours || {};
