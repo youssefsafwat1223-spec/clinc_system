@@ -317,7 +317,7 @@ const buildInquiryMenuReply = () =>
 
 const buildDefaultReply = (clinicName) =>
   [
-    `أهلاً بك في ${clinicName}.`,
+    `مرحباً بك في عيادة ${clinicName}.`,
     'اختر:',
     '- احجز',
     '- استفسار',
