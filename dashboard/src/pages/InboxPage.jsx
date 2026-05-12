@@ -497,8 +497,8 @@ export default function InboxPage() {
 
       <div className="grid gap-4 lg:h-[calc(100vh-200px)] lg:min-h-[620px] lg:grid-cols-[380px_minmax(0,1fr)] xl:grid-cols-[440px_minmax(0,1fr)]">
         <DataCard
-          className={`min-w-0 overflow-hidden p-0 ${
-            isMobileConversationOpen ? 'hidden lg:flex' : 'flex h-[calc(100vh-180px)] min-h-[460px] flex-col lg:h-auto lg:min-h-0'
+          className={`min-w-0 flex-col overflow-hidden p-0 ${
+            isMobileConversationOpen ? 'hidden lg:flex' : 'flex h-[calc(100vh-180px)] min-h-[460px] lg:h-auto lg:min-h-0'
           }`}
         >
           <div className="border-b border-white/10 bg-white/[0.015] px-4 py-4 sm:px-5">
@@ -671,8 +671,8 @@ export default function InboxPage() {
         </DataCard>
 
         <DataCard
-          className={`min-w-0 overflow-hidden p-0 ${
-            !isMobileConversationOpen && !selectedPatientData ? 'hidden lg:flex' : 'flex h-[calc(100vh-180px)] min-h-[560px] flex-col lg:h-auto lg:min-h-0'
+          className={`min-w-0 flex-col overflow-hidden p-0 ${
+            !isMobileConversationOpen && !selectedPatientData ? 'hidden lg:flex' : 'flex h-[calc(100vh-180px)] min-h-[560px] lg:h-auto lg:min-h-0'
           }`}
         >
           {selectedPatientData ? (
