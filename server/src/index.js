@@ -9,6 +9,7 @@ const errorHandler = require('./middleware/errorHandler');
 const { startReminderCrons } = require('./cron/reminderCron');
 const { startExpiryCron } = require('./cron/expiryCron');
 const { startReviewCron } = require('./cron/reviewCron');
+const { startHumanTimeoutCron } = require('./cron/humanTimeoutCron');
 const { seedSystemTemplates } = require('./lib/seedSystemTemplates');
 
 // Route imports
@@ -133,6 +134,7 @@ const startServer = async () => {
       startReminderCrons();
       startExpiryCron();
       startReviewCron();
+      startHumanTimeoutCron();
     } catch (error) {
       console.error('[DB] Prisma startup connection failed:', error.message);
       console.log('[Cron] Skipped startup because database connection is unavailable');

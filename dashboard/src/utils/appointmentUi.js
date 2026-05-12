@@ -28,9 +28,7 @@ export const formatDateTime = (value) => {
     day: 'numeric',
     month: 'long',
     year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
+  }).format(new Date(value)) + ` - ${formatTime(value)}`;
 };
 
 export const formatDetailedDate = (value) => {
@@ -52,9 +50,10 @@ export const formatDate = (value) => {
 
 export const formatTime = (value) => {
   if (!value) return '-';
-  return new Intl.DateTimeFormat('ar-EG', {
-    hour: '2-digit',
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
     minute: '2-digit',
+    hour12: true,
   }).format(new Date(value));
 };
 

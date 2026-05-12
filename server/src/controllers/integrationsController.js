@@ -26,6 +26,8 @@ const DAY_LABELS = {
   saturday: 'السبت',
 };
 
+const GREETING_ONLY_PATTERN = /^(?:\s)*(?:السلام(?:\s+عليكم)?|سلام(?:\s+عليكم)?|مرحبا|اهلا|أهلا|هاي|hello|hi|hey|start)(?:\s)*$/i;
+
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 const normalizePlatform = (value) => PLATFORM_MAP[String(value || '').trim().toLowerCase()] || 'FACEBOOK';
 const isTemplatePlaceholder = (value) => /^\{\{[^}]+\}\}$/.test(String(value || '').trim());
@@ -321,6 +323,20 @@ const buildDefaultReply = (clinicName) =>
     '- استفسار',
   ].join('\n');
 
+const looksLikeRealQuestion = (text = '') => {
+  const value = String(text || '').trim();
+  if (!value) return false;
+  if (GREETING_ONLY_PATTERN.test(value)) return false;
+
+  return (
+    value.includes('?') ||
+    value.includes('؟') ||
+    /(كم|بكم|شلون|شنو|ايش|إيش|ازاي|كيف|فين|وين|هاي|هذا|هذي|الحشوات|حشوة|تركيب|جلسة|جلسه|كامل|كاملة|كله|كله|السعر|سعر|تكلفة|خدمة|خدمات|عنوان|مكان|موقع)/i.test(
+      value
+    )
+  );
+};
+
 const buildBookingReply = (settings) => {
   const whatsappLink = resolveWhatsAppChatLink({
     whatsappChatLink: settings?.whatsappChatLink,
@@ -357,8 +373,8 @@ const detectIntent = (text) => {
   if (/(اتصلوا|اتواصلوا|حد\s*يكلمني|حد\s*يتواصل|اكلم\s*الدعم|عاوز\s*رقم|عاوز\s*حد)/i.test(text)) return 'callback_request';
   if (/(استفسار|مشكلة|الم|ألم|تورم|نزيف|حساسية|كسر|رائحة|شكوى)/i.test(text)) return 'problem_inquiry';
   if (/(احجز|حجز|موعد|appointment|book)/i.test(text)) return 'booking';
-  if (/(اسعار|أسعار|سعر|تكلفة|الكشف|الخدمات|service|price)/i.test(text)) return 'prices';
-  if (/(عنوان|العنوان|لوكيشن|location|map|maps|google maps|موقع)/i.test(text)) return 'address';
+  if (/(اسعار|أسعار|سعر|تكلفة|الكشف|الخدمات|service|price|بكم|حشوات|الحشوات|حشوة|التركيب|تركيب|جلسة|جلسه|كاملة|كامل)/i.test(text)) return 'prices';
+  if (/(عنوان|العنوان|لوكيشن|location|map|maps|google maps|موقع|مكان|فين|وين)/i.test(text)) return 'address';
   if (/(مواعيد\s*الدكاتره|مواعيد\s*الدكاترة|مواعيد\s*الأطباء|دوام\s*الدكاتره|دوام\s*الدكاترة|doctor schedules?)/i.test(text)) return 'doctor_schedules';
   if (/(مواعيد|ساعات|دوام|working|hours)/i.test(text)) return 'hours';
   if (/(دكتور|دكاترة|دكاتره|أطباء|اطباء|doctor)/i.test(text)) return 'doctors';
@@ -600,7 +616,7 @@ const manychatWebhook = async (req, res) => {
       replyText = buildDoctorsText(doctors);
     } else if (intent === 'doctor_schedules') {
       replyText = buildDoctorsSchedulesText(doctors);
-    } else if (settings?.aiEnabled && incomingText) {
+    } else if (settings?.aiEnabled && incomingText && (intent !== 'default' || looksLikeRealQuestion(incomingTextRaw))) {
       replyText = await openaiService.getInquiryResponse(String(incomingTextRaw || '').trim(), [], patient?.id || null);
     } else {
       replyText = buildDefaultReply(clinicName);

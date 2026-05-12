@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, CheckCheck, ExternalLink, Menu, User, X } from 'lucide-react';
+import { Bell, CheckCheck, ExternalLink, Menu, PanelRightClose, PanelRightOpen, User, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../api/client';
 
@@ -35,13 +35,17 @@ const resolveTitle = (pathname) => {
 
 const formatNotificationTime = (value) => {
   if (!value) return '';
-  return new Intl.DateTimeFormat('ar-EG', {
-    dateStyle: 'short',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  const date = new Date(value);
+  const day = new Intl.DateTimeFormat('ar-EG', { dateStyle: 'short' }).format(date);
+  const time = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
+  return `${day} - ${time}`;
 };
 
-export default function Header({ onMenuClick }) {
+export default function Header({ onMenuClick, onSidebarToggle, isSidebarCollapsed = false }) {
   const location = useLocation();
   const navigate = useNavigate();
   const dropdownRef = useRef(null);
@@ -111,9 +115,20 @@ export default function Header({ onMenuClick }) {
         <Menu className="h-6 w-6" />
       </button>
 
-      <div className="hidden md:block">
-        <h2 className="text-2xl font-black tracking-tight text-white">{title}</h2>
-        <p className="text-xs font-medium text-sky-400/80">متصل بالسيرفر الحي</p>
+      <div className="hidden items-center gap-3 md:flex">
+        <button
+          type="button"
+          onClick={onSidebarToggle}
+          className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300 transition hover:bg-white/10 hover:text-white"
+          aria-label={isSidebarCollapsed ? 'إظهار الشريط الجانبي' : 'طي الشريط الجانبي'}
+          title={isSidebarCollapsed ? 'إظهار الشريط الجانبي' : 'طي الشريط الجانبي'}
+        >
+          {isSidebarCollapsed ? <PanelRightOpen className="h-5 w-5" /> : <PanelRightClose className="h-5 w-5" />}
+        </button>
+        <div>
+          <h2 className="text-2xl font-black tracking-tight text-white">{title}</h2>
+          <p className="text-xs font-medium text-sky-400/80">متصل بالسيرفر الحي</p>
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

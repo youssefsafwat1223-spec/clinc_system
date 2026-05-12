@@ -49,7 +49,7 @@ const navItems = [
   { path: '/settings', label: 'الإعدادات', icon: Settings, allowedRoles: ['ADMIN'] },
 ];
 
-export default function Sidebar({ isOpen = false, onClose }) {
+export default function Sidebar({ isOpen = false, isCollapsed = false, onClose }) {
   const location = useLocation();
   const userStr = localStorage.getItem('user');
   let userRole = 'STAFF';
@@ -124,16 +124,17 @@ export default function Sidebar({ isOpen = false, onClose }) {
       {isOpen && <div className="fixed inset-0 z-30 bg-black/60 backdrop-blur-sm md:hidden" onClick={onClose} />}
       <aside
         className={clsx(
-          'fixed inset-y-0 right-0 z-40 flex h-screen w-72 flex-col overflow-y-auto border-l border-white/5 bg-[#060a16]/95 p-5 text-white shadow-2xl shadow-black/40 backdrop-blur-xl transition-transform duration-300 md:static md:w-72 md:translate-x-0',
-          isOpen ? 'translate-x-0' : 'translate-x-full md:translate-x-0'
+          'fixed inset-y-0 right-0 z-40 flex h-screen flex-col overflow-y-auto border-l border-white/5 bg-[#060a16]/95 p-5 text-white shadow-2xl shadow-black/40 backdrop-blur-xl transition-all duration-300 md:static md:translate-x-0',
+          isCollapsed ? 'md:w-24' : 'md:w-72',
+          isOpen ? 'translate-x-0 w-72' : 'translate-x-full md:translate-x-0'
         )}
       >
-        <div className="mb-6 border-b border-white/5 pb-5">
-          <div className="flex items-center gap-3">
+        <div className={clsx('mb-6 border-b border-white/5 pb-5', isCollapsed && 'md:items-center')}>
+          <div className={clsx('flex items-center gap-3', isCollapsed && 'md:justify-center')}>
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-cyan-600 shadow-lg shadow-sky-500/25">
               <Stethoscope className="h-6 w-6 text-white" />
             </div>
-            <div>
+            <div className={clsx(isCollapsed ? 'md:hidden' : 'min-w-0')}>
               <h1 className="text-xl font-black tracking-tight text-white">عيادتي</h1>
               <p className="text-[11px] font-medium text-sky-400/80">نظام الإدارة الذكي</p>
             </div>
@@ -151,17 +152,24 @@ export default function Sidebar({ isOpen = false, onClose }) {
                 key={item.path}
                 to={item.path}
                 onClick={onClose}
+                title={item.label}
                 className={clsx(
-                  'mb-1 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all',
+                  'relative mb-1 flex items-center rounded-xl px-4 py-3 text-sm font-semibold transition-all',
+                  isCollapsed ? 'justify-center gap-0 md:px-3' : 'gap-3',
                   isActive
                     ? 'border border-sky-500/20 bg-sky-500/10 text-sky-300 shadow-lg shadow-sky-950/20'
                     : 'text-slate-300 hover:bg-white/5 hover:text-white'
                 )}
               >
                 <Icon className="h-5 w-5 flex-shrink-0" />
-                <span className="flex-1">{item.label}</span>
-                {badge ? (
+                {!isCollapsed ? <span className="flex-1">{item.label}</span> : null}
+                {!isCollapsed && badge ? (
                   <span className="rounded-full bg-sky-500/20 px-2 py-1 text-xs font-bold text-sky-300">
+                    {badge > 99 ? '+99' : badge}
+                  </span>
+                ) : null}
+                {isCollapsed && badge ? (
+                  <span className="absolute -left-1 -top-1 rounded-full bg-sky-500 px-1.5 py-0.5 text-[10px] font-black text-white">
                     {badge > 99 ? '+99' : badge}
                   </span>
                 ) : null}
@@ -173,10 +181,14 @@ export default function Sidebar({ isOpen = false, onClose }) {
         <div className="mt-auto border-t border-white/5 pt-4">
           <button
             onClick={handleLogout}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-300 transition hover:bg-rose-500/20 hover:text-white"
+            title="تسجيل الخروج"
+            className={clsx(
+              'flex rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-sm font-bold text-slate-300 transition hover:bg-rose-500/20 hover:text-white',
+              isCollapsed ? 'w-full items-center justify-center' : 'w-full items-center justify-center gap-2'
+            )}
           >
             <LogOut className="h-4 w-4" />
-            تسجيل الخروج
+            {!isCollapsed ? 'تسجيل الخروج' : null}
           </button>
         </div>
       </aside>

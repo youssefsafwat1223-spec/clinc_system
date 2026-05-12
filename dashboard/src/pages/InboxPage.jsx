@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowRight,
   Bot,
   CheckCheck,
   HelpCircle,
@@ -97,9 +98,10 @@ const formatDay = (value) => {
 };
 
 const formatTime = (value) =>
-  new Intl.DateTimeFormat('ar-EG', {
+  new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     minute: '2-digit',
+    hour12: true,
   }).format(new Date(value));
 
 const formatRelative = (value) => {
@@ -173,6 +175,7 @@ export default function InboxPage() {
   const [activeTab, setActiveTab] = useState('ALL');
   const [searchTerm, setSearchTerm] = useState('');
   const [showBotGuide, setShowBotGuide] = useState(false);
+  const [isMobileConversationOpen, setIsMobileConversationOpen] = useState(false);
   const imageInputRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const requestedPatientId = searchParams.get('patientId') || '';
@@ -263,6 +266,12 @@ export default function InboxPage() {
   useEffect(() => {
     if (selectedPatientId) fetchConversation(selectedPatientId);
     else setConversation([]);
+  }, [selectedPatientId]);
+
+  useEffect(() => {
+    if (!selectedPatientId) {
+      setIsMobileConversationOpen(false);
+    }
   }, [selectedPatientId]);
 
   useEffect(() => {
@@ -453,8 +462,12 @@ export default function InboxPage() {
         }
       />
 
-      <div className="grid gap-4 lg:h-[calc(100vh-220px)] lg:min-h-[620px] lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[380px_minmax(0,1fr)]">
-        <DataCard className="flex h-[42vh] min-h-[360px] min-w-0 flex-col overflow-hidden p-0 lg:h-auto lg:min-h-0">
+      <div className="grid gap-4 lg:h-[calc(100vh-220px)] lg:min-h-[620px] lg:grid-cols-[420px_minmax(0,1fr)] xl:grid-cols-[460px_minmax(0,1fr)]">
+        <DataCard
+          className={`min-w-0 overflow-hidden p-0 ${
+            isMobileConversationOpen ? 'hidden lg:flex' : 'flex h-[calc(100vh-220px)] min-h-[460px] flex-col lg:h-auto lg:min-h-0'
+          }`}
+        >
           <div className="border-b border-white/10 p-5">
             <div className="mb-4 flex items-center justify-between">
               <div>
@@ -508,7 +521,10 @@ export default function InboxPage() {
                     <button
                       key={patient.id}
                       type="button"
-                      onClick={() => setSelectedPatientId(patient.id)}
+                      onClick={() => {
+                        setSelectedPatientId(patient.id);
+                        setIsMobileConversationOpen(true);
+                      }}
                       className={`w-full rounded-2xl border p-4 text-right transition ${
                         selected
                           ? 'border-sky-500/40 bg-sky-500/10 shadow-lg shadow-sky-500/10'
@@ -552,12 +568,24 @@ export default function InboxPage() {
           </div>
         </DataCard>
 
-        <DataCard className="flex h-[78vh] min-h-[560px] min-w-0 flex-col overflow-hidden p-0 lg:h-auto lg:min-h-0">
+        <DataCard
+          className={`min-w-0 overflow-hidden p-0 ${
+            !isMobileConversationOpen && !selectedPatientData ? 'hidden lg:flex' : 'flex h-[calc(100vh-220px)] min-h-[560px] flex-col lg:h-auto lg:min-h-0'
+          }`}
+        >
           {selectedPatientData ? (
             <>
               <div className="border-b border-white/10 p-5">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileConversationOpen(false)}
+                      className="rounded-xl border border-white/10 bg-white/5 p-2 text-slate-300 transition hover:bg-white/10 hover:text-white lg:hidden"
+                      aria-label="العودة إلى المحادثات"
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
                     <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-cyan-500 text-white">
                       <User className="h-6 w-6" />
                     </div>
@@ -614,7 +642,7 @@ export default function InboxPage() {
                 </div>
               </div>
 
-              <div ref={messagesContainerRef} className="chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#080d1f] p-4 sm:p-5">
+              <div ref={messagesContainerRef} className="chat-scroll min-h-0 flex-1 overflow-y-auto overscroll-contain bg-[#080d1f] p-4 sm:p-5 lg:p-6">
                 {loadingChat ? (
                   <div className="flex h-full items-center justify-center text-slate-400">جارٍ تحميل المحادثة...</div>
                 ) : groupedMessages.length === 0 ? (
@@ -639,7 +667,7 @@ export default function InboxPage() {
                           return (
                             <div key={message.id} className={`flex ${outbound ? 'justify-start' : 'justify-end'}`}>
                               <div
-                                className={`max-w-[88%] rounded-2xl px-4 py-3 shadow-lg sm:max-w-[78%] ${
+                                className={`max-w-[92%] rounded-2xl px-4 py-3 shadow-lg sm:max-w-[84%] xl:max-w-[76%] ${
                                   outbound
                                     ? 'rounded-tl-sm bg-sky-500 text-white shadow-sky-500/10'
                                     : 'rounded-tr-sm border border-white/10 bg-white/10 text-slate-100'

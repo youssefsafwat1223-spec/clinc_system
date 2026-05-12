@@ -31,7 +31,7 @@ const BOOKING_SESSION_TTL_MS = 30 * 60 * 1000;
 const processedWhatsAppMessages = new Map();
 const PROCESSED_WHATSAPP_MESSAGE_TTL_MS = 10 * 60 * 1000;
 const TIME_SLOT_PAGE_SIZE = 9;
-const ADDRESS_INTENT_PATTERN = /(عنوان|العنوان|الموقع|لوكيشن|location|map|maps|خرائط|جوجل\s*ماب|google\s*maps)/i;
+const ADDRESS_INTENT_PATTERN = /(عنوان|العنوان|مكان|المكان|فين|وين|الموقع|لوكيشن|location|map|maps|خرائط|جوجل\s*ماب|google\s*maps)/i;
 const WHATSAPP_BOOKING_TEXT_PATTERN = /(?:حجز|موعد|احجز|حابه احجز|عاوز احجز|عايزة احجز|book|appointment)/i;
 const WHATSAPP_INQUIRY_TEXT_PATTERN = /(?:استفسار|سؤال|اسال|اسأل|عاوز اسال|عايز اسال|عاوز أعرف|عايز أعرف|عاوزه اعرف|اريد الاستفسار)/i;
 const WELCOME_GREETING_PATTERN = /مرحبا|سلام|السلام|أهلا|اهلا|هاي|hello|hi|start/i;
@@ -40,6 +40,7 @@ const WHATSAPP_INQUIRY_PROMPT =
   'تفضل، يمكنك الاستفسار عن الأسعار أو الخدمات أو عنوان العيادة أو المواعيد أو أي مشكلة لديك، وسأساعدك فوراً.';
 const WHATSAPP_BOOKING_REQUEST_REPLY =
   'تم تسجيل رغبتك في الحجز، وسيتواصل معك موظف من الاستقبال لترتيب الموعد. إذا رغبت يمكننا أيضاً متابعة الحجز عبر نفس رقم الواتساب الحالي.';
+const HUMAN_HANDOVER_TIMEOUT_HOURS = Number(process.env.HUMAN_HANDOVER_TIMEOUT_HOURS || 5);
 const LEGACY_WHATSAPP_BOOKING_STEPS = new Set([
   'select_service',
   'text_booking_request',
@@ -49,6 +50,19 @@ const LEGACY_WHATSAPP_BOOKING_STEPS = new Set([
   'select_period',
   'select_time',
 ]);
+
+const GREETING_ONLY_PATTERN = /^(?:\s)*(?:السلام(?:\s+عليكم)?|سلام(?:\s+عليكم)?|مرحبا|اهلا|أهلا|هاي|hi|hello|start)(?:\s)*(?:يا\s+)?(?:بوت|دكتور|عيادة)?(?:\s)*$/i;
+
+const isGreetingOnlyMessage = (value = '') => GREETING_ONLY_PATTERN.test(String(value || '').trim());
+
+const hasHumanHandoverExpired = (patient) => {
+  const updatedAtValue = patient?.updatedAt ? new Date(patient.updatedAt) : null;
+  if (!updatedAtValue || Number.isNaN(updatedAtValue.getTime())) {
+    return false;
+  }
+
+  return Date.now() - updatedAtValue.getTime() >= HUMAN_HANDOVER_TIMEOUT_HOURS * 60 * 60 * 1000;
+};
 
 const hasWorkingHours = (workingHours) =>
   Boolean(workingHours && typeof workingHours === 'object' && Object.values(workingHours).some(Boolean));
@@ -657,6 +671,13 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     // If human handover is active
+    if (patient.chatState === 'HUMAN' && hasHumanHandoverExpired(patient)) {
+      patient = await prisma.patient.update({
+        where: { id: patient.id },
+        data: { chatState: 'BOT' },
+      });
+    }
+
     if (patient.chatState === 'HUMAN') {
       if (content && /رجوع|العودة|القائمة|بداية|إلغاء/i.test(content)) {
         // End human mode
@@ -678,7 +699,7 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     // If this is a new patient and the first message is only a greeting, show the main menu.
-    if (isNewPatient && message.type === 'text' && (!content || WELCOME_GREETING_PATTERN.test(content))) {
+    if (isNewPatient && message.type === 'text' && (!content || isGreetingOnlyMessage(content))) {
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
 
@@ -901,7 +922,7 @@ const handleWhatsAppMessage = async (message, contact) => {
     }
 
     // Handle greetings explicitly to show the Welcome Menu
-    if (content && WELCOME_GREETING_PATTERN.test(content)) {
+    if (content && isGreetingOnlyMessage(content)) {
       clearBookingSession(from);
       return await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
     }
@@ -931,7 +952,7 @@ const handleWhatsAppMessage = async (message, contact) => {
     // Default: Check if AI is enabled for general inquiries
     const settings = await prisma.clinicSettings.findFirst();
     if (settings?.aiEnabled && content) {
-      return await handleInquiry(from, patient, content);
+      return await handleInquiry(from, patient, content, { appendWelcome: true });
     }
 
     // Fallback: Send welcome message with buttons
@@ -1807,7 +1828,7 @@ const handleTimeSlotSelection = async (from, patient, timeISO) => {
   }
 };
 
-const handleInquiry = async (from, patient, content) => {
+const handleInquiry = async (from, patient, content, options = {}) => {
   try {
     // Get recent conversation history
     const recentMessages = await prisma.message.findMany({
@@ -1827,11 +1848,17 @@ const handleInquiry = async (from, patient, content) => {
 
       if (settings?.locationImageUrl) {
         await whatsappService.sendImageMessage(from, settings.locationImageUrl, aiResponse);
+        if (options.appendWelcome) {
+          await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
+        }
         return;
       }
     }
 
     await whatsappService.sendTextMessage(from, aiResponse);
+    if (options.appendWelcome) {
+      await whatsappService.sendInteractiveMessage(buildWelcomeMessage(from));
+    }
   } catch (error) {
     console.error('[WhatsApp] handleInquiry ERROR:', error.message);
     await whatsappService.sendTextMessage(from, 'عذراً، حدث خطأ تقني. يرجى المحاولة لاحقاً أو التواصل معنا مباشرة.');

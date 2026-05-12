@@ -20,15 +20,15 @@ const formatDateKey = (date) => {
 };
 
 /**
- * Format time to Arabic readable format (12-hour).
+ * Format time using explicit AM/PM markers instead of 24-hour notation.
  */
 const formatTimeAr = (date) => {
   const d = new Date(date);
-  let hours = d.getHours();
-  const minutes = d.getMinutes().toString().padStart(2, '0');
-  const period = hours >= 12 ? 'م' : 'ص';
-  hours = hours % 12 || 12;
-  return `${hours}:${minutes}${period}`;
+  return new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(d);
 };
 
 const normalizeWorkingPeriods = (hours) => {
