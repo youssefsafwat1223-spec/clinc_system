@@ -21,11 +21,21 @@ const statusOptions = [
   { value: 'CONTACTED', label: 'تم التواصل' },
 ];
 
-const platformOptions = [
-  { value: 'ALL', label: 'كل المنصات' },
-  { value: 'WHATSAPP', label: 'واتساب' },
-  { value: 'FACEBOOK', label: 'فيسبوك' },
-  { value: 'INSTAGRAM', label: 'إنستجرام' },
+const platformTabs = ['ALL', 'WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
+
+const platformLabels = {
+  ALL: 'الكل',
+  WHATSAPP: 'واتساب',
+  FACEBOOK: 'فيسبوك',
+  INSTAGRAM: 'إنستجرام',
+};
+
+const dateRangeOptions = [
+  { value: 'all', label: 'كل الفترات' },
+  { value: 'today', label: 'اليوم' },
+  { value: '2days', label: 'آخر يومين' },
+  { value: 'week', label: 'آخر أسبوع' },
+  { value: 'month', label: 'آخر شهر' },
 ];
 
 const platformTone = {
@@ -41,10 +51,33 @@ const statusTone = {
 
 const formatDateTime = (value) => {
   if (!value) return '-';
-  return new Intl.DateTimeFormat('ar-EG', {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(new Date(value));
+  const date = new Date(value);
+  const day = new Intl.DateTimeFormat('ar-EG', { dateStyle: 'medium' }).format(date);
+  const time = new Intl.DateTimeFormat('en-US', {
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  }).format(date);
+  return `${day} - ${time}`;
+};
+
+const isWithinDateRange = (value, range) => {
+  if (!value || range === 'all') return true;
+  const requestDate = new Date(value);
+  if (Number.isNaN(requestDate.getTime())) return true;
+
+  const now = new Date();
+  if (range === 'today') {
+    return requestDate.toDateString() === now.toDateString();
+  }
+
+  const diffMs = now.getTime() - requestDate.getTime();
+  const day = 24 * 60 * 60 * 1000;
+
+  if (range === '2days') return diffMs <= 2 * day;
+  if (range === 'week') return diffMs <= 7 * day;
+  if (range === 'month') return diffMs <= 30 * day;
+  return true;
 };
 
 export default function CallbackRequestsPage() {
@@ -52,7 +85,8 @@ export default function CallbackRequestsPage() {
   const [requests, setRequests] = useState([]);
   const [stats, setStats] = useState({ total: 0, NEW: 0, CONTACTED: 0, CLOSED: 0 });
   const [statusFilter, setStatusFilter] = useState('ALL');
-  const [platformFilter, setPlatformFilter] = useState('ALL');
+  const [activeTab, setActiveTab] = useState('ALL');
+  const [dateRange, setDateRange] = useState('all');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState('');
@@ -63,8 +97,7 @@ export default function CallbackRequestsPage() {
       const res = await api.get('/callback-requests', {
         params: {
           status: statusFilter,
-          platform: platformFilter,
-          search: search || undefined,
+          platform: activeTab === 'ALL' ? 'ALL' : activeTab,
           limit: 300,
         },
       });
@@ -79,18 +112,44 @@ export default function CallbackRequestsPage() {
 
   useEffect(() => {
     loadData();
-  }, [statusFilter, platformFilter]);
+  }, [statusFilter, activeTab]);
+
+  const platformCounts = useMemo(
+    () =>
+      requests.reduce(
+        (accumulator, request) => {
+          accumulator.ALL += 1;
+          if (request.platform && accumulator[request.platform] !== undefined) {
+            accumulator[request.platform] += 1;
+          }
+          return accumulator;
+        },
+        { ALL: 0, WHATSAPP: 0, FACEBOOK: 0, INSTAGRAM: 0 }
+      ),
+    [requests]
+  );
 
   const filteredRequests = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return requests;
 
-    return requests.filter((request) =>
-      [request.name, request.phone, request.requestMessage, request.patient?.name, request.patient?.displayName, request.senderId]
+    return requests.filter((request) => {
+      const matchesPlatform = activeTab === 'ALL' || request.platform === activeTab;
+      const matchesDate = isWithinDateRange(request.createdAt, dateRange);
+      const haystack = [
+        request.name,
+        request.phone,
+        request.requestMessage,
+        request.patient?.name,
+        request.patient?.displayName,
+        request.senderId,
+      ]
         .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term))
-    );
-  }, [requests, search]);
+        .join(' ')
+        .toLowerCase();
+
+      return matchesPlatform && matchesDate && (!term || haystack.includes(term));
+    });
+  }, [requests, activeTab, dateRange, search]);
 
   const updateStatus = async (request, status) => {
     setSavingId(request.id);
@@ -145,43 +204,72 @@ export default function CallbackRequestsPage() {
       </div>
 
       <DataCard className="mb-6">
-        <div className="grid gap-4 md:grid-cols-[200px_200px_1fr_auto]">
-          <Field label="الحالة">
-            <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
-              {statusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </Field>
+        <div className="space-y-4">
+          <div className="flex gap-2 overflow-x-auto pb-1">
+            {platformTabs.map((tab) => (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`shrink-0 rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                  activeTab === tab
+                    ? 'bg-sky-500 text-white'
+                    : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                }`}
+              >
+                {platformLabels[tab]}
+                <span className={`ms-1.5 ${activeTab === tab ? 'text-sky-100' : 'text-slate-500'}`}>
+                  ({platformCounts[tab] || 0})
+                </span>
+              </button>
+            ))}
+          </div>
 
-          <Field label="المنصة">
-            <select className={inputClass} value={platformFilter} onChange={(event) => setPlatformFilter(event.target.value)}>
-              {platformOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <div className="flex flex-wrap gap-2">
+            {dateRangeOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setDateRange(option.value)}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                  dateRange === option.value
+                    ? 'bg-cyan-500 text-white'
+                    : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
 
-          <Field label="بحث">
-            <div className="relative">
-              <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-              <input
-                className={`${inputClass} pr-10`}
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="ابحث بالاسم أو الرقم أو نص الرسالة"
-              />
+          <div className="grid gap-4 md:grid-cols-[220px_1fr_auto]">
+            <Field label="الحالة">
+              <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                {statusOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
+            <Field label="بحث">
+              <div className="relative">
+                <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                <input
+                  className={`${inputClass} pr-10`}
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="ابحث بالاسم أو الرقم أو نص الرسالة"
+                />
+              </div>
+            </Field>
+
+            <div className="flex items-end">
+              <SecondaryButton type="button" onClick={loadData}>
+                إعادة تحميل
+              </SecondaryButton>
             </div>
-          </Field>
-
-          <div className="flex items-end">
-            <SecondaryButton type="button" onClick={loadData}>
-              إعادة تحميل
-            </SecondaryButton>
           </div>
         </div>
       </DataCard>
@@ -200,7 +288,9 @@ export default function CallbackRequestsPage() {
                     <StatusBadge tone={statusTone[request.status] || 'slate'}>
                       {request.status === 'NEW' ? 'جديد' : request.status === 'CONTACTED' ? 'تم التواصل' : request.status}
                     </StatusBadge>
-                    <StatusBadge tone={platformTone[request.platform] || 'slate'}>{request.platform}</StatusBadge>
+                    <StatusBadge tone={platformTone[request.platform] || 'slate'}>
+                      {platformLabels[request.platform] || request.platform}
+                    </StatusBadge>
                   </div>
 
                   <h3 className="text-lg font-black text-white">
