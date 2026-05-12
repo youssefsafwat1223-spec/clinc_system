@@ -10,6 +10,8 @@ const { resolveWhatsAppChatLink } = require('../utils/clinicLinks');
 const DEFAULT_QUICK_REPLIES = ['احجز', 'استفسار'];
 const DEFAULT_CALLBACK_PROMPT = 'إذا تحب نخلي الاستقبال يتواصل وياك، ابعت رقمك هنا وسنتواصل معك.';
 const MANYCHAT_LOG_PATH = path.join(process.cwd(), 'manychat-debug.log');
+const SOCIAL_SESSION_TTL_MS = 2 * 60 * 60 * 1000;
+const socialSessions = new Map();
 
 const PLATFORM_MAP = {
   facebook: 'FACEBOOK',
@@ -27,6 +29,33 @@ const DAY_LABELS = {
 };
 
 const GREETING_ONLY_PATTERN = /^(?:\s)*(?:السلام(?:\s+عليكم)?|سلام(?:\s+عليكم)?|مرحبا|اهلا|أهلا|هاي|hello|hi|hey|start)(?:\s)*$/i;
+
+const pruneSocialSessions = () => {
+  const now = Date.now();
+  for (const [key, session] of socialSessions.entries()) {
+    if (!session?.updatedAt || now - session.updatedAt > SOCIAL_SESSION_TTL_MS) {
+      socialSessions.delete(key);
+    }
+  }
+};
+
+const getSocialSession = (key) => {
+  pruneSocialSessions();
+  const session = socialSessions.get(key);
+  if (!session) return null;
+  return session;
+};
+
+const setSocialSession = (key, data) => {
+  socialSessions.set(key, {
+    ...data,
+    updatedAt: Date.now(),
+  });
+};
+
+const clearSocialSession = (key) => {
+  socialSessions.delete(key);
+};
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 const normalizePlatform = (value) => PLATFORM_MAP[String(value || '').trim().toLowerCase()] || 'FACEBOOK';
@@ -207,6 +236,24 @@ const extractPhoneNumber = (value = '') => {
   return match ? match[0] : null;
 };
 
+const normalizeLookupText = (value = '') =>
+  String(value || '')
+    .toLowerCase()
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const isFollowUpMessage = (value = '') =>
+  /^(?:\?+|؟+|ارجو الرد|أرجو الرد|رد|طيب|طب|تمام|اوكي|أوكي|يعني|زين|اي|أي|بليل|بالليل|ساعه\s*\d+|ساعة\s*\d+)/i.test(
+    String(value || '').trim()
+  );
+
+const isAcknowledgement = (value = '') =>
+  /^(?:تمام|اوكي|أوكي|شكرا|شكرًا|تسلم|تسلمين|يسلمو|حبيبي|حبيبتي|♥️|❤️)+$/i.test(String(value || '').trim());
+
 const formatWorkingHours = (workingHours = {}, heading = 'مواعيد العمل') => {
   if (!workingHours || typeof workingHours !== 'object') {
     return `${heading} غير متاحة حالياً.`;
@@ -297,6 +344,81 @@ const buildDoctorsSchedulesText = (doctors) => {
     .join('\n\n')}`;
 };
 
+const findMatchingServices = (services, userText) => {
+  const lookup = normalizeLookupText(userText);
+  if (!lookup) return [];
+
+  const genericTerms = new Set([
+    'اسعار',
+    'السعر',
+    'سعر',
+    'تكلفه',
+    'تكلفة',
+    'خدمه',
+    'خدمة',
+    'خدمات',
+    'كل',
+    'جلسه',
+    'جلسة',
+    'كامل',
+    'كامله',
+    'كاملة',
+    'هاي',
+    'هذا',
+    'هذي',
+    'شنو',
+    'بكم',
+    'كم',
+    'لو',
+  ]);
+
+  return services.filter((service) => {
+    const name = normalizeLookupText(service.nameAr || service.name || '');
+    if (!name) return false;
+
+    if (lookup.includes(name)) {
+      return true;
+    }
+
+    const parts = name.split(' ').filter((part) => part.length > 2 && !genericTerms.has(part));
+    if (!parts.length) return false;
+    return parts.every((part) => lookup.includes(part));
+  });
+};
+
+const buildSpecificServicesReply = async (services, patientId) => {
+  if (!services.length) return '';
+
+  const lines = [];
+  for (const service of services.slice(0, 3)) {
+    const serviceName = service.nameAr || service.name || 'خدمة';
+    const price = await formatServicePriceForPatient(service, patientId);
+    lines.push(`- ${serviceName}: ${price || 'يرجى مراجعة الاستقبال لتأكيد السعر'}`);
+  }
+
+  return [
+    services.length === 1 ? 'بالنسبة للخدمة المطلوبة:' : 'بالنسبة للخدمات المطلوبة:',
+    ...lines,
+    'إذا كنت تقصد هل السعر كامل أو حسب عدد الجلسات، فالاستقبال يؤكد لك هذه التفاصيل بدقة.',
+  ].join('\n');
+};
+
+const getRecentConversationHistory = async (patientId, platform) => {
+  if (!patientId) return [];
+
+  const messages = await prisma.message.findMany({
+    where: {
+      patientId,
+      platform,
+      type: { in: ['INBOUND', 'OUTBOUND'] },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 6,
+  });
+
+  return messages.reverse();
+};
+
 const buildAddressReply = (settings) => {
   const address = settings?.address || 'العنوان غير متاح حالياً.';
   const mapsLink = settings?.googleMapsLink || '';
@@ -368,10 +490,11 @@ const appendCallbackPrompt = (replyText, settings, { skip = false } = {}) => {
 const detectIntent = (text) => {
   if (!text) return 'default';
 
-  if (/^(استفسار|استفسار عادي)$/i.test(text)) return 'inquiry_menu';
+  if (isAcknowledgement(text)) return 'acknowledgement';
+  if (/^(استفسار|استفسار عادي|استفسر|ابي استفسر|اريد استفسر|بس دا استفسر)$/i.test(text)) return 'inquiry_menu';
   if (/^(احجز|حجز)$/i.test(text)) return 'booking';
   if (/(اتصلوا|اتواصلوا|حد\s*يكلمني|حد\s*يتواصل|اكلم\s*الدعم|عاوز\s*رقم|عاوز\s*حد)/i.test(text)) return 'callback_request';
-  if (/(استفسار|مشكلة|الم|ألم|تورم|نزيف|حساسية|كسر|رائحة|شكوى)/i.test(text)) return 'problem_inquiry';
+  if (/(استفسار|استفسر|مشكلة|الم|ألم|تورم|نزيف|حساسية|كسر|رائحة|شكوى)/i.test(text)) return 'problem_inquiry';
   if (/(احجز|حجز|موعد|appointment|book)/i.test(text)) return 'booking';
   if (/(اسعار|أسعار|سعر|تكلفة|الكشف|الخدمات|service|price|بكم|حشوات|الحشوات|حشوة|التركيب|تركيب|جلسة|جلسه|كاملة|كامل)/i.test(text)) return 'prices';
   if (/(عنوان|العنوان|لوكيشن|location|map|maps|google maps|موقع|مكان|فين|وين)/i.test(text)) return 'address';
@@ -567,6 +690,7 @@ const manychatWebhook = async (req, res) => {
     const incomingTextRaw = readIncomingText(req.body);
     const incomingText = normalizeText(incomingTextRaw);
     const fallbackName = fullName || (platform === 'FACEBOOK' ? 'مريض Facebook' : 'مريض Instagram');
+    const sessionKey = senderId ? `${platform}:${senderId}` : '';
 
     const [settings, services, doctors, patient] = await Promise.all([
       fetchClinicSettings(),
@@ -590,6 +714,12 @@ const manychatWebhook = async (req, res) => {
     const intent = detectIntent(incomingText);
     const clinicName = settings?.clinicNameAr || settings?.clinicName || 'العيادة';
     const extractedPhone = extractPhoneNumber(incomingTextRaw);
+    const socialSession = sessionKey ? getSocialSession(sessionKey) : null;
+    const recentHistory = patient ? await getRecentConversationHistory(patient.id, platform) : [];
+    const matchedServices = findMatchingServices(services, incomingTextRaw);
+    const awaitingPhone = Boolean(socialSession?.awaitingPhone);
+    const canUseContextualAi =
+      Boolean(recentHistory.length) && (isFollowUpMessage(incomingTextRaw) || socialSession?.mode === 'inquiry');
 
     let replyText = '';
     let imageUrl = null;
@@ -599,6 +729,8 @@ const manychatWebhook = async (req, res) => {
       replyText = buildDefaultReply(clinicName);
     } else if (intent === 'greeting') {
       replyText = buildDefaultReply(clinicName);
+    } else if (intent === 'acknowledgement') {
+      replyText = 'حياك، إذا عندك أي سؤال إضافي أنا حاضر.';
     } else if (intent === 'inquiry_menu') {
       replyText = buildInquiryMenuReply();
     } else if (intent === 'callback_request') {
@@ -606,7 +738,10 @@ const manychatWebhook = async (req, res) => {
     } else if (intent === 'booking') {
       replyText = buildBookingReply(settings);
     } else if (intent === 'prices') {
-      replyText = await buildServicesText(services, patient?.id || null);
+      replyText =
+        matchedServices.length > 0
+          ? await buildSpecificServicesReply(matchedServices, patient?.id || null)
+          : await buildServicesText(services, patient?.id || null);
     } else if (intent === 'address') {
       replyText = buildAddressReply(settings);
       imageUrl = settings?.locationImageUrl || null;
@@ -616,13 +751,17 @@ const manychatWebhook = async (req, res) => {
       replyText = buildDoctorsText(doctors);
     } else if (intent === 'doctor_schedules') {
       replyText = buildDoctorsSchedulesText(doctors);
-    } else if (settings?.aiEnabled && incomingText && (intent !== 'default' || looksLikeRealQuestion(incomingTextRaw))) {
-      replyText = await openaiService.getInquiryResponse(String(incomingTextRaw || '').trim(), [], patient?.id || null);
+    } else if (settings?.aiEnabled && incomingText && (intent !== 'default' || looksLikeRealQuestion(incomingTextRaw) || canUseContextualAi)) {
+      replyText = await openaiService.getInquiryResponse(
+        String(incomingTextRaw || '').trim(),
+        recentHistory,
+        patient?.id || null
+      );
     } else {
       replyText = buildDefaultReply(clinicName);
     }
 
-    if (extractedPhone) {
+    if (extractedPhone && (intent === 'callback_request' || intent === 'booking' || awaitingPhone)) {
       await createCallbackRequest({
         patient,
         platform,
@@ -647,8 +786,26 @@ const manychatWebhook = async (req, res) => {
     }
 
     replyText = appendCallbackPrompt(replyText, settings, {
-      skip: callbackSaved || intent === 'callback_request' || intent === 'booking',
+      skip: callbackSaved || intent === 'callback_request' || intent === 'booking' || awaitingPhone,
     });
+
+    if (sessionKey) {
+      if (callbackSaved) {
+        clearSocialSession(sessionKey);
+      } else if (intent === 'booking' || intent === 'callback_request') {
+        setSocialSession(sessionKey, {
+          mode: 'callback',
+          awaitingPhone: true,
+          lastIntent: intent,
+        });
+      } else if (sourceType !== 'comment' && intent !== 'greeting' && intent !== 'acknowledgement') {
+        setSocialSession(sessionKey, {
+          mode: 'inquiry',
+          awaitingPhone: false,
+          lastIntent: intent === 'default' ? socialSession?.lastIntent || 'inquiry' : intent,
+        });
+      }
+    }
 
     if (patient && (incomingTextRaw || sourceType === 'comment')) {
       const inboundContent = incomingTextRaw || 'تعليق جديد بدون نص واضح';
