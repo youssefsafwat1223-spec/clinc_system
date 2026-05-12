@@ -30,7 +30,7 @@ const buildWelcomeMessage = (to) => ({
   interactive: {
     type: 'button',
     body: {
-      text: 'مرحباً بك في عيادتنا.\nاختر نوع الطلب:',
+      text: 'مرحباً بك في عيادة الدكتور إبراهيم.\nاختر نوع الطلب:',
     },
     footer: {
       text: 'الحجز يتم عبر متابعة من الاستقبال',
