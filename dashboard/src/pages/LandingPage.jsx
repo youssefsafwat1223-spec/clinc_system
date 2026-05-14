@@ -50,6 +50,57 @@ const CLINIC_SUBTITLE = 'لطب وتجميل الأسنان';
 const CLINIC_DESCRIPTION =
   'عيادة مختصة بطب وتجميل الأسنان، نقدم خدمات متكاملة في العلاج والتجميل بأحدث التقنيات الطبية وبخبرة تركز على الراحة والدقة وجودة النتائج.';
 
+const FALLBACK_SERVICES = [
+  {
+    id: 'fallback-cleaning',
+    name: 'Dental Cleaning',
+    nameAr: 'تنظيف الأسنان',
+    description: 'تنظيف وتلميع احترافي للأسنان للمساعدة في إزالة التكلسات والمحافظة على صحة اللثة والابتسامة.',
+    duration: 30,
+    price: 40000,
+  },
+  {
+    id: 'fallback-filling',
+    name: 'Cosmetic Filling',
+    nameAr: 'حشوة تجميلية',
+    description: 'حشوات تجميلية بلون الأسنان لعلاج التسوس واستعادة الشكل الطبيعي والوظيفة بشكل مريح.',
+    duration: 45,
+    price: 50000,
+  },
+  {
+    id: 'fallback-whitening',
+    name: 'Teeth Whitening',
+    nameAr: 'تبييض الأسنان',
+    description: 'جلسات تبييض آمنة لتحسين لون الأسنان ومنح الابتسامة إشراقة أوضح بنتائج ملحوظة.',
+    duration: 60,
+    price: 50000,
+  },
+  {
+    id: 'fallback-nerve',
+    name: 'Root Canal Treatment',
+    nameAr: 'علاج العصب',
+    description: 'علاج دقيق لحالات التهاب العصب وألم الأسنان مع الحفاظ على السن قدر الإمكان.',
+    duration: 60,
+    price: 75000,
+  },
+  {
+    id: 'fallback-crown',
+    name: 'Ceramic Crown',
+    nameAr: 'تركيب أسنان سيراميك',
+    description: 'تركيبات سيراميك تجميلية وعملية لاستعادة شكل الأسنان ووظيفتها بمظهر طبيعي.',
+    duration: 60,
+    price: 60000,
+  },
+  {
+    id: 'fallback-braces',
+    name: 'Orthodontics',
+    nameAr: 'تقويم الأسنان',
+    description: 'خطط تقويم لتعديل اصطفاف الأسنان وتحسين العضة والمتابعة حسب احتياج كل حالة.',
+    duration: 45,
+    price: 1000000,
+  },
+];
+
 const DAY_NAMES = {
   sunday: 'الأحد',
   monday: 'الاثنين',
@@ -167,7 +218,7 @@ function ToothIcon({ className = 'w-8 h-8' }) {
    â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 export default function LandingPage() {
-  const [services, setServices] = useState([]);
+  const [services, setServices] = useState(FALLBACK_SERVICES);
   const [servicesLoading, setServicesLoading] = useState(true);
   const [clinic, setClinic] = useState(FALLBACK_CLINIC);
   const [doctors, setDoctors] = useState([]);
@@ -185,7 +236,10 @@ export default function LandingPage() {
           api.get('/settings/public').catch(() => null),
         ]);
 
-        if (servicesRes) setServices(servicesRes.data.services || []);
+        if (servicesRes) {
+          const nextServices = Array.isArray(servicesRes.data.services) ? servicesRes.data.services.filter(Boolean) : [];
+          setServices(nextServices.length > 0 ? nextServices : FALLBACK_SERVICES);
+        }
         if (settingsRes) {
           const d = settingsRes.data;
           setClinic({ ...FALLBACK_CLINIC, ...d.clinic });
@@ -194,7 +248,7 @@ export default function LandingPage() {
           setStats(d.stats || { patients: 0, appointments: 0, doctors: 0 });
         }
       } catch {
-        /* fallback to defaults */
+        setServices(FALLBACK_SERVICES);
       } finally {
         setServicesLoading(false);
       }
