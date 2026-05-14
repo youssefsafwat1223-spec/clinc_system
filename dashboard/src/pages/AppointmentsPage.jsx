@@ -7,6 +7,12 @@ import ManualBookingPanel from '../components/appointments/ManualBookingPanel';
 import AppointmentCard from '../components/appointments/AppointmentCard';
 import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatCard, inputClass } from '../components/ui';
 import { appointmentStatusLabels, formatDetailedDate } from '../utils/appointmentUi';
+import {
+  buildRecentMonthOptions,
+  calendarFilterOptions,
+  getMonthWeekOptions,
+  isWithinCalendarFilter,
+} from '../utils/dateFilters';
 
 const daysAr = {
   sunday: 'الأحد',
@@ -21,6 +27,7 @@ const daysAr = {
 const statusOrder = ['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'BLOCKED'];
 
 const dayKey = (value) => new Date(value).toISOString().slice(0, 10);
+const monthOptions = buildRecentMonthOptions();
 
 export default function AppointmentsPage() {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
@@ -33,12 +40,16 @@ export default function AppointmentsPage() {
   const [doctorProfile, setDoctorProfile] = useState(null);
   const [doctorLoading, setDoctorLoading] = useState(isDoctor);
   const [savingSchedule, setSavingSchedule] = useState(false);
+  const [dateRange, setDateRange] = useState('all');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value || '');
+  const [selectedWeek, setSelectedWeek] = useState('1');
 
   const fetchAppointments = async () => {
     try {
       setLoading(true);
       const [appointmentsRes, statsRes] = await Promise.all([
-        api.get('/appointments', { params: { status: filter === 'ALL' ? undefined : filter, limit: 100 } }),
+        api.get('/appointments', { params: { status: filter === 'ALL' ? undefined : filter, limit: 500 } }),
         api.get('/appointments/stats').catch(() => ({ data: {} })),
       ]);
       setAppointments(appointmentsRes.data.appointments || []);
@@ -70,6 +81,14 @@ export default function AppointmentsPage() {
   useEffect(() => {
     fetchDoctorProfile();
   }, []);
+
+  const weekOptions = useMemo(() => getMonthWeekOptions(selectedMonth), [selectedMonth]);
+
+  useEffect(() => {
+    if (!weekOptions.some((option) => option.value === selectedWeek)) {
+      setSelectedWeek(weekOptions[0]?.value || '1');
+    }
+  }, [selectedWeek, weekOptions]);
 
   const handleAction = async (appointment, action) => {
     try {
@@ -146,18 +165,30 @@ export default function AppointmentsPage() {
     }
   };
 
+  const filteredAppointments = useMemo(
+    () =>
+      appointments.filter((appointment) =>
+        isWithinCalendarFilter(appointment.scheduledTime, dateRange, {
+          exactDate: selectedDate,
+          monthValue: selectedMonth,
+          weekOfMonth: selectedWeek,
+        })
+      ),
+    [appointments, dateRange, selectedDate, selectedMonth, selectedWeek]
+  );
+
   const todayAppointmentsCount = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    return appointments.filter((appointment) => dayKey(appointment.scheduledTime) === today).length;
-  }, [appointments]);
+    return filteredAppointments.filter((appointment) => dayKey(appointment.scheduledTime) === today).length;
+  }, [filteredAppointments]);
 
   const upcomingCount = useMemo(
-    () => appointments.filter((appointment) => new Date(appointment.scheduledTime) >= new Date()).length,
-    [appointments]
+    () => filteredAppointments.filter((appointment) => new Date(appointment.scheduledTime) >= new Date()).length,
+    [filteredAppointments]
   );
 
   const groupedAppointments = useMemo(() => {
-    return appointments
+    return filteredAppointments
       .slice()
       .sort((first, second) => new Date(first.scheduledTime) - new Date(second.scheduledTime))
       .reduce((groups, appointment) => {
@@ -166,7 +197,7 @@ export default function AppointmentsPage() {
         groups[key].push(appointment);
         return groups;
       }, {});
-  }, [appointments]);
+  }, [filteredAppointments]);
 
   return (
     <AppLayout>
@@ -191,6 +222,65 @@ export default function AppointmentsPage() {
           </button>
         ))}
       </div>
+
+      <DataCard className="mb-6">
+        <div className="space-y-4">
+          <div className="flex flex-wrap gap-2">
+            {calendarFilterOptions.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setDateRange(option.value)}
+                className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                  dateRange === option.value
+                    ? 'bg-cyan-500 text-white'
+                    : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {dateRange === 'day' ? (
+              <Field label="اليوم المحدد">
+                <input className={inputClass} type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+              </Field>
+            ) : null}
+
+            {dateRange === 'specificMonth' || dateRange === 'specificWeek' ? (
+              <Field label="الشهر">
+                <select className={inputClass} value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
+                  {monthOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+
+            {dateRange === 'specificWeek' ? (
+              <Field label="أسبوع الشهر">
+                <select className={inputClass} value={selectedWeek} onChange={(event) => setSelectedWeek(event.target.value)}>
+                  {weekOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+
+            <div className="flex items-end">
+              <SecondaryButton type="button" onClick={fetchAppointments}>
+                تحديث القائمة
+              </SecondaryButton>
+            </div>
+          </div>
+        </div>
+      </DataCard>
 
       <ManualBookingPanel
         isDoctor={isDoctor}
@@ -269,7 +359,7 @@ export default function AppointmentsPage() {
       ) : null}
 
       <div className="my-6 grid gap-4 md:grid-cols-4">
-        <StatCard title="إجمالي المواعيد" value={stats.ALL || appointments.length} icon={CalendarDays} tone="blue" />
+        <StatCard title="إجمالي المواعيد" value={filteredAppointments.length} icon={CalendarDays} tone="blue" />
         <StatCard title="قيد الانتظار" value={stats.PENDING || 0} icon={Clock} tone="amber" />
         <StatCard title="مؤكد" value={stats.CONFIRMED || 0} icon={CheckCircle} tone="green" />
         <StatCard title="مواعيد اليوم" value={todayAppointmentsCount} hint={`${upcomingCount} موعد قادم`} icon={UserRound} tone="slate" />
@@ -277,7 +367,7 @@ export default function AppointmentsPage() {
 
       {loading ? (
         <DataCard className="text-center text-slate-300">جارٍ تحميل المواعيد...</DataCard>
-      ) : appointments.length === 0 ? (
+      ) : filteredAppointments.length === 0 ? (
         <DataCard className="text-center">
           <CalendarDays className="mx-auto mb-4 h-12 w-12 text-slate-500" />
           <h2 className="text-lg font-black text-white">لا توجد مواعيد</h2>

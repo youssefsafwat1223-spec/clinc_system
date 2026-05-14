@@ -6,11 +6,22 @@ import AppLayout from '../components/Layout';
 import AppointmentCard from '../components/appointments/AppointmentCard';
 import { DataCard, Field, PageHeader, PrimaryButton, StatCard, inputClass } from '../components/ui';
 import { appointmentStatusLabels, todayInputValue } from '../utils/appointmentUi';
+import {
+  buildRecentMonthOptions,
+  calendarFilterOptions,
+  getMonthWeekOptions,
+  isWithinCalendarFilter,
+} from '../utils/dateFilters';
+
+const monthOptions = buildRecentMonthOptions();
 
 export default function TodayPatientsPage() {
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [date, setDate] = useState(todayInputValue());
+  const [dateRange, setDateRange] = useState('today');
+  const [selectedDate, setSelectedDate] = useState(todayInputValue());
+  const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value || '');
+  const [selectedWeek, setSelectedWeek] = useState('1');
   const [status, setStatus] = useState('ALL');
   const [doctorFilter, setDoctorFilter] = useState('ALL');
 
@@ -19,14 +30,13 @@ export default function TodayPatientsPage() {
     try {
       const res = await api.get('/appointments', {
         params: {
-          date,
           status: status === 'ALL' ? undefined : status,
-          limit: 300,
+          limit: 500,
         },
       });
       setAppointments(res.data.appointments || []);
     } catch (error) {
-      toast.error(error.message || 'فشل تحميل مرضى اليوم');
+      toast.error(error.message || 'فشل تحميل المرضى');
     } finally {
       setLoading(false);
     }
@@ -34,7 +44,15 @@ export default function TodayPatientsPage() {
 
   useEffect(() => {
     loadAppointments();
-  }, [date, status]);
+  }, [status]);
+
+  const weekOptions = useMemo(() => getMonthWeekOptions(selectedMonth), [selectedMonth]);
+
+  useEffect(() => {
+    if (!weekOptions.some((option) => option.value === selectedWeek)) {
+      setSelectedWeek(weekOptions[0]?.value || '1');
+    }
+  }, [selectedWeek, weekOptions]);
 
   const doctors = useMemo(() => {
     const map = new Map();
@@ -44,25 +62,35 @@ export default function TodayPatientsPage() {
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }));
   }, [appointments]);
 
-  const filteredAppointments = appointments.filter((appointment) =>
-    doctorFilter === 'ALL' ? true : appointment.doctorId === doctorFilter
+  const filteredAppointments = useMemo(
+    () =>
+      appointments.filter((appointment) => {
+        const matchesDoctor = doctorFilter === 'ALL' ? true : appointment.doctorId === doctorFilter;
+        const matchesDate = isWithinCalendarFilter(appointment.scheduledTime, dateRange, {
+          exactDate: selectedDate,
+          monthValue: selectedMonth,
+          weekOfMonth: selectedWeek,
+        });
+        return matchesDoctor && matchesDate;
+      }),
+    [appointments, doctorFilter, dateRange, selectedDate, selectedMonth, selectedWeek]
   );
 
   const stats = useMemo(
     () => ({
-      total: appointments.length,
-      pending: appointments.filter((item) => item.status === 'PENDING').length,
-      confirmed: appointments.filter((item) => item.status === 'CONFIRMED').length,
-      completed: appointments.filter((item) => item.status === 'COMPLETED').length,
+      total: filteredAppointments.length,
+      pending: filteredAppointments.filter((item) => item.status === 'PENDING').length,
+      confirmed: filteredAppointments.filter((item) => item.status === 'CONFIRMED').length,
+      completed: filteredAppointments.filter((item) => item.status === 'COMPLETED').length,
     }),
-    [appointments]
+    [filteredAppointments]
   );
 
   return (
     <AppLayout>
       <PageHeader
         title="مرضى اليوم"
-        description="عرض كل مواعيد اليوم بكل الحالات، مع فلترة سريعة حسب الحالة والطبيب."
+        description="عرض مواعيد المرضى مع فلاتر سريعة حسب الفترة، الحالة، والطبيب."
         actions={
           <PrimaryButton type="button" onClick={loadAppointments} disabled={loading}>
             <RefreshCw className="h-4 w-4" />
@@ -72,17 +100,31 @@ export default function TodayPatientsPage() {
       />
 
       <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <StatCard title="إجمالي اليوم" value={stats.total} icon={Users} tone="blue" />
+        <StatCard title="إجمالي النتائج" value={stats.total} icon={Users} tone="blue" />
         <StatCard title="قيد الانتظار" value={stats.pending} icon={CalendarDays} tone="amber" />
         <StatCard title="مؤكد" value={stats.confirmed} icon={CalendarDays} tone="green" />
         <StatCard title="تم الكشف" value={stats.completed} icon={CalendarDays} tone="slate" />
       </div>
 
-      <DataCard className="mb-6">
-        <div className="grid gap-4 lg:grid-cols-3">
-          <Field label="التاريخ">
-            <input className={inputClass} type="date" value={date} onChange={(event) => setDate(event.target.value)} />
-          </Field>
+      <DataCard className="mb-6 space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {calendarFilterOptions.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setDateRange(option.value)}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                dateRange === option.value
+                  ? 'bg-cyan-500 text-white'
+                  : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Field label="الحالة">
             <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}>
               {['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'BLOCKED'].map((item) => (
@@ -92,6 +134,7 @@ export default function TodayPatientsPage() {
               ))}
             </select>
           </Field>
+
           <Field label="الطبيب">
             <select className={inputClass} value={doctorFilter} onChange={(event) => setDoctorFilter(event.target.value)}>
               <option value="ALL">كل الأطباء</option>
@@ -102,11 +145,41 @@ export default function TodayPatientsPage() {
               ))}
             </select>
           </Field>
+
+          {dateRange === 'day' ? (
+            <Field label="اليوم المحدد">
+              <input className={inputClass} type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+            </Field>
+          ) : null}
+
+          {dateRange === 'specificMonth' || dateRange === 'specificWeek' ? (
+            <Field label="الشهر">
+              <select className={inputClass} value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
+                {monthOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
+
+          {dateRange === 'specificWeek' ? (
+            <Field label="أسبوع الشهر">
+              <select className={inputClass} value={selectedWeek} onChange={(event) => setSelectedWeek(event.target.value)}>
+                {weekOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          ) : null}
         </div>
       </DataCard>
 
       {loading ? (
-        <DataCard>جارٍ تحميل مرضى اليوم...</DataCard>
+        <DataCard>جارٍ تحميل المرضى...</DataCard>
       ) : filteredAppointments.length === 0 ? (
         <DataCard className="text-center">
           <Filter className="mx-auto mb-3 h-10 w-10 text-slate-500" />

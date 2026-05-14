@@ -54,7 +54,7 @@ router.post('/', requireRole('ADMIN'), upload.single('image'), (req, res) => {
   });
 });
 
-router.post('/campaign-image', requireRole('ADMIN', 'STAFF'), upload.single('image'), (req, res) => {
+router.post('/campaign-image', requireRole('ADMIN', 'STAFF', 'RECEPTION'), upload.single('image'), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'الرجاء اختيار صورة للحملة' });
   }

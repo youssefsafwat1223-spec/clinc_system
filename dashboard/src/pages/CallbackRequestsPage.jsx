@@ -14,6 +14,12 @@ import {
   StatusBadge,
   inputClass,
 } from '../components/ui';
+import {
+  buildRecentMonthOptions,
+  calendarFilterOptions,
+  getMonthWeekOptions,
+  isWithinCalendarFilter,
+} from '../utils/dateFilters';
 
 const statusOptions = [
   { value: 'ALL', label: 'كل الحالات' },
@@ -30,14 +36,6 @@ const platformLabels = {
   INSTAGRAM: 'إنستجرام',
 };
 
-const dateRangeOptions = [
-  { value: 'all', label: 'كل الفترات' },
-  { value: 'today', label: 'اليوم' },
-  { value: '2days', label: 'آخر يومين' },
-  { value: 'week', label: 'آخر أسبوع' },
-  { value: 'month', label: 'آخر شهر' },
-];
-
 const platformTone = {
   WHATSAPP: 'green',
   FACEBOOK: 'blue',
@@ -48,6 +46,8 @@ const statusTone = {
   NEW: 'amber',
   CONTACTED: 'blue',
 };
+
+const monthOptions = buildRecentMonthOptions();
 
 const formatDateTime = (value) => {
   if (!value) return '-';
@@ -61,25 +61,6 @@ const formatDateTime = (value) => {
   return `${day} - ${time}`;
 };
 
-const isWithinDateRange = (value, range) => {
-  if (!value || range === 'all') return true;
-  const requestDate = new Date(value);
-  if (Number.isNaN(requestDate.getTime())) return true;
-
-  const now = new Date();
-  if (range === 'today') {
-    return requestDate.toDateString() === now.toDateString();
-  }
-
-  const diffMs = now.getTime() - requestDate.getTime();
-  const day = 24 * 60 * 60 * 1000;
-
-  if (range === '2days') return diffMs <= 2 * day;
-  if (range === 'week') return diffMs <= 7 * day;
-  if (range === 'month') return diffMs <= 30 * day;
-  return true;
-};
-
 export default function CallbackRequestsPage() {
   const navigate = useNavigate();
   const [requests, setRequests] = useState([]);
@@ -87,9 +68,20 @@ export default function CallbackRequestsPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [activeTab, setActiveTab] = useState('ALL');
   const [dateRange, setDateRange] = useState('all');
+  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value || '');
+  const [selectedWeek, setSelectedWeek] = useState('1');
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState('');
+
+  const weekOptions = useMemo(() => getMonthWeekOptions(selectedMonth), [selectedMonth]);
+
+  useEffect(() => {
+    if (!weekOptions.some((option) => option.value === selectedWeek)) {
+      setSelectedWeek(weekOptions[0]?.value || '1');
+    }
+  }, [selectedWeek, weekOptions]);
 
   const loadData = async () => {
     setLoading(true);
@@ -98,7 +90,7 @@ export default function CallbackRequestsPage() {
         params: {
           status: statusFilter,
           platform: activeTab === 'ALL' ? 'ALL' : activeTab,
-          limit: 300,
+          limit: 500,
         },
       });
       setRequests(res.data.requests || []);
@@ -134,7 +126,11 @@ export default function CallbackRequestsPage() {
 
     return requests.filter((request) => {
       const matchesPlatform = activeTab === 'ALL' || request.platform === activeTab;
-      const matchesDate = isWithinDateRange(request.createdAt, dateRange);
+      const matchesDate = isWithinCalendarFilter(request.createdAt, dateRange, {
+        exactDate: selectedDate,
+        monthValue: selectedMonth,
+        weekOfMonth: selectedWeek,
+      });
       const haystack = [
         request.name,
         request.phone,
@@ -149,7 +145,7 @@ export default function CallbackRequestsPage() {
 
       return matchesPlatform && matchesDate && (!term || haystack.includes(term));
     });
-  }, [requests, activeTab, dateRange, search]);
+  }, [requests, activeTab, dateRange, selectedDate, selectedMonth, selectedWeek, search]);
 
   const updateStatus = async (request, status) => {
     setSavingId(request.id);
@@ -226,7 +222,7 @@ export default function CallbackRequestsPage() {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {dateRangeOptions.map((option) => (
+            {calendarFilterOptions.map((option) => (
               <button
                 key={option.value}
                 type="button"
@@ -242,7 +238,7 @@ export default function CallbackRequestsPage() {
             ))}
           </div>
 
-          <div className="grid gap-4 md:grid-cols-[220px_1fr_auto]">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Field label="الحالة">
               <select className={inputClass} value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
                 {statusOptions.map((option) => (
@@ -253,7 +249,37 @@ export default function CallbackRequestsPage() {
               </select>
             </Field>
 
-            <Field label="بحث">
+            {dateRange === 'day' ? (
+              <Field label="اليوم المحدد">
+                <input className={inputClass} type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+              </Field>
+            ) : null}
+
+            {dateRange === 'specificMonth' || dateRange === 'specificWeek' ? (
+              <Field label="الشهر">
+                <select className={inputClass} value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)}>
+                  {monthOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+
+            {dateRange === 'specificWeek' ? (
+              <Field label="أسبوع الشهر">
+                <select className={inputClass} value={selectedWeek} onChange={(event) => setSelectedWeek(event.target.value)}>
+                  {weekOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            ) : null}
+
+            <Field label="بحث" className={dateRange === 'day' || dateRange === 'specificMonth' || dateRange === 'specificWeek' ? '' : 'md:col-span-2 xl:col-span-3'}>
               <div className="relative">
                 <Search className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <input
@@ -264,12 +290,12 @@ export default function CallbackRequestsPage() {
                 />
               </div>
             </Field>
+          </div>
 
-            <div className="flex items-end">
-              <SecondaryButton type="button" onClick={loadData}>
-                إعادة تحميل
-              </SecondaryButton>
-            </div>
+          <div className="flex justify-end">
+            <SecondaryButton type="button" onClick={loadData}>
+              إعادة تحميل
+            </SecondaryButton>
           </div>
         </div>
       </DataCard>

@@ -273,11 +273,11 @@ export default function LandingPage() {
 /* â”€â”€ Top Info Bar â”€â”€ */
 function TopInfoBar({ clinic }) {
   return (
-    <div className="bg-[#060a16] border-b border-white/5 py-2 px-6 text-xs">
-      <div className="mx-auto flex max-w-7xl items-center justify-between">
-        <div className="flex items-center gap-2 text-slate-400">
+    <div className="border-b border-white/5 bg-[#060a16] px-4 py-2 text-xs sm:px-6">
+      <div className="mx-auto flex max-w-7xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-start gap-2 text-slate-400 sm:items-center">
           <MapPin className="h-3.5 w-3.5 text-sky-400" />
-          <span>{clinic.address}</span>
+          <span className="leading-6">{clinic.address}</span>
         </div>
         <a
           href={`tel:${clinic.phone}`}
@@ -308,7 +308,7 @@ function Navbar({ clinic, scrolled, mobileMenuOpen, setMobileMenuOpen, scrollToS
           : 'bg-[#060a16]/80 backdrop-blur-sm'
       }`}
     >
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
         {/* Logo */}
         <button onClick={() => scrollToSection('hero')} className="flex items-center gap-3 group">
           <div className="relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-sky-400 to-cyan-600 shadow-lg shadow-sky-500/25 transition-transform group-hover:scale-105">
@@ -372,7 +372,7 @@ function HeroSection({ clinic, whatsappLink, scrollToSection }) {
     <section
       id="hero"
       ref={ref}
-      className="relative flex min-h-[85vh] items-center justify-center overflow-hidden px-6 pt-10"
+      className="relative flex min-h-[78vh] items-center justify-center overflow-hidden px-4 pt-8 sm:min-h-[85vh] sm:px-6 sm:pt-10"
     >
       {/* Background image */}
       <div className="pointer-events-none absolute inset-0">
@@ -421,12 +421,12 @@ function HeroSection({ clinic, whatsappLink, scrollToSection }) {
         </p>
 
         {/* CTAs */}
-        <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <div className="flex w-full flex-col items-center justify-center gap-4 sm:w-auto sm:flex-row">
           <a
             href={whatsappLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="group flex items-center gap-3 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-8 py-4 text-lg font-bold text-white shadow-2xl shadow-sky-500/25 transition-all hover:shadow-sky-500/40 hover:brightness-110"
+            className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-sky-500 to-cyan-500 px-8 py-4 text-lg font-bold text-white shadow-2xl shadow-sky-500/25 transition-all hover:shadow-sky-500/40 hover:brightness-110 sm:w-auto"
           >
             <MessageCircle className="h-6 w-6" />
             <span>احجز موعدك هسه</span>
@@ -434,7 +434,7 @@ function HeroSection({ clinic, whatsappLink, scrollToSection }) {
           </a>
           <button
             onClick={() => scrollToSection('services')}
-            className="flex items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-8 py-4 text-lg font-medium text-slate-300 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-white/10 hover:text-white"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-8 py-4 text-lg font-medium text-slate-300 backdrop-blur-sm transition-all hover:border-white/20 hover:bg-white/10 hover:text-white sm:w-auto"
           >
             <span>شوف خدماتنا</span>
             <ChevronDown className="h-5 w-5 animate-bounce" />
@@ -443,7 +443,7 @@ function HeroSection({ clinic, whatsappLink, scrollToSection }) {
       </div>
 
       {/* Scroll indicator */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2">
+      <div className="absolute bottom-8 left-1/2 hidden -translate-x-1/2 sm:block">
         <div className="flex h-8 w-5 items-start justify-center rounded-full border-2 border-white/20 p-1">
           <div className="h-2 w-1 animate-bounce rounded-full bg-white/40" />
         </div>
@@ -759,7 +759,17 @@ function DoctorsSection({ doctors }) {
           </p>
         </div>
 
-        <div className={`grid gap-8 ${doctors.length <= 3 ? `md:grid-cols-${doctors.length}` : 'md:grid-cols-3 lg:grid-cols-4'} justify-items-center max-w-4xl mx-auto`}>
+        <div
+          className={`mx-auto grid max-w-4xl justify-items-center gap-8 ${
+            doctors.length === 1
+              ? 'md:grid-cols-1'
+              : doctors.length === 2
+                ? 'md:grid-cols-2'
+                : doctors.length === 3
+                  ? 'md:grid-cols-3'
+                  : 'md:grid-cols-3 lg:grid-cols-4'
+          }`}
+        >
           {doctors.map((doctor, i) => {
             const color = COLORS[i % COLORS.length];
             return (
