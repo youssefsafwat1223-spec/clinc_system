@@ -84,6 +84,10 @@ function getServiceIcon(service) {
   return Star;
 }
 
+function getServiceTitle(service) {
+  return service.nameAr || service.name || 'خدمة أسنان';
+}
+
 function formatServicePrice(service) {
   const from = service.priceFrom;
   const to = service.priceTo;
@@ -693,7 +697,7 @@ function ServicesSection({ services, loading, whatsappLink }) {
                     )}
                   </div>
 
-                  <h3 className="mb-2 text-lg font-bold text-white">{service.nameAr}</h3>
+                  <h3 className="mb-2 text-lg font-bold text-white">{getServiceTitle(service)}</h3>
                   <p className="mb-5 text-sm leading-7 text-slate-400">
                     {service.description || 'خدمة متميزة نقدمها لكم بأعلى جودة وبأحدث التقنيات.'}
                   </p>

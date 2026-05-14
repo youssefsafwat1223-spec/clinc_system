@@ -14,6 +14,10 @@ import {
 } from '../utils/dateFilters';
 
 const monthOptions = buildRecentMonthOptions();
+const todayFirstFilterOptions = [
+  ...calendarFilterOptions.filter((option) => option.value === 'today'),
+  ...calendarFilterOptions.filter((option) => option.value !== 'today'),
+];
 
 export default function TodayPatientsPage() {
   const [appointments, setAppointments] = useState([]);
@@ -108,7 +112,7 @@ export default function TodayPatientsPage() {
 
       <DataCard className="mb-6 space-y-4">
         <div className="flex flex-wrap gap-2">
-          {calendarFilterOptions.map((option) => (
+          {todayFirstFilterOptions.map((option) => (
             <button
               key={option.value}
               type="button"
