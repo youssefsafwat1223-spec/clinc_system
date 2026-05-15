@@ -7,12 +7,14 @@ import {
   DataCard,
   Field,
   PageHeader,
+  PageLoader,
   PrimaryButton,
   SecondaryButton,
   StatCard,
   StatusBadge,
   inputClass,
 } from '../components/ui';
+import { confirmDialog } from '../components/dialogs';
 
 const daysAr = {
   sunday: 'الأحد',
@@ -248,7 +250,13 @@ export default function SettingsPage() {
   };
 
   const removeContact = async (contact) => {
-    if (!window.confirm(`حذف جهة الاتصال "${contact.name}"؟`)) return;
+    const ok = await confirmDialog({
+      title: 'حذف جهة الاتصال',
+      message: `سيتم حذف "${contact.name}" نهائياً.`,
+      confirmLabel: 'حذف',
+      tone: 'danger',
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/contacts/${contact.id}`);
@@ -298,7 +306,13 @@ export default function SettingsPage() {
   };
 
   const removeDiscount = async (discount) => {
-    if (!window.confirm(`حذف خصم "${discount.name}"؟`)) return;
+    const ok = await confirmDialog({
+      title: 'حذف الخصم',
+      message: `سيتم حذف خصم "${discount.name}" نهائياً.`,
+      confirmLabel: 'حذف',
+      tone: 'danger',
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/discounts/${discount.id}`);
@@ -319,7 +333,9 @@ export default function SettingsPage() {
   if (loading) {
     return (
       <AppLayout>
-        <DataCard className="text-center text-slate-300">جارٍ تحميل الإعدادات...</DataCard>
+        <DataCard>
+          <PageLoader label="جارٍ تحميل الإعدادات..." />
+        </DataCard>
       </AppLayout>
     );
   }

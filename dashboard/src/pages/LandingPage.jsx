@@ -226,6 +226,7 @@ export default function LandingPage() {
   const [stats, setStats] = useState({ patients: 0, appointments: 0, doctors: 0 });
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [showBackToTop, setShowBackToTop] = useState(false);
 
   // Fetch public data
   useEffect(() => {
@@ -258,10 +259,19 @@ export default function LandingPage() {
 
   // Scroll listener
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 50);
-    window.addEventListener('scroll', handleScroll);
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 50);
+      setShowBackToTop(window.scrollY > window.innerHeight * 0.8);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
+
+  // Keep document title in sync with clinic name
+  useEffect(() => {
+    const name = clinic.nameAr || clinic.name;
+    if (name) document.title = `${name} ${CLINIC_SUBTITLE}`;
+  }, [clinic]);
 
   const scrollToSection = (id) => {
     setMobileMenuOpen(false);
@@ -315,11 +325,25 @@ export default function LandingPage() {
         href={whatsappLink}
         target="_blank"
         rel="noopener noreferrer"
-        className="fixed bottom-6 left-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30 transition-transform hover:scale-110 active:scale-95"
+        style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+        className="fixed left-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500 shadow-lg shadow-emerald-500/30 transition-transform hover:scale-110 active:scale-95 sm:left-6"
         aria-label="تواصل عبر واتساب"
       >
         <MessageCircle className="h-7 w-7 text-white" />
       </a>
+
+      {/* â”€â”€ Back to top â”€â”€ */}
+      <button
+        type="button"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        style={{ bottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+        className={`fixed right-4 z-50 flex h-12 w-12 items-center justify-center rounded-full border border-white/10 bg-white/10 text-white backdrop-blur-md transition-all hover:bg-white/20 sm:right-6 ${
+          showBackToTop ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
+        }`}
+        aria-label="العودة لأعلى الصفحة"
+      >
+        <ChevronDown className="h-5 w-5 rotate-180" />
+      </button>
     </div>
   );
 }
@@ -430,11 +454,18 @@ function HeroSection({ clinic, whatsappLink, scrollToSection }) {
     <section
       id="hero"
       ref={ref}
-      className="relative flex min-h-[78vh] items-center justify-center overflow-hidden px-4 pt-8 sm:min-h-[85vh] sm:px-6 sm:pt-10"
+      className="relative flex min-h-[68vh] items-center justify-center overflow-hidden px-4 pb-12 pt-8 sm:min-h-[85vh] sm:px-6 sm:pt-10"
     >
       {/* Background image */}
       <div className="pointer-events-none absolute inset-0">
-        <img src="/images/hero-bg.png" alt="" className="h-full w-full object-cover opacity-20" />
+        <img
+          src="/images/hero-bg.png"
+          alt=""
+          aria-hidden="true"
+          decoding="async"
+          fetchpriority="low"
+          className="h-full w-full object-cover opacity-20"
+        />
         <div className="absolute inset-0 bg-gradient-to-b from-[#0a0f1e] via-[#0a0f1e]/80 to-[#0a0f1e]" />
       </div>
 
@@ -585,7 +616,13 @@ function ActiveDiscountsSection({ discounts, promoImage }) {
       <div className="mx-auto max-w-6xl overflow-hidden rounded-3xl border border-amber-400/20 bg-gradient-to-l from-amber-500/10 to-sky-500/10">
         <div className="grid gap-6 p-6 md:grid-cols-[220px_1fr] md:p-8">
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/5">
-            <img src={promoImage || '/images/hero-bg.png'} alt="Current offer" className="h-44 w-full object-cover md:h-full" />
+            <img
+              src={promoImage || '/images/hero-bg.png'}
+              alt="Current offer"
+              loading="lazy"
+              decoding="async"
+              className="h-44 w-full object-cover md:h-full"
+            />
           </div>
           <div>
             <p className="mb-2 text-sm font-bold text-amber-300">العروض الحالية</p>
@@ -598,6 +635,8 @@ function ActiveDiscountsSection({ discounts, promoImage }) {
                       <img
                         src={discount.imageUrl}
                         alt={discount.name}
+                        loading="lazy"
+                        decoding="async"
                         className="h-20 w-20 shrink-0 rounded-2xl object-cover"
                       />
                     ) : null}
@@ -714,14 +753,25 @@ function ServicesSection({ services, loading, whatsappLink }) {
         </div>
 
         {loading ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="relative h-14 w-14">
-              <div className="absolute inset-0 animate-spin rounded-full border-t-2 border-sky-500" />
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, i) => (
               <div
-                className="absolute inset-2 animate-spin rounded-full border-r-2 border-sky-400 opacity-75"
-                style={{ animationDuration: '1.4s' }}
-              />
-            </div>
+                key={i}
+                className="animate-pulse rounded-3xl border border-white/5 bg-white/[0.02] p-7"
+              >
+                <div className="mb-5 flex items-start justify-between">
+                  <div className="h-14 w-14 rounded-2xl bg-white/[0.05]" />
+                  <div className="h-7 w-20 rounded-xl bg-white/[0.05]" />
+                </div>
+                <div className="mb-2 h-5 w-1/2 rounded bg-white/[0.06]" />
+                <div className="mb-2 h-3 w-full rounded bg-white/[0.04]" />
+                <div className="mb-5 h-3 w-5/6 rounded bg-white/[0.04]" />
+                <div className="flex items-center justify-between border-t border-white/5 pt-4">
+                  <div className="h-3 w-16 rounded bg-white/[0.04]" />
+                  <div className="h-7 w-20 rounded-lg bg-white/[0.05]" />
+                </div>
+              </div>
+            ))}
           </div>
         ) : services.length === 0 ? (
           <div className="mx-auto max-w-md rounded-2xl border border-white/5 bg-white/[0.02] p-12 text-center">
@@ -843,6 +893,8 @@ function DoctorsSection({ doctors }) {
                       <img
                         src={doctor.image}
                         alt={doctor.name}
+                        loading="lazy"
+                        decoding="async"
                         className="h-full w-full object-cover"
                       />
                     </div>
@@ -890,6 +942,8 @@ function AboutSection({ clinic, whatsappLink }) {
                   <img
                     src="/images/doctor.png"
                     alt="د. إبراهيم - طبيب أسنان"
+                    loading="lazy"
+                    decoding="async"
                     className="h-full w-full object-cover object-top"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0d1225] via-transparent to-transparent" />
@@ -925,6 +979,8 @@ function AboutSection({ clinic, whatsappLink }) {
                 <img
                   src="/images/smile.png"
                   alt="نتيجة تجميل أسنان"
+                  loading="lazy"
+                  decoding="async"
                   className="h-28 w-40 object-cover"
                 />
                 <div className="px-3 py-2">

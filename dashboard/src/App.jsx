@@ -53,7 +53,7 @@ const ProtectedRoute = ({ children, allowedRoles }) => {
 const PageLoader = () => (
   <div className="flex min-h-screen items-center justify-center bg-dark-bg">
     <div className="relative h-14 w-14">
-      <div className="absolute inset-0 animate-spin rounded-full border-t-2 border-primary-500"></div>
+      <div className="absolute inset-0 animate-spin rounded-full border-t-2 border-sky-500"></div>
       <div
         className="absolute inset-2 animate-spin rounded-full border-r-2 border-primary-400 opacity-75"
         style={{ animationDuration: '1.4s' }}

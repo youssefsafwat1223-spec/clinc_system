@@ -4,7 +4,9 @@ import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 import AppointmentCard from '../components/appointments/AppointmentCard';
-import { DataCard, Field, PageHeader, PrimaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import EmptyState from '../components/EmptyState';
+import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import { confirmDialog, promptDialog } from '../components/dialogs';
 import { appointmentStatusLabels, appointmentStatusTone } from '../utils/appointmentUi';
 
 const statusGuide = [
@@ -85,18 +87,40 @@ export default function AppointmentRequestsPage() {
         toast.success('تم قبول وتأكيد الموعد');
       }
       if (action === 'reject') {
-        const reason = window.prompt('سبب رفض الطلب:');
+        const reason = await promptDialog({
+          title: 'رفض الطلب',
+          message: 'اكتب سبب الرفض — سيتم إبلاغ المريض.',
+          placeholder: 'مثال: لا توجد مواعيد متاحة',
+          multiline: true,
+          required: true,
+          confirmLabel: 'رفض',
+          tone: 'danger',
+        });
         if (reason === null) return;
         await api.post(`/appointments/${appointment.id}/reject`, { reason });
         toast.success('تم رفض الطلب');
       }
       if (action === 'complete') {
-        if (!window.confirm('هل تم الكشف على المريض؟')) return;
+        const ok = await confirmDialog({
+          title: 'تأكيد إكمال الكشف',
+          message: 'هل تم الكشف على المريض؟',
+          confirmLabel: 'تم الكشف',
+          tone: 'primary',
+        });
+        if (!ok) return;
         await api.post(`/appointments/${appointment.id}/complete`);
         toast.success('تم تسجيل الكشف');
       }
       if (action === 'cancel') {
-        const reason = window.prompt('سبب الإلغاء:');
+        const reason = await promptDialog({
+          title: 'إلغاء الموعد',
+          message: 'اكتب سبب الإلغاء — سيتم إبلاغ المريض.',
+          placeholder: 'مثال: تعارض في موعد الطبيب',
+          multiline: true,
+          required: true,
+          confirmLabel: 'إلغاء الموعد',
+          tone: 'danger',
+        });
         if (reason === null) return;
         await api.post(`/appointments/${appointment.id}/cancel`, { reason });
         toast.success('تم إلغاء الموعد');
@@ -169,9 +193,9 @@ export default function AppointmentRequestsPage() {
       </DataCard>
 
       {loading ? (
-        <DataCard>جاري تحميل الطلبات...</DataCard>
+        <DataCard><PageLoader label="جاري تحميل الطلبات..." /></DataCard>
       ) : appointments.length === 0 ? (
-        <DataCard className="text-center">لا توجد طلبات في هذا التصنيف.</DataCard>
+        <DataCard><EmptyState icon={Clock} title="لا توجد طلبات" description="لا توجد طلبات في هذا التصنيف." /></DataCard>
       ) : (
         <div className="grid gap-4">
           {appointments.map((appointment) => (

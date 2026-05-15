@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bell, CheckCheck, ExternalLink, Menu, PanelRightClose, PanelRightOpen, User, X } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../api/client';
+import GlobalSearch from './GlobalSearch';
 
 const routeTitles = {
   '/dashboard': 'الرئيسية',
@@ -71,6 +72,10 @@ export default function Header({ onMenuClick, onSidebarToggle, isSidebarCollapse
   };
 
   useEffect(() => {
+    document.title = `${title} - عيادتي`;
+  }, [title]);
+
+  useEffect(() => {
     loadNotifications();
     const interval = window.setInterval(loadNotifications, 60000);
     return () => window.clearInterval(interval);
@@ -132,6 +137,8 @@ export default function Header({ onMenuClick, onSidebarToggle, isSidebarCollapse
       </div>
 
       <div className="flex items-center gap-3">
+        <GlobalSearch />
+
         <div className="relative" ref={dropdownRef}>
           <button
             type="button"

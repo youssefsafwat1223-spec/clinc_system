@@ -1,8 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Edit2, Plus, Save, Trash2, X } from 'lucide-react';
+import { Edit2, Plus, Save, Stethoscope, Trash2, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
+import EmptyState from '../components/EmptyState';
+import {
+  DataCard,
+  Field,
+  PageHeader,
+  PrimaryButton,
+  SecondaryButton,
+  inputClass,
+} from '../components/ui';
+import { confirmDialog } from '../components/dialogs';
 
 const emptyForm = {
   nameAr: '',
@@ -89,7 +99,13 @@ export default function ServicesPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('حذف هذه الخدمة؟')) return;
+    const ok = await confirmDialog({
+      title: 'حذف الخدمة',
+      message: 'سيتم حذف هذه الخدمة نهائياً. هل تريد المتابعة؟',
+      confirmLabel: 'حذف',
+      tone: 'danger',
+    });
+    if (!ok) return;
 
     try {
       await api.delete(`/services/${id}`);
@@ -114,188 +130,181 @@ export default function ServicesPage() {
     setShowForm(true);
   };
 
+  const openCreate = () => {
+    setFormData(emptyForm);
+    setEditingId(null);
+    setShowForm(true);
+  };
+
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">الخدمات</h1>
-            <p className="mt-1 text-sm text-gray-500">إدارة خدمات العيادة وأسعارها</p>
-          </div>
-          <button
-            onClick={() => {
-              setFormData(emptyForm);
-              setEditingId(null);
-              setShowForm(true);
-            }}
-            className="flex items-center gap-2 rounded-lg bg-green-500 px-4 py-2 font-medium text-white transition hover:bg-green-600"
-          >
+      <PageHeader
+        title="الخدمات"
+        description="إدارة خدمات العيادة وأسعارها."
+        actions={
+          <PrimaryButton type="button" onClick={openCreate}>
             <Plus className="h-4 w-4" />
             خدمة جديدة
-          </button>
+          </PrimaryButton>
+        }
+      />
+
+      {loading ? (
+        <DataCard className="flex h-48 items-center justify-center">
+          <span className="h-8 w-8 animate-spin rounded-full border-4 border-sky-500 border-t-transparent" />
+        </DataCard>
+      ) : services.length === 0 ? (
+        <DataCard>
+          <EmptyState
+            icon={Stethoscope}
+            title="لا توجد خدمات حالياً"
+            description="ابدأ بإضافة الخدمات التي تقدمها العيادة حتى يستطيع المرضى الحجز عليها."
+            action={{ label: 'إضافة خدمة', onClick: openCreate }}
+          />
+        </DataCard>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {services.map((service) => (
+            <DataCard key={service.id} className="p-5">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="truncate text-base font-bold text-white">
+                    {service.nameAr || service.name}
+                  </h3>
+                  <p className="truncate text-xs text-slate-500" dir="ltr">
+                    {service.name}
+                  </p>
+                </div>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => handleEdit(service)}
+                    className="rounded-lg border border-sky-500/20 bg-sky-500/10 p-2 text-sky-300 transition hover:bg-sky-500/20"
+                    aria-label="تعديل الخدمة"
+                  >
+                    <Edit2 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(service.id)}
+                    className="rounded-lg border border-rose-500/20 bg-rose-500/10 p-2 text-rose-300 transition hover:bg-rose-500/20"
+                    aria-label="حذف الخدمة"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {service.description ? (
+                <p className="mb-3 text-sm leading-7 text-slate-400">{service.description}</p>
+              ) : null}
+
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+                {formatPriceRange(service) ? <span>السعر: {formatPriceRange(service)}</span> : null}
+                {service.duration ? <span>المدة: {service.duration} دقيقة</span> : null}
+              </div>
+            </DataCard>
+          ))}
         </div>
+      )}
 
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <div className="h-8 w-8 animate-spin rounded-full border-4 border-green-500 border-t-transparent" />
-          </div>
-        ) : services.length === 0 ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-12 text-center">
-            <p className="text-gray-500">لا توجد خدمات حالياً</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {services.map((service) => (
-              <div
-                key={service.id}
-                className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition hover:shadow-md"
+      {showForm ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+          <div className="my-4 w-full max-w-md overflow-hidden rounded-3xl border border-white/10 bg-[#0b1020] shadow-2xl shadow-black/60">
+            <div className="flex items-center justify-between border-b border-white/10 p-5">
+              <h2 className="text-lg font-black text-white">
+                {editingId ? 'تعديل الخدمة' : 'خدمة جديدة'}
+              </h2>
+              <button
+                onClick={closeForm}
+                className="rounded-lg p-2 text-slate-400 transition hover:bg-white/10 hover:text-white"
+                aria-label="إغلاق"
               >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <h3 className="truncate font-bold text-gray-900">{service.nameAr || service.name}</h3>
-                    <p className="truncate text-xs text-gray-500" dir="ltr">
-                      {service.name}
-                    </p>
-                  </div>
-                  <div className="flex gap-1">
-                    <button
-                      onClick={() => handleEdit(service)}
-                      className="rounded-lg bg-blue-100 p-2 text-blue-600 transition hover:bg-blue-200"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(service.id)}
-                      className="rounded-lg bg-red-100 p-2 text-red-600 transition hover:bg-red-200"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
 
-                {service.description ? (
-                  <p className="mb-3 text-sm leading-6 text-gray-600">{service.description}</p>
-                ) : null}
+            <div className="space-y-4 p-5">
+              <Field label="الاسم بالعربية">
+                <input
+                  type="text"
+                  value={formData.nameAr}
+                  onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
+                  className={inputClass}
+                />
+              </Field>
 
-                <div className="flex flex-wrap gap-3 text-xs text-gray-500">
-                  {formatPriceRange(service) ? <span>السعر: {formatPriceRange(service)}</span> : null}
-                  {service.duration ? <span>المدة: {service.duration} دقيقة</span> : null}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+              <Field label="الاسم بالإنجليزية">
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  className={inputClass}
+                  dir="ltr"
+                />
+              </Field>
 
-        {showForm ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-            <div className="my-4 w-full max-w-md rounded-lg border border-gray-200 bg-white shadow-2xl">
-              <div className="flex items-center justify-between border-b border-gray-200 p-6">
-                <h2 className="text-xl font-bold text-gray-900">
-                  {editingId ? 'تعديل الخدمة' : 'خدمة جديدة'}
-                </h2>
-                <button onClick={closeForm} className="text-gray-600 transition hover:text-gray-900">
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
+              <Field label="الوصف">
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  className={inputClass}
+                  rows="3"
+                />
+              </Field>
 
-              <div className="space-y-4 p-6">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-900">الاسم بالعربية</label>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="السعر الأساسي">
                   <input
-                    type="text"
-                    value={formData.nameAr}
-                    onChange={(e) => setFormData({ ...formData, nameAr: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    type="number"
+                    value={formData.price}
+                    onChange={(e) => setFormData({ ...formData, price: e.target.value })}
+                    className={inputClass}
                   />
-                </div>
+                </Field>
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-900">الاسم بالإنجليزية</label>
+                <Field label="المدة بالدقائق">
                   <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    dir="ltr"
+                    type="number"
+                    value={formData.duration}
+                    onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
+                    placeholder="30"
+                    className={inputClass}
                   />
-                </div>
+                </Field>
+              </div>
 
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-gray-900">الوصف</label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    rows="3"
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="السعر من">
+                  <input
+                    type="number"
+                    value={formData.priceFrom}
+                    onChange={(e) => setFormData({ ...formData, priceFrom: e.target.value })}
+                    className={inputClass}
                   />
-                </div>
+                </Field>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-900">السعر الأساسي</label>
-                    <input
-                      type="number"
-                      value={formData.price}
-                      onChange={(e) => setFormData({ ...formData, price: e.target.value })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
+                <Field label="السعر إلى">
+                  <input
+                    type="number"
+                    value={formData.priceTo}
+                    onChange={(e) => setFormData({ ...formData, priceTo: e.target.value })}
+                    className={inputClass}
+                  />
+                </Field>
+              </div>
 
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-900">المدة بالدقائق</label>
-                    <input
-                      type="number"
-                      value={formData.duration}
-                      onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
-                      placeholder="30"
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-900">السعر من</label>
-                    <input
-                      type="number"
-                      value={formData.priceFrom}
-                      onChange={(e) => setFormData({ ...formData, priceFrom: e.target.value })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-gray-900">السعر إلى</label>
-                    <input
-                      type="number"
-                      value={formData.priceTo}
-                      onChange={(e) => setFormData({ ...formData, priceTo: e.target.value })}
-                      className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 border-t border-gray-200 pt-4">
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-green-500 px-4 py-2 font-medium text-white transition hover:bg-green-600 disabled:opacity-50"
-                  >
-                    <Save className="h-4 w-4" />
-                    حفظ
-                  </button>
-                  <button
-                    onClick={closeForm}
-                    className="flex-1 rounded-lg bg-gray-100 px-4 py-2 font-medium text-gray-700 transition hover:bg-gray-200"
-                  >
-                    إلغاء
-                  </button>
-                </div>
+              <div className="flex gap-3 border-t border-white/10 pt-4">
+                <PrimaryButton onClick={handleSave} disabled={saving} className="flex-1">
+                  <Save className="h-4 w-4" />
+                  {saving ? 'جاري الحفظ...' : 'حفظ'}
+                </PrimaryButton>
+                <SecondaryButton onClick={closeForm} className="flex-1">
+                  إلغاء
+                </SecondaryButton>
               </div>
             </div>
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </AppLayout>
   );
 }

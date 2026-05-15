@@ -2,7 +2,7 @@ const cron = require('node-cron');
 const prisma = require('../lib/prisma');
 const whatsappService = require('../services/whatsappService');
 
-const REVIEW_DELAY_HOURS = 3;
+const REVIEW_DELAY_HOURS = Number(process.env.REVIEW_REQUEST_DELAY_HOURS || 24);
 const REVIEW_TEMPLATE = 'clinic_review_ar';
 const REVIEW_FALLBACK_LANGUAGES = ['ar', 'ar_EG', 'ar_AR', 'ar_SA'];
 
@@ -33,21 +33,24 @@ const sendReviewTemplateWithFallback = async (phone, params) => {
       }
     }
   }
+
   throw lastError || new Error('Review template language not resolved');
 };
 
-/**
- * Find confirmed appointments that ended 3+ hours ago and haven't had a review sent yet.
- * Send a WhatsApp template with rating buttons.
- */
 const sendPendingReviewRequests = async () => {
   const cutoff = new Date(Date.now() - REVIEW_DELAY_HOURS * 60 * 60 * 1000);
 
   const appointments = await prisma.appointment.findMany({
     where: {
-      status: { in: ['CONFIRMED', 'COMPLETED'] },
+      status: 'COMPLETED',
       reviewSent: false,
-      scheduledTime: { lte: cutoff },
+      OR: [
+        { completedAt: { lte: cutoff } },
+        {
+          completedAt: null,
+          updatedAt: { lte: cutoff },
+        },
+      ],
     },
     include: {
       patient: { select: { id: true, name: true, phone: true, platform: true } },
@@ -63,7 +66,6 @@ const sendPendingReviewRequests = async () => {
   for (const appointment of appointments) {
     try {
       if (!appointment.patient?.phone || appointment.patient.platform !== 'WHATSAPP') {
-        // Mark as sent so we don't retry non-WhatsApp patients
         await prisma.appointment.update({
           where: { id: appointment.id },
           data: { reviewSent: true },
@@ -71,7 +73,7 @@ const sendPendingReviewRequests = async () => {
         continue;
       }
 
-      const patientName = appointment.patient.name || 'عزيزي المريض';
+      const patientName = appointment.patient.name || 'عزيزنا المريض';
       const doctorName = (appointment.doctor?.name || 'الطبيب').replace(/^د\.\s*/, '');
 
       const usedLang = await sendReviewTemplateWithFallback(appointment.patient.phone, [patientName, doctorName]);
@@ -81,7 +83,6 @@ const sendPendingReviewRequests = async () => {
           .catch(() => {});
       }
 
-      // Create review record (awaiting reply)
       await prisma.review.create({
         data: {
           appointmentId: appointment.id,
@@ -91,7 +92,6 @@ const sendPendingReviewRequests = async () => {
         },
       });
 
-      // Mark appointment so we don't send again
       await prisma.appointment.update({
         where: { id: appointment.id },
         data: { reviewSent: true },
@@ -101,7 +101,6 @@ const sendPendingReviewRequests = async () => {
       console.log(`[ReviewCron] Sent review request to ${appointment.patient.phone}`);
     } catch (error) {
       console.error(`[ReviewCron] Failed to send review for appointment ${appointment.id}:`, error.message);
-      // Don't mark as sent so we can retry next cycle
     }
   }
 
@@ -109,7 +108,6 @@ const sendPendingReviewRequests = async () => {
 };
 
 const startReviewCron = () => {
-  // Run every 15 minutes
   cron.schedule('*/15 * * * *', async () => {
     try {
       const count = await sendPendingReviewRequests();
@@ -121,7 +119,7 @@ const startReviewCron = () => {
     }
   });
 
-  console.log('[Cron] Review request cron started (every 15 min)');
+  console.log(`[Cron] Review request cron started (every 15 min, delay ${REVIEW_DELAY_HOURS}h)`);
 };
 
 module.exports = { startReviewCron, sendPendingReviewRequests };

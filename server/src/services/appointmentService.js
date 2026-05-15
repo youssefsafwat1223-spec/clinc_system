@@ -3,6 +3,7 @@ const { generateTimeSlots, formatDateAr, formatTimeAr } = require('../utils/help
 
 const BLOCKING_STATUSES = ['CONFIRMED', 'PENDING', 'BLOCKED'];
 const PENDING_APPOINTMENT_EXPIRY_HOURS = Number(process.env.PENDING_APPOINTMENT_EXPIRY_HOURS || 24);
+const WALK_IN_DAILY_LIMIT = Number(process.env.WALK_IN_DAILY_LIMIT || 30);
 
 const buildRange = (time, durationMinutes) => {
   const start = new Date(time).getTime();
@@ -35,11 +36,31 @@ const getDayBounds = (time) => {
   return { dayStart, dayEnd };
 };
 
+const buildWalkInScheduledTime = (dateValue) => {
+  const date = new Date(dateValue);
+  date.setHours(12, 0, 0, 0);
+  return date;
+};
+
+const getDoctorWalkInCount = async ({ doctorId, dateValue, excludeAppointmentId = null }) => {
+  const { dayStart, dayEnd } = getDayBounds(dateValue);
+  return prisma.appointment.count({
+    where: {
+      doctorId,
+      appointmentType: 'WALK_IN',
+      status: { in: BLOCKING_STATUSES },
+      ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {}),
+      scheduledTime: { gte: dayStart, lte: dayEnd },
+    },
+  });
+};
+
 const getAppointmentConflict = async ({ doctorId, scheduledTime, duration, excludeAppointmentId = null }) => {
   const { dayStart, dayEnd } = getDayBounds(scheduledTime);
   const existingAppointments = await prisma.appointment.findMany({
     where: {
       doctorId,
+      appointmentType: 'SCHEDULED',
       status: { in: BLOCKING_STATUSES },
       ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {}),
       scheduledTime: { gte: dayStart, lte: dayEnd },
@@ -55,7 +76,13 @@ const getAppointmentConflict = async ({ doctorId, scheduledTime, duration, exclu
   });
 };
 
-const isDoctorAvailableAt = async ({ doctorId, scheduledTime, duration, excludeAppointmentId = null, ignoreLeadTime = false }) => {
+const isDoctorAvailableAt = async ({
+  doctorId,
+  scheduledTime,
+  duration,
+  excludeAppointmentId = null,
+  ignoreLeadTime = false,
+}) => {
   const doctor = await prisma.doctor.findFirst({ where: { id: doctorId, active: true } });
   if (!doctor) return false;
 
@@ -68,7 +95,12 @@ const isDoctorAvailableAt = async ({ doctorId, scheduledTime, duration, excludeA
   const inWorkingHours = daySlots.some((slot) => new Date(slot.time).getTime() === requested.getTime());
   if (!inWorkingHours) return false;
 
-  const conflict = await getAppointmentConflict({ doctorId, scheduledTime: requested, duration, excludeAppointmentId });
+  const conflict = await getAppointmentConflict({
+    doctorId,
+    scheduledTime: requested,
+    duration,
+    excludeAppointmentId,
+  });
   return !conflict;
 };
 
@@ -80,10 +112,7 @@ const getAvailableDoctorsAt = async ({ serviceId, scheduledTime, doctorIds = nul
     where: {
       active: true,
       ...(Array.isArray(doctorIds) && doctorIds.length > 0 ? { id: { in: doctorIds } } : {}),
-      OR: [
-        { tasks: { none: {} } },
-        { tasks: { some: { serviceId } } },
-      ],
+      OR: [{ tasks: { none: {} } }, { tasks: { some: { serviceId } } }],
     },
     orderBy: { createdAt: 'asc' },
   });
@@ -120,39 +149,69 @@ const generateBookingRef = async () => {
   return `B-${Date.now().toString(36).toUpperCase()}`;
 };
 
-/**
- * Create a new appointment with conflict detection + pending lock
- */
-const createAppointment = async ({ patientId, doctorId, serviceId, scheduledTime, rescheduleAptId = null }) => {
-  // Get the service for duration
+const createAppointment = async ({
+  patientId,
+  doctorId,
+  serviceId,
+  scheduledTime,
+  appointmentType = 'SCHEDULED',
+  rescheduleAptId = null,
+}) => {
   const service = await prisma.service.findUnique({ where: { id: serviceId } });
   if (!service) throw new Error('الخدمة غير موجودة');
 
-  const doctorAvailable = await isDoctorAvailableAt({
-    doctorId,
-    scheduledTime,
-    duration: service.duration,
-    excludeAppointmentId: rescheduleAptId,
-  });
+  const resolvedAppointmentType = appointmentType === 'WALK_IN' ? 'WALK_IN' : 'SCHEDULED';
+  const resolvedScheduledTime =
+    resolvedAppointmentType === 'WALK_IN'
+      ? buildWalkInScheduledTime(scheduledTime)
+      : new Date(scheduledTime);
 
-  if (!doctorAvailable) {
-    const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
-    const alternatives = await getAlternativeSlots(doctorId, scheduledTime, doctor?.workingHours || {}, service.duration);
-    return { conflict: true, alternatives };
-  }
+  if (resolvedAppointmentType === 'WALK_IN') {
+    const walkInCount = await getDoctorWalkInCount({
+      doctorId,
+      dateValue: resolvedScheduledTime,
+      excludeAppointmentId: rescheduleAptId,
+    });
 
-  const hasOverlap = await getAppointmentConflict({
-    doctorId,
-    scheduledTime,
-    duration: service.duration,
-    excludeAppointmentId: rescheduleAptId,
-  });
+    if (walkInCount >= WALK_IN_DAILY_LIMIT) {
+      throw new Error(`تم الوصول إلى الحد اليومي للحجوزات لهذا الطبيب (${WALK_IN_DAILY_LIMIT})`);
+    }
+  } else {
+    const doctorAvailable = await isDoctorAvailableAt({
+      doctorId,
+      scheduledTime: resolvedScheduledTime,
+      duration: service.duration,
+      excludeAppointmentId: rescheduleAptId,
+    });
 
-  if (hasOverlap) {
-    // There's a conflict - suggest alternatives
-    const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
-    const alternatives = await getAlternativeSlots(doctorId, scheduledTime, doctor.workingHours, service.duration);
-    return { conflict: true, alternatives };
+    if (!doctorAvailable) {
+      const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
+      const alternatives = await getAlternativeSlots(
+        doctorId,
+        resolvedScheduledTime,
+        doctor?.workingHours || {},
+        service.duration
+      );
+      return { conflict: true, alternatives };
+    }
+
+    const hasOverlap = await getAppointmentConflict({
+      doctorId,
+      scheduledTime: resolvedScheduledTime,
+      duration: service.duration,
+      excludeAppointmentId: rescheduleAptId,
+    });
+
+    if (hasOverlap) {
+      const doctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
+      const alternatives = await getAlternativeSlots(
+        doctorId,
+        resolvedScheduledTime,
+        doctor?.workingHours || {},
+        service.duration
+      );
+      return { conflict: true, alternatives };
+    }
   }
 
   const lockedUntil = new Date(Date.now() + PENDING_APPOINTMENT_EXPIRY_HOURS * 60 * 60 * 1000);
@@ -160,16 +219,18 @@ const createAppointment = async ({ patientId, doctorId, serviceId, scheduledTime
   let appointment;
 
   if (rescheduleAptId) {
-    // We are rescheduling an existing appointment
     const oldApt = await prisma.appointment.findUnique({ where: { id: rescheduleAptId } });
-    const oldTimeFormatted = oldApt ? `${formatDateAr(oldApt.scheduledTime)} الساعة ${formatTimeAr(oldApt.scheduledTime)}` : 'وقت سابق';
+    const oldTimeFormatted = oldApt
+      ? `${formatDateAr(oldApt.scheduledTime)} الساعة ${formatTimeAr(oldApt.scheduledTime)}`
+      : 'وقت سابق';
 
     appointment = await prisma.appointment.update({
       where: { id: rescheduleAptId },
       data: {
         doctorId,
         serviceId,
-        scheduledTime: new Date(scheduledTime),
+        appointmentType: resolvedAppointmentType,
+        scheduledTime: resolvedScheduledTime,
         status: 'PENDING',
         lockedUntil,
         notes: `تم التأجيل من: ${oldTimeFormatted}`,
@@ -181,7 +242,6 @@ const createAppointment = async ({ patientId, doctorId, serviceId, scheduledTime
       },
     });
   } else {
-    // Generate a friendly uppercase 6-char booking ID (e.g. B-XY3K9P)
     const bookingRef = await generateBookingRef();
 
     appointment = await prisma.appointment.create({
@@ -190,7 +250,8 @@ const createAppointment = async ({ patientId, doctorId, serviceId, scheduledTime
         patientId,
         doctorId,
         serviceId,
-        scheduledTime: new Date(scheduledTime),
+        appointmentType: resolvedAppointmentType,
+        scheduledTime: resolvedScheduledTime,
         status: 'PENDING',
         lockedUntil,
       },
@@ -202,12 +263,14 @@ const createAppointment = async ({ patientId, doctorId, serviceId, scheduledTime
     });
   }
 
+  await prisma.patient.update({
+    where: { id: patientId },
+    data: { profileType: 'BOOKED' },
+  });
+
   return { conflict: false, appointment };
 };
 
-/**
- * Confirm an appointment (with final conflict check)
- */
 const confirmAppointment = async (appointmentId) => {
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
@@ -218,22 +281,33 @@ const confirmAppointment = async (appointmentId) => {
   if (appointment.status === 'CONFIRMED') throw new Error('الموعد مؤكد بالفعل');
   if (appointment.status === 'EXPIRED') throw new Error('الموعد منتهي الصلاحية');
 
-  // Final conflict check
-  const hasOverlap = await getAppointmentConflict({
-    doctorId: appointment.doctorId,
-    scheduledTime: appointment.scheduledTime,
-    duration: appointment.service.duration,
-    excludeAppointmentId: appointmentId,
-  });
+  if (appointment.appointmentType === 'SCHEDULED') {
+    const hasOverlap = await getAppointmentConflict({
+      doctorId: appointment.doctorId,
+      scheduledTime: appointment.scheduledTime,
+      duration: appointment.service.duration,
+      excludeAppointmentId: appointmentId,
+    });
 
-  if (hasOverlap) {
-    const alternatives = await getAlternativeSlots(
-      appointment.doctorId,
-      appointment.scheduledTime,
-      appointment.doctor.workingHours,
-      appointment.service.duration
-    );
-    return { conflict: true, alternatives, appointment };
+    if (hasOverlap) {
+      const alternatives = await getAlternativeSlots(
+        appointment.doctorId,
+        appointment.scheduledTime,
+        appointment.doctor.workingHours,
+        appointment.service.duration
+      );
+      return { conflict: true, alternatives, appointment };
+    }
+  } else {
+    const walkInCount = await getDoctorWalkInCount({
+      doctorId: appointment.doctorId,
+      dateValue: appointment.scheduledTime,
+      excludeAppointmentId: appointmentId,
+    });
+
+    if (walkInCount >= WALK_IN_DAILY_LIMIT) {
+      throw new Error(`تم الوصول إلى الحد اليومي للحجوزات لهذا الطبيب (${WALK_IN_DAILY_LIMIT})`);
+    }
   }
 
   const confirmed = await prisma.appointment.update({
@@ -245,9 +319,6 @@ const confirmAppointment = async (appointmentId) => {
   return { conflict: false, appointment: confirmed };
 };
 
-/**
- * Reject an appointment and suggest alternatives
- */
 const rejectAppointment = async (appointmentId, reason) => {
   const appointment = await prisma.appointment.findUnique({
     where: { id: appointmentId },
@@ -262,30 +333,28 @@ const rejectAppointment = async (appointmentId, reason) => {
     include: { patient: true, doctor: true, service: true },
   });
 
-  const alternatives = await getAlternativeSlots(
-    appointment.doctorId,
-    appointment.scheduledTime,
-    appointment.doctor.workingHours,
-    appointment.service.duration
-  );
+  const alternatives =
+    appointment.appointmentType === 'SCHEDULED'
+      ? await getAlternativeSlots(
+          appointment.doctorId,
+          appointment.scheduledTime,
+          appointment.doctor.workingHours,
+          appointment.service.duration
+        )
+      : [];
 
   return { appointment: updated, alternatives };
 };
 
-/**
- * Get alternative available slots near the requested time
- */
 const getAlternativeSlots = async (doctorId, aroundTime, workingHours, duration = 30) => {
   const baseDate = new Date(aroundTime);
   const resolvedWorkingHours = await resolveWorkingHours(workingHours);
   const slots = [];
 
-  // Check the next 7 days
   for (let dayOffset = 0; dayOffset < 14; dayOffset++) {
     const date = new Date(baseDate);
     date.setDate(date.getDate() + dayOffset);
 
-    // Get booked slots for this day
     const dayStart = new Date(date);
     dayStart.setHours(0, 0, 0, 0);
     const dayEnd = new Date(date);
@@ -294,6 +363,7 @@ const getAlternativeSlots = async (doctorId, aroundTime, workingHours, duration 
     const bookedAppointments = await prisma.appointment.findMany({
       where: {
         doctorId,
+        appointmentType: 'SCHEDULED',
         status: { in: BLOCKING_STATUSES },
         scheduledTime: { gte: dayStart, lte: dayEnd },
       },
@@ -313,9 +383,6 @@ const getAlternativeSlots = async (doctorId, aroundTime, workingHours, duration 
   return slots.slice(0, 10);
 };
 
-/**
- * Expire stale pending appointments
- */
 const expirePendingAppointments = async () => {
   const expired = await prisma.appointment.updateMany({
     where: {

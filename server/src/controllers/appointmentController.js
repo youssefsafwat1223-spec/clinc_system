@@ -113,6 +113,7 @@ const create = async (req, res, next) => {
       patientId,
       doctorId,
       serviceId,
+      appointmentType = 'SCHEDULED',
       scheduledTime,
       date,
       time,
@@ -130,7 +131,16 @@ const create = async (req, res, next) => {
           select: { id: true },
         })
       )?.id;
-    const resolvedScheduledTime = scheduledTime || (date && time ? `${date}T${time}` : null);
+    const resolvedAppointmentType = appointmentType === 'WALK_IN' ? 'WALK_IN' : 'SCHEDULED';
+    const resolvedScheduledTime =
+      scheduledTime ||
+      (date
+        ? resolvedAppointmentType === 'WALK_IN'
+          ? date
+          : time
+            ? `${date}T${time}`
+            : null
+        : null);
 
     if (!patientId || !(scopedDoctor?.id || doctorId) || !resolvedServiceId || !resolvedScheduledTime) {
       return res.status(400).json({ error: 'المريض والطبيب والتاريخ والوقت مطلوبة' });
@@ -141,6 +151,7 @@ const create = async (req, res, next) => {
       doctorId: scopedDoctor?.id || doctorId,
       serviceId: resolvedServiceId,
       scheduledTime: resolvedScheduledTime,
+      appointmentType: resolvedAppointmentType,
     });
 
     if (result.conflict) {
@@ -442,11 +453,11 @@ const complete = async (req, res, next) => {
       return res.status(400).json({ error: 'لا يمكن تحديد "تم الكشف" إلا للمواعيد المؤكدة' });
     }
 
-    const appointment = await prisma.appointment.update({
-      where: { id: req.params.id },
-      data: { status: 'COMPLETED' },
-      include: { patient: true, doctor: true, service: true },
-    });
+      const appointment = await prisma.appointment.update({
+        where: { id: req.params.id },
+        data: { status: 'COMPLETED', completedAt: new Date() },
+        include: { patient: true, doctor: true, service: true },
+      });
 
     if (appointment.service?.price) {
       await prisma.patient.update({
@@ -457,6 +468,29 @@ const complete = async (req, res, next) => {
         },
       });
     }
+
+    res.json({ appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const noShow = async (req, res, next) => {
+  try {
+    const { appointment: existingAppointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!existingAppointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    if (!['PENDING', 'CONFIRMED'].includes(existingAppointment.status)) {
+      return res.status(400).json({ error: 'يمكن تحديد "لم يأت" فقط للحجوزات النشطة' });
+    }
+
+    const appointment = await prisma.appointment.update({
+      where: { id: req.params.id },
+      data: { status: 'NO_SHOW' },
+      include: { patient: true, doctor: true, service: true },
+    });
 
     res.json({ appointment });
   } catch (error) {
@@ -536,7 +570,7 @@ const block = async (req, res, next) => {
 const getStats = async (req, res, next) => {
   try {
     const scopedDoctor = await getScopedDoctor(req);
-    const statuses = ['PENDING', 'CONFIRMED', 'CANCELLED', 'REJECTED', 'EXPIRED', 'BLOCKED', 'COMPLETED'];
+    const statuses = ['PENDING', 'CONFIRMED', 'CANCELLED', 'REJECTED', 'EXPIRED', 'BLOCKED', 'COMPLETED', 'NO_SHOW'];
     const counts = { ALL: 0, RESCHEDULED: 0 };
     const where = scopedDoctor ? { doctorId: scopedDoctor.id } : {};
 
@@ -578,6 +612,7 @@ module.exports = {
   update,
   block,
   complete,
+  noShow,
   cancel,
   getStats,
   availability,

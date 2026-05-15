@@ -3,7 +3,8 @@ import { CheckCircle, CreditCard, DollarSign, Edit3, Percent, RefreshCw, Search,
 import { toast } from 'react-toastify';
 import AppLayout from '../components/Layout';
 import api from '../api/client';
-import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import EmptyState from '../components/EmptyState';
 import { formatDateTime, money } from '../utils/appointmentUi';
 
 const statusLabels = {
@@ -151,9 +152,9 @@ export default function PaymentsPage() {
       </DataCard>
 
       {loading ? (
-        <DataCard>جاري تحميل المدفوعات...</DataCard>
+        <DataCard><PageLoader label="جاري تحميل المدفوعات..." /></DataCard>
       ) : filteredPayments.length === 0 ? (
-        <DataCard>لا توجد مدفوعات مطابقة للفلاتر الحالية.</DataCard>
+        <DataCard><EmptyState icon={CreditCard} title="لا توجد مدفوعات" description="لا توجد مدفوعات مطابقة للفلاتر الحالية." /></DataCard>
       ) : (
         <div className="grid gap-4">
           {filteredPayments.map((payment) => {

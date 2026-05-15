@@ -3,19 +3,21 @@ import { Inbox } from 'lucide-react';
 export default function EmptyState({ icon: Icon = Inbox, title, description, action }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 px-4">
-      <div className="rounded-2xl bg-slate-500/5 p-6 mb-6">
-        <Icon className="w-12 h-12 text-slate-400" />
+      <div className="mb-6 rounded-2xl border border-white/5 bg-white/[0.03] p-6">
+        <Icon className="h-12 w-12 text-slate-500" />
       </div>
-      <h3 className="text-xl font-bold text-white mb-2">{title}</h3>
-      <p className="text-slate-400 text-center mb-6 max-w-md">{description}</p>
-      {action && (
+      <h3 className="mb-2 text-xl font-bold text-white">{title}</h3>
+      {description ? (
+        <p className="mb-6 max-w-md text-center text-sm leading-7 text-slate-400">{description}</p>
+      ) : null}
+      {action ? (
         <button
           onClick={action.onClick}
-          className="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition-colors"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 px-6 py-2.5 text-sm font-bold text-white shadow-lg shadow-sky-500/20 transition hover:brightness-110"
         >
           {action.label}
         </button>
-      )}
+      ) : null}
     </div>
   );
 }

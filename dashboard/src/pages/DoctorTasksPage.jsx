@@ -3,7 +3,7 @@ import { Edit3, Save, Stethoscope, X } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
-import { DataCard, PageHeader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
+import { DataCard, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
 
 export default function DoctorTasksPage() {
   const [doctors, setDoctors] = useState([]);
@@ -70,7 +70,7 @@ export default function DoctorTasksPage() {
       />
 
       {loading ? (
-        <DataCard>جاري تحميل البيانات...</DataCard>
+        <DataCard><PageLoader label="جاري تحميل البيانات..." /></DataCard>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">
           {doctors.map((doctor) => {

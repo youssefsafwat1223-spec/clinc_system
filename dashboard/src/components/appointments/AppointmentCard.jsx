@@ -12,12 +12,14 @@ export default function AppointmentCard({
   onConfirm,
   onReject,
   onComplete,
+  onNoShow,
   onCancel,
   compact = false,
 }) {
   const patientName = appointment.patient?.displayName || appointment.patient?.name || 'مريض غير محدد';
   const serviceName = appointment.service?.nameAr || appointment.service?.name || 'خدمة غير محددة';
   const doctorName = appointment.doctor?.name || 'طبيب غير محدد';
+  const isWalkIn = appointment.appointmentType === 'WALK_IN';
 
   return (
     <DataCard className={compact ? 'p-4' : undefined}>
@@ -33,11 +35,16 @@ export default function AppointmentCard({
             >
               {appointment.bookingRef || appointment.id}
             </span>
+            {isWalkIn ? (
+              <span className="rounded-full border border-amber-500/20 bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-200">
+                دخول حسب الحضور
+              </span>
+            ) : null}
           </div>
 
           <h3 className="truncate text-lg font-black text-white">{patientName}</h3>
 
-          <div className="mt-3 grid gap-2 text-sm text-slate-300 md:grid-cols-2 xl:grid-cols-4">
+          <div className={`mt-3 grid gap-2 text-sm text-slate-300 ${isWalkIn ? 'md:grid-cols-3 xl:grid-cols-3' : 'md:grid-cols-2 xl:grid-cols-4'}`}>
             <span className="inline-flex items-center gap-2">
               <User className="h-4 w-4 text-sky-300" />
               {appointment.patient?.phone || '-'}
@@ -50,10 +57,12 @@ export default function AppointmentCard({
               <CalendarDays className="h-4 w-4 text-amber-300" />
               {formatDetailedDate(appointment.scheduledTime)}
             </span>
-            <span className="inline-flex items-center gap-2">
-              <Clock3 className="h-4 w-4 text-cyan-300" />
-              {formatTime(appointment.scheduledTime)}
-            </span>
+            {!isWalkIn ? (
+              <span className="inline-flex items-center gap-2">
+                <Clock3 className="h-4 w-4 text-cyan-300" />
+                {formatTime(appointment.scheduledTime)}
+              </span>
+            ) : null}
           </div>
 
           <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">
@@ -89,6 +98,14 @@ export default function AppointmentCard({
                 <CheckCircle className="h-4 w-4" />
                 تم الكشف
               </PrimaryButton>
+              <SecondaryButton
+                type="button"
+                onClick={() => onNoShow?.(appointment)}
+                className="hover:bg-amber-500/10 hover:text-amber-200"
+              >
+                <XCircle className="h-4 w-4" />
+                لم يأت
+              </SecondaryButton>
               <SecondaryButton
                 type="button"
                 onClick={() => onCancel?.(appointment)}

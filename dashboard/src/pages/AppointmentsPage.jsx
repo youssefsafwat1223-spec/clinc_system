@@ -5,7 +5,9 @@ import api from '../api/client';
 import AppLayout from '../components/Layout';
 import ManualBookingPanel from '../components/appointments/ManualBookingPanel';
 import AppointmentCard from '../components/appointments/AppointmentCard';
-import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatCard, inputClass } from '../components/ui';
+import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatCard, inputClass } from '../components/ui';
+import { confirmDialog, promptDialog } from '../components/dialogs';
+import EmptyState from '../components/EmptyState';
 import { appointmentStatusLabels, formatDetailedDate } from '../utils/appointmentUi';
 import {
   buildRecentMonthOptions,
@@ -24,7 +26,7 @@ const daysAr = {
   saturday: 'السبت',
 };
 
-const statusOrder = ['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'BLOCKED'];
+const statusOrder = ['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED', 'REJECTED', 'BLOCKED'];
 
 const dayKey = (value) => new Date(value).toISOString().slice(0, 10);
 const monthOptions = buildRecentMonthOptions();
@@ -98,20 +100,53 @@ export default function AppointmentsPage() {
       }
 
       if (action === 'complete') {
-        if (!window.confirm('هل تم الكشف على المريض؟')) return;
+        const ok = await confirmDialog({
+          title: 'تأكيد إكمال الكشف',
+          message: 'هل تم الكشف على المريض؟ سيتم تسجيل الموعد كمكتمل.',
+          confirmLabel: 'تم الكشف',
+          tone: 'primary',
+        });
+        if (!ok) return;
         await api.post(`/appointments/${appointment.id}/complete`);
         toast.success('تم تسجيل الموعد كمكتمل');
       }
 
+      if (action === 'no-show') {
+        const ok = await confirmDialog({
+          title: 'تسجيل عدم الحضور',
+          message: 'هل تريد تسجيل هذا الحجز كـ "لم يأت"؟',
+          confirmLabel: 'تسجيل لم يأت',
+        });
+        if (!ok) return;
+        await api.post(`/appointments/${appointment.id}/no-show`);
+        toast.success('تم تسجيل الحجز كـ لم يأت');
+      }
+
       if (action === 'cancel') {
-        const reason = window.prompt('اكتب سبب الإلغاء:');
+        const reason = await promptDialog({
+          title: 'إلغاء الحجز',
+          message: 'يرجى كتابة سبب الإلغاء — سيتم إبلاغ المريض.',
+          placeholder: 'مثال: تعارض في موعد الطبيب',
+          multiline: true,
+          required: true,
+          confirmLabel: 'إلغاء الحجز',
+          tone: 'danger',
+        });
         if (reason === null) return;
         await api.post(`/appointments/${appointment.id}/cancel`, { reason });
         toast.success('تم إلغاء الحجز');
       }
 
       if (action === 'reject') {
-        const reason = window.prompt('اكتب سبب الرفض:');
+        const reason = await promptDialog({
+          title: 'رفض الطلب',
+          message: 'اكتب سبب الرفض — سيتم إبلاغ المريض.',
+          placeholder: 'مثال: لا توجد مواعيد متاحة',
+          multiline: true,
+          required: true,
+          confirmLabel: 'رفض',
+          tone: 'danger',
+        });
         if (reason === null) return;
         await api.post(`/appointments/${appointment.id}/reject`, { reason });
         toast.success('تم رفض الموعد');
@@ -305,7 +340,9 @@ export default function AppointmentsPage() {
           </div>
 
           {doctorLoading ? (
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center text-slate-300">جارٍ تحميل جدول الطبيب...</div>
+            <div className="rounded-2xl border border-white/10 bg-white/5">
+              <PageLoader label="جارٍ تحميل جدول الطبيب..." />
+            </div>
           ) : !doctorProfile ? (
             <div className="rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4 text-sm text-rose-200">لا يوجد ملف طبيب مرتبط بهذا الحساب.</div>
           ) : (
@@ -366,12 +403,14 @@ export default function AppointmentsPage() {
       </div>
 
       {loading ? (
-        <DataCard className="text-center text-slate-300">جارٍ تحميل المواعيد...</DataCard>
+        <DataCard><PageLoader label="جارٍ تحميل المواعيد..." /></DataCard>
       ) : filteredAppointments.length === 0 ? (
-        <DataCard className="text-center">
-          <CalendarDays className="mx-auto mb-4 h-12 w-12 text-slate-500" />
-          <h2 className="text-lg font-black text-white">لا توجد مواعيد</h2>
-          <p className="mt-2 text-sm text-slate-400">غيّر الفلتر أو أنشئ موعدًا يدويًا من لوحة الحجز بالأعلى.</p>
+        <DataCard>
+          <EmptyState
+            icon={CalendarDays}
+            title="لا توجد مواعيد"
+            description="غيّر الفلتر أو أنشئ موعدًا يدويًا من لوحة الحجز بالأعلى."
+          />
         </DataCard>
       ) : (
         <div className="space-y-5">
@@ -394,6 +433,7 @@ export default function AppointmentsPage() {
                     onConfirm={(item) => handleAction(item, 'confirm')}
                     onReject={(item) => handleAction(item, 'reject')}
                     onComplete={(item) => handleAction(item, 'complete')}
+                    onNoShow={(item) => handleAction(item, 'no-show')}
                     onCancel={(item) => handleAction(item, 'cancel')}
                   />
                 ))}

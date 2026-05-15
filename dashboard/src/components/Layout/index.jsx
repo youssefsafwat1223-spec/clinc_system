@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar from './Sidebar';
 import Header from './Header';
+import useKeyboardShortcuts from '../../hooks/useKeyboardShortcuts';
 
 export default function AppLayout({ children, noPadding = false }) {
+  useKeyboardShortcuts();
+
   const [isSidebarOpen, setSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setSidebarCollapsed] = useState(() => {
     try {

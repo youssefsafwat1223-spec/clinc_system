@@ -5,24 +5,22 @@ export default function Tabs({ tabs }) {
 
   return (
     <div>
-      <div className="flex gap-2 border-b border-slate-700 mb-6 overflow-x-auto">
+      <div className="mb-6 flex gap-2 overflow-x-auto border-b border-white/10">
         {tabs.map((tab, index) => (
           <button
             key={index}
             onClick={() => setActiveTab(index)}
-            className={`px-4 py-3 font-medium text-sm whitespace-nowrap transition-colors ${
+            className={`whitespace-nowrap px-4 py-3 text-sm font-bold transition-colors ${
               activeTab === index
-                ? 'text-blue-400 border-b-2 border-blue-500'
-                : 'text-slate-400 hover:text-slate-300'
+                ? 'border-b-2 border-sky-500 text-sky-300'
+                : 'text-slate-400 hover:text-slate-200'
             }`}
           >
             {tab.label}
           </button>
         ))}
       </div>
-      <div>
-        {tabs[activeTab].content}
-      </div>
+      <div>{tabs[activeTab].content}</div>
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { Calendar, CreditCard, FileText, MessageSquare, Save, Stethoscope, Trash
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
-import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
 import { formatDateTime, money } from '../utils/appointmentUi';
 
 const tabs = [
@@ -96,7 +96,15 @@ export default function PatientProfilePage() {
   const [toothRows, setToothRows] = useState([emptyToothNote()]);
   const [services, setServices] = useState([]);
   const [availableDoctors, setAvailableDoctors] = useState([]);
-  const [booking, setBooking] = useState({ date: buildNext14Days()[0], time: '09:00', doctorId: '', serviceId: '' });
+  const [booking, setBooking] = useState({
+    date: buildNext14Days()[0],
+    time: '09:00',
+    doctorId: '',
+    serviceId: '',
+    appointmentType: 'SCHEDULED',
+    targetType: 'SELF',
+    familyName: '',
+  });
 
   const loadPatient = async () => {
     setLoading(true);
@@ -223,6 +231,52 @@ export default function PatientProfilePage() {
     }
   };
 
+  const submitBooking = async () => {
+    const needsTime = booking.appointmentType !== 'WALK_IN';
+    if (!booking.date || !booking.doctorId || (needsTime && !booking.time)) {
+      toast.warn(needsTime ? 'اختر التاريخ والوقت والطبيب أولاً' : 'اختر التاريخ والطبيب أولاً');
+      return;
+    }
+
+    if (booking.targetType === 'FAMILY' && !booking.familyName.trim()) {
+      toast.warn('اكتب اسم فرد العائلة أولاً');
+      return;
+    }
+
+    setBookingLoading(true);
+    try {
+      let targetPatientId = id;
+
+      if (booking.targetType === 'FAMILY') {
+        const createdPatient = await api.post('/patients', {
+          name: booking.familyName.trim(),
+          phone: patient.phone,
+          platform: patient.platform || 'WHATSAPP',
+          profileType: 'BOOKED',
+        });
+        targetPatientId = createdPatient.data.patient.id;
+      }
+
+      await api.post('/appointments', {
+        patientId: targetPatientId,
+        date: booking.date,
+        time: needsTime ? booking.time : undefined,
+        serviceId: booking.serviceId,
+        doctorId: booking.doctorId,
+        appointmentType: booking.appointmentType,
+        confirmImmediately: true,
+        notifyPatient: true,
+      });
+
+      toast.success('تم إنشاء الموعد وإرسال التأكيد');
+      await loadPatient();
+    } catch (error) {
+      toast.error(error.message || 'فشل إنشاء الموعد');
+    } finally {
+      setBookingLoading(false);
+    }
+  };
+
   const savePatient = async () => {
     setSaving(true);
     try {
@@ -256,7 +310,9 @@ export default function PatientProfilePage() {
   if (loading) {
     return (
       <AppLayout>
-        <DataCard>جاري تحميل ملف المريض...</DataCard>
+        <DataCard>
+          <PageLoader label="جاري تحميل ملف المريض..." />
+        </DataCard>
       </AppLayout>
     );
   }
@@ -272,6 +328,10 @@ export default function PatientProfilePage() {
   return (
     <AppLayout>
       <PageHeader
+        breadcrumbs={[
+          { label: 'المرضى', to: '/patients' },
+          { label: patient.displayName || patient.name || 'ملف المريض' },
+        ]}
         title={patient.displayName || patient.name || 'ملف المريض'}
         description={`${patient.phone || '-'} - ${patient.platform || 'WHATSAPP'}`}
         actions={
@@ -452,7 +512,29 @@ export default function PatientProfilePage() {
             <h2 className="text-lg font-black text-white">حجز موعد سريع</h2>
             <p className="mt-1 text-sm text-slate-400">اختر التاريخ والوقت والطبيب فقط. لا توجد خانة ملاحظات.</p>
           </div>
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <Field label="الحجز باسم">
+              <select className={inputClass} value={booking.targetType} onChange={(event) => setBooking((current) => ({ ...current, targetType: event.target.value }))}>
+                <option value="SELF">المريض نفسه</option>
+                <option value="FAMILY">أحد أفراد العائلة</option>
+              </select>
+            </Field>
+            <Field label="نوع الحجز">
+              <select className={inputClass} value={booking.appointmentType} onChange={(event) => setBooking((current) => ({ ...current, appointmentType: event.target.value }))}>
+                <option value="SCHEDULED">حجز بموعد</option>
+                <option value="WALK_IN">حجز بدون موعد</option>
+              </select>
+            </Field>
+            {booking.targetType === 'FAMILY' ? (
+              <Field label="اسم فرد العائلة">
+                <input
+                  className={inputClass}
+                  value={booking.familyName}
+                  onChange={(event) => setBooking((current) => ({ ...current, familyName: event.target.value }))}
+                  placeholder="اكتب الاسم على نفس الرقم"
+                />
+              </Field>
+            ) : null}
             <Field label="التاريخ">
               <select className={inputClass} value={booking.date} onChange={(event) => setBooking((current) => ({ ...current, date: event.target.value }))}>
                 {buildNext14Days().map((date) => <option key={date} value={date}>{date}</option>)}
@@ -470,7 +552,7 @@ export default function PatientProfilePage() {
             </Field>
           </div>
           <div className="mt-5 flex justify-end">
-            <PrimaryButton type="button" onClick={bookAppointment} disabled={bookingLoading || !booking.doctorId}>
+            <PrimaryButton type="button" onClick={submitBooking} disabled={bookingLoading || !booking.doctorId}>
               <Calendar className="h-4 w-4" />
               {bookingLoading ? 'جاري الحجز...' : 'احجز'}
             </PrimaryButton>

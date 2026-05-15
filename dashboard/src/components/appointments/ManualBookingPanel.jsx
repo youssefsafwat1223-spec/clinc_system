@@ -36,6 +36,9 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
     patientId: '',
     doctorId: '',
     serviceId: '',
+    appointmentType: 'SCHEDULED',
+    targetType: 'SELF',
+    familyName: '',
     date: todayDateValue(),
     time: '',
     notes: '',
@@ -242,8 +245,21 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
 
     const effectiveDoctorId = isDoctor ? doctorProfile?.id : form.doctorId;
 
-    if (!form.patientId || !effectiveDoctorId || !form.serviceId || !form.date || !form.time) {
-      toast.error('اختر المريض والطبيب والخدمة والموعد أولًا');
+    const requiresTime = form.appointmentType !== 'WALK_IN';
+    const bookingForFamily = form.targetType === 'FAMILY';
+
+    if (!form.patientId || !effectiveDoctorId || !form.serviceId || !form.date || (requiresTime && !form.time)) {
+      toast.error(requiresTime ? 'اختر المريض والطبيب والخدمة والموعد أولًا' : 'اختر المريض والطبيب والخدمة والتاريخ أولًا');
+      return;
+    }
+
+    if (bookingForFamily && !form.familyName.trim()) {
+      toast.error('اكتب اسم فرد العائلة أولًا');
+      return;
+    }
+
+    if (bookingForFamily && !selectedPatient?.phone) {
+      toast.error('اختر مريضًا له رقم هاتف حتى يتم الحجز لأحد أفراد العائلة');
       return;
     }
 
@@ -251,11 +267,28 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
       setSubmitting(true);
       setAlternatives([]);
 
+      let targetPatientId = form.patientId;
+
+      if (bookingForFamily) {
+        const createdPatientResponse = await api.post('/patients', {
+          name: form.familyName.trim(),
+          phone: selectedPatient.phone,
+          platform: selectedPatient.platform || 'WHATSAPP',
+          notes: form.notes || undefined,
+          profileType: 'BOOKED',
+        });
+
+        const familyPatient = createdPatientResponse.data.patient;
+        targetPatientId = familyPatient.id;
+        setPatients((current) => [familyPatient, ...current.filter((patient) => patient.id !== familyPatient.id)]);
+      }
+
       const response = await api.post('/appointments', {
-        patientId: form.patientId,
+        patientId: targetPatientId,
         doctorId: effectiveDoctorId,
         serviceId: form.serviceId,
-        scheduledTime: `${form.date}T${form.time}:00`,
+        appointmentType: form.appointmentType,
+        scheduledTime: form.appointmentType === 'WALK_IN' ? form.date : `${form.date}T${form.time}:00`,
         notes: form.notes || undefined,
         confirmImmediately: form.confirmImmediately,
         notifyPatient: form.notifyPatient,
@@ -267,6 +300,9 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
         ...current,
         patientId: '',
         serviceId: '',
+        appointmentType: 'SCHEDULED',
+        targetType: 'SELF',
+        familyName: '',
         time: '',
         notes: '',
         confirmImmediately: true,
@@ -310,8 +346,8 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
             onClick={() => switchBookingMode(BOOKING_MODES.NEW_PATIENT)}
             className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-bold transition ${
               bookingMode === BOOKING_MODES.NEW_PATIENT
-                ? 'border-primary-400 bg-primary-500/20 text-primary-200'
-                : 'border-primary-500/20 bg-primary-500/10 text-primary-300 hover:bg-primary-500/20'
+                ? 'border-sky-400 bg-sky-500/20 text-sky-200'
+                : 'border-sky-500/20 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20'
             }`}
           >
             <UserPlus className="w-4 h-4" />
@@ -466,6 +502,42 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
         </div>
 
         <div className="space-y-2">
+          <label className="text-xs font-bold text-dark-muted">نوع الحجز</label>
+          <select
+            value={form.appointmentType}
+            onChange={(event) => handleFormChange('appointmentType', event.target.value)}
+            className="input-field"
+          >
+            <option value="SCHEDULED">حجز بموعد</option>
+            <option value="WALK_IN">حجز بدون موعد</option>
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="text-xs font-bold text-dark-muted">الحجز باسم</label>
+          <select
+            value={form.targetType}
+            onChange={(event) => handleFormChange('targetType', event.target.value)}
+            className="input-field"
+          >
+            <option value="SELF">المريض نفسه</option>
+            <option value="FAMILY">أحد أفراد العائلة</option>
+          </select>
+        </div>
+
+        {form.targetType === 'FAMILY' ? (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-dark-muted">اسم فرد العائلة</label>
+            <input
+              value={form.familyName}
+              onChange={(event) => handleFormChange('familyName', event.target.value)}
+              className="input-field"
+              placeholder="يُحجز على نفس رقم المريض المختار"
+            />
+          </div>
+        ) : null}
+
+        <div className="space-y-2">
           <label className="text-xs font-bold text-dark-muted">التاريخ</label>
           <input
             type="date"
@@ -475,15 +547,22 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
           />
         </div>
 
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-dark-muted">الوقت</label>
-          <input
-            type="time"
-            value={form.time}
-            onChange={(event) => handleFormChange('time', event.target.value)}
-            className="input-field"
-          />
-        </div>
+        {form.appointmentType === 'SCHEDULED' ? (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-dark-muted">الوقت</label>
+            <input
+              type="time"
+              value={form.time}
+              onChange={(event) => handleFormChange('time', event.target.value)}
+              className="input-field"
+            />
+          </div>
+        ) : (
+          <div className="space-y-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+            <p className="font-bold">ملاحظة للمريض</p>
+            <p className="mt-1">سيتم إرسال تأكيد بأن الدخول حسب أسبقية الحضور، والشخص الذي يصل أولاً يدخل أولاً.</p>
+          </div>
+        )}
 
         <div className="space-y-2 md:col-span-2">
           <label className="text-xs font-bold text-dark-muted">ملاحظات داخلية</label>

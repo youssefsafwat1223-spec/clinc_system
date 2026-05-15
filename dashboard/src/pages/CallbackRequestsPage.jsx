@@ -8,12 +8,14 @@ import {
   DataCard,
   Field,
   PageHeader,
+  PageLoader,
   PrimaryButton,
   SecondaryButton,
   StatCard,
   StatusBadge,
   inputClass,
 } from '../components/ui';
+import EmptyState from '../components/EmptyState';
 import {
   buildRecentMonthOptions,
   calendarFilterOptions,
@@ -301,9 +303,9 @@ export default function CallbackRequestsPage() {
       </DataCard>
 
       {loading ? (
-        <DataCard className="text-center text-slate-300">جارٍ تحميل الطلبات...</DataCard>
+        <DataCard><PageLoader label="جاري تحميل الطلبات..." /></DataCard>
       ) : filteredRequests.length === 0 ? (
-        <DataCard className="text-center text-slate-400">لا توجد طلبات مطابقة الآن.</DataCard>
+        <DataCard><EmptyState icon={Phone} title="لا توجد طلبات" description="لا توجد طلبات مطابقة الآن." /></DataCard>
       ) : (
         <div className="grid gap-4">
           {filteredRequests.map((request) => (

@@ -3,7 +3,8 @@ import { HelpCircle, MessageSquare, Send } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
-import { DataCard, PageHeader, PrimaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import { DataCard, PageHeader, PageLoader, PrimaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import EmptyState from '../components/EmptyState';
 import { formatDateTime } from '../utils/appointmentUi';
 
 const statusLabels = {
@@ -131,9 +132,9 @@ export default function ConsultationsPage() {
 
           <div className="max-h-[620px] divide-y divide-white/5 overflow-y-auto">
             {loading ? (
-              <div className="p-6 text-slate-400">جاري التحميل...</div>
+              <PageLoader />
             ) : filteredConsultations.length === 0 ? (
-              <div className="p-6 text-slate-400">لا توجد استشارات.</div>
+              <EmptyState icon={HelpCircle} title="لا توجد استشارات" description="ستظهر الاستشارات هنا فور وصولها." />
             ) : (
               filteredConsultations.map((consultation) => (
                 <button

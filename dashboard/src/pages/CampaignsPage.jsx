@@ -4,6 +4,7 @@ import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
+import { confirmDialog } from '../components/dialogs';
 
 const steps = [
   { id: 1, label: 'نوع الرسالة' },
@@ -410,7 +411,13 @@ export default function CampaignsPage() {
   };
 
   const deleteTemplate = async (id) => {
-    if (!window.confirm('حذف هذا القالب؟')) return;
+    const ok = await confirmDialog({
+      title: 'حذف القالب',
+      message: 'سيتم حذف هذا القالب نهائياً. هل تريد المتابعة؟',
+      confirmLabel: 'حذف',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await api.delete(`/campaigns/templates/${id}`);
       toast.success('تم حذف القالب');

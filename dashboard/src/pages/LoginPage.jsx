@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Stethoscope, Lock, Mail, ArrowLeft } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
+import { inputClass } from '../components/ui';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -16,10 +17,10 @@ export default function LoginPage() {
       setLoading(true);
 
       const res = await api.post('/auth/login', { email, password });
-      
+
       localStorage.setItem('token', res.data.token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
-      
+
       toast.success('تم تسجيل الدخول بنجاح');
       navigate('/dashboard');
     } catch (error) {
@@ -30,40 +31,37 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-dark-bg flex items-center justify-center p-4 relative overflow-hidden font-sans">
-      {/* Background decorations */}
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-primary-900/20 blur-[120px] pointer-events-none"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-indigo-900/10 blur-[100px] pointer-events-none"></div>
+    <div
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0a0f1e] p-4 font-sans"
+      dir="rtl"
+    >
+      <div className="pointer-events-none absolute right-[-12rem] top-[-8rem] h-[34rem] w-[34rem] rounded-full bg-sky-600/10 blur-[140px]" />
+      <div className="pointer-events-none absolute bottom-[-10rem] left-[-10rem] h-[28rem] w-[28rem] rounded-full bg-cyan-600/10 blur-[120px]" />
 
-      <div className="w-full max-w-md relative z-10 fade-in">
-        <div className="flex flex-col items-center mb-10">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-lg shadow-primary-500/20 mb-4 animate-bounce-slow">
-            <Stethoscope className="w-10 h-10 text-white" />
+      <div className="relative z-10 w-full max-w-md">
+        <div className="mb-10 flex flex-col items-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-400 to-cyan-600 shadow-lg shadow-sky-500/25">
+            <Stethoscope className="h-9 w-9 text-white" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-white mb-2">عيادتي</h1>
-          <p className="text-dark-muted font-medium">نظام الإدارة الذكي للعيادات</p>
+          <h1 className="mb-2 text-3xl font-black tracking-tight text-white">عيادتي</h1>
+          <p className="text-sm font-medium text-slate-400">نظام الإدارة الذكي للعيادات</p>
         </div>
 
-        <div className="glass-panel p-8 sm:p-10 rounded-2xl shadow-2xl border border-dark-border/50 relative overflow-hidden backdrop-blur-2xl">
-          {/* Subtle gradient inside card */}
-          <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-primary-500 to-transparent opacity-50"></div>
-          
-          <h2 className="text-2xl font-bold text-white mb-8 text-center text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-300">
-            تسجيل الدخول للنظام
-          </h2>
+        <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.03] p-8 shadow-2xl shadow-black/40 backdrop-blur-xl sm:p-10">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-500/60 to-transparent" />
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2 relative group">
-              <label className="text-sm font-medium text-dark-muted group-focus-within:text-primary-400 transition-colors">البريد الإلكتروني</label>
+          <h2 className="mb-8 text-center text-2xl font-black text-white">تسجيل الدخول للنظام</h2>
+
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-slate-300">البريد الإلكتروني</label>
               <div className="relative">
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-dark-muted group-focus-within:text-primary-400 transition-colors" />
-                </div>
+                <Mail className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="input-field pr-10 bg-dark-bg/60 border-dark-border/60 focus:bg-dark-bg transition-all h-12"
+                  className={`${inputClass} h-12 pr-10`}
                   placeholder="admin@clinic.com"
                   required
                   dir="ltr"
@@ -71,19 +69,15 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="space-y-2 relative group">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-dark-muted group-focus-within:text-primary-400 transition-colors">كلمة المرور</label>
-              </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-slate-300">كلمة المرور</label>
               <div className="relative">
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-dark-muted group-focus-within:text-primary-400 transition-colors" />
-                </div>
+                <Lock className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-500" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="input-field pr-10 bg-dark-bg/60 border-dark-border/60 focus:bg-dark-bg transition-all h-12"
+                  className={`${inputClass} h-12 pr-10`}
                   placeholder="••••••••"
                   required
                   dir="ltr"
@@ -94,18 +88,21 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full btn-primary h-12 text-lg mt-8 relative overflow-hidden group shadow-lg shadow-primary-500/25"
+              className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-500 text-base font-bold text-white shadow-lg shadow-sky-500/25 transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <span className="relative z-10 flex items-center justify-center gap-2">
-                {loading ? 'جاري التحقق...' : 'دخول'}
-                {!loading && <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />}
-              </span>
-              {/* Button shine effect */}
-              <div className="absolute inset-0 -translate-x-full group-hover:animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg]"></div>
+              {loading ? (
+                <>
+                  <span className="h-5 w-5 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  <span>جاري التحقق...</span>
+                </>
+              ) : (
+                <>
+                  <span>دخول</span>
+                  <ArrowLeft className="h-5 w-5" />
+                </>
+              )}
             </button>
           </form>
-          
-
         </div>
       </div>
     </div>

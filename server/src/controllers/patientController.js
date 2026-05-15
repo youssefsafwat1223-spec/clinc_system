@@ -95,7 +95,7 @@ const syncPatientGroups = async (tx, patientId, { groupIds, groupNames }, replac
 
 const getAll = async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, search, groupId, period, sortBy } = req.query;
+    const { page = 1, limit = 20, search, groupId, period, sortBy, profileType } = req.query;
     const { skip, take } = paginate(Number(page), Number(limit));
     const scopedDoctor = await getScopedDoctor(req);
 
@@ -124,7 +124,14 @@ const getAll = async (req, res, next) => {
       periodWhere = { appointments: { some: { scheduledTime: { gte: monthStart } } } };
     }
 
-    const where = combineWhere(accessWhere, searchWhere, groupWhere, periodWhere);
+    const profileTypeWhere =
+      profileType === 'BOOKED' || profileType === 'LEAD'
+        ? { profileType }
+        : profileType === 'CONTACT_ONLY'
+          ? { profileType: 'LEAD' }
+          : null;
+
+    const where = combineWhere(accessWhere, searchWhere, groupWhere, periodWhere, profileTypeWhere);
     const orderBy =
       sortBy === 'mostBooked'
         ? { appointments: { _count: 'desc' } }
@@ -207,6 +214,7 @@ const create = async (req, res, next) => {
       totalSpent,
       lastPaymentDate,
       creditBalance,
+      profileType,
       groupIds,
       groupNames,
     } = req.body;
@@ -235,6 +243,7 @@ const create = async (req, res, next) => {
           totalSpent: Number(totalSpent) || 0,
           lastPaymentDate: lastPaymentDate ? new Date(lastPaymentDate) : null,
           creditBalance: Number(creditBalance) || 0,
+          profileType: profileType === 'BOOKED' ? 'BOOKED' : 'LEAD',
         },
       });
 
@@ -416,29 +425,32 @@ const bulkImport = async (req, res, next) => {
           continue;
         }
 
-        const exists = await tx.patient.findUnique({ where: { phone } });
+        const exists = await tx.patient.findFirst({ where: { phone } });
 
-        const patient = await tx.patient.upsert({
-          where: { phone },
-          update: {
-            name,
-            ...(row.displayName !== undefined && { displayName: String(row.displayName || '').trim() || null }),
-            ...(row.notes !== undefined && { notes: String(row.notes || '') }),
-            ...(row.email !== undefined && { email: String(row.email || '').trim() || null }),
-            ...(row.age !== undefined && { age: row.age === '' || row.age === null ? null : Number(row.age) || null }),
-            ...(row.gender !== undefined && { gender: String(row.gender || '').trim() || null }),
-          },
-          create: {
-            name,
-            phone,
-            displayName: String(row.displayName || '').trim() || null,
-            email: String(row.email || '').trim() || null,
-            age: row.age === '' || row.age === null || row.age === undefined ? null : Number(row.age) || null,
-            gender: String(row.gender || '').trim() || null,
-            notes: row.notes || null,
-            platform: row.platform || 'WHATSAPP',
-          },
-        });
+        const patient = exists
+          ? await tx.patient.update({
+              where: { id: exists.id },
+              data: {
+                name,
+                ...(row.displayName !== undefined && { displayName: String(row.displayName || '').trim() || null }),
+                ...(row.notes !== undefined && { notes: String(row.notes || '') }),
+                ...(row.email !== undefined && { email: String(row.email || '').trim() || null }),
+                ...(row.age !== undefined && { age: row.age === '' || row.age === null ? null : Number(row.age) || null }),
+                ...(row.gender !== undefined && { gender: String(row.gender || '').trim() || null }),
+              },
+            })
+          : await tx.patient.create({
+              data: {
+                name,
+                phone,
+                displayName: String(row.displayName || '').trim() || null,
+                email: String(row.email || '').trim() || null,
+                age: row.age === '' || row.age === null || row.age === undefined ? null : Number(row.age) || null,
+                gender: String(row.gender || '').trim() || null,
+                notes: row.notes || null,
+                platform: row.platform || 'WHATSAPP',
+              },
+            });
 
         await syncPatientGroups(
           tx,

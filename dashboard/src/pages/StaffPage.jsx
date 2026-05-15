@@ -3,7 +3,9 @@ import { CalendarClock, Edit2, Mail, Phone, Plus, Save, Stethoscope, Trash2, Use
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
-import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
+import { confirmDialog } from '../components/dialogs';
+import EmptyState from '../components/EmptyState';
 
 const emptyForm = {
   name: '',
@@ -132,7 +134,13 @@ export default function StaffPage() {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('هل تريد حذف هذا الموظف؟')) return;
+    const ok = await confirmDialog({
+      title: 'حذف الموظف',
+      message: 'سيتم حذف هذا الحساب نهائياً ولن يستطيع الموظف الدخول للنظام. هل تريد المتابعة؟',
+      confirmLabel: 'حذف',
+      tone: 'danger',
+    });
+    if (!ok) return;
     try {
       await api.delete(`/staff/${id}`);
       toast.success('تم حذف الموظف');
@@ -206,11 +214,14 @@ export default function StaffPage() {
       </div>
 
       {loading ? (
-        <DataCard className="text-center text-slate-300">جاري تحميل الكادر الطبي...</DataCard>
+        <DataCard><PageLoader label="جاري تحميل الكادر الطبي..." /></DataCard>
       ) : staff.length === 0 ? (
-        <DataCard className="text-center">
-          <h2 className="text-lg font-black text-white">لا يوجد كادر مسجل</h2>
-          <p className="mt-2 text-sm text-slate-400">ابدأ بإضافة طبيب أو موظف استقبال.</p>
+        <DataCard>
+          <EmptyState
+            icon={UserCog}
+            title="لا يوجد كادر مسجل"
+            description="ابدأ بإضافة طبيب أو موظف استقبال."
+          />
         </DataCard>
       ) : (
         <div className="grid gap-4 lg:grid-cols-2">

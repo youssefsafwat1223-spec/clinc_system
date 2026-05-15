@@ -4,7 +4,8 @@ import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 import AppointmentCard from '../components/appointments/AppointmentCard';
-import { DataCard, Field, PageHeader, PrimaryButton, StatCard, inputClass } from '../components/ui';
+import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, StatCard, inputClass } from '../components/ui';
+import EmptyState from '../components/EmptyState';
 import { appointmentStatusLabels, todayInputValue } from '../utils/appointmentUi';
 import {
   buildRecentMonthOptions,
@@ -131,7 +132,7 @@ export default function TodayPatientsPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Field label="الحالة">
             <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}>
-              {['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'REJECTED', 'BLOCKED'].map((item) => (
+              {['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED', 'REJECTED', 'BLOCKED'].map((item) => (
                 <option key={item} value={item}>
                   {appointmentStatusLabels[item]}
                 </option>
@@ -183,11 +184,16 @@ export default function TodayPatientsPage() {
       </DataCard>
 
       {loading ? (
-        <DataCard>جارٍ تحميل المرضى...</DataCard>
+        <DataCard>
+          <PageLoader />
+        </DataCard>
       ) : filteredAppointments.length === 0 ? (
-        <DataCard className="text-center">
-          <Filter className="mx-auto mb-3 h-10 w-10 text-slate-500" />
-          لا توجد مواعيد مطابقة للفلاتر الحالية.
+        <DataCard>
+          <EmptyState
+            icon={Filter}
+            title="لا توجد مواعيد مطابقة"
+            description="لا توجد مواعيد مطابقة للفلاتر الحالية. جرب تغيير الفترة أو الحالة."
+          />
         </DataCard>
       ) : (
         <div className="grid gap-4">

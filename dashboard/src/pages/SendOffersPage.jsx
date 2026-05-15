@@ -3,7 +3,7 @@ import { CheckSquare, Image, RotateCcw, Search, Send, Square, Upload } from 'luc
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
-import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
+import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
 
 const steps = ['اختيار مراجعي واتساب', 'اختيار القالب والرسالة', 'مراجعة وإرسال'];
 
@@ -328,7 +328,7 @@ export default function SendOffersPage() {
           </div>
 
           {loading ? (
-            <p className="text-slate-400">جارٍ التحميل...</p>
+            <PageLoader label="جارٍ التحميل..." />
           ) : (
             <div className="grid max-h-[58vh] gap-3 overflow-auto md:grid-cols-2 xl:grid-cols-3">
               {filteredPatients.map((patient) => (

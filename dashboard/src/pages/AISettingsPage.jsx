@@ -3,7 +3,7 @@ import { AlertCircle, Bot, BrainCircuit, Plus, Save, Sparkles, Stethoscope, Tras
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
-import { DataCard, Field, PageHeader, PrimaryButton, StatCard, inputClass } from '../components/ui';
+import { DataCard, Field, HelpTip, PageHeader, PageLoader, PrimaryButton, StatCard, inputClass } from '../components/ui';
 
 const createEmptyFaq = () => ({ question: '', answer: '' });
 
@@ -124,7 +124,9 @@ export default function AISettingsPage() {
   if (loading) {
     return (
       <AppLayout>
-        <DataCard>جاري تحميل إعدادات الذكاء الاصطناعي...</DataCard>
+        <DataCard>
+          <PageLoader label="جاري تحميل إعدادات الذكاء الاصطناعي..." />
+        </DataCard>
       </AppLayout>
     );
   }
@@ -158,6 +160,7 @@ export default function AISettingsPage() {
               onChange={(event) => setSettings((current) => ({ ...current, aiEnabled: event.target.checked }))}
             />
             تفعيل الردود الآلية
+            <HelpTip text="عند التفعيل يرد البوت تلقائياً على رسائل المرضى وفق التوجيهات وقاعدة المعرفة. عند الإيقاف تذهب الرسائل للمتابعة البشرية فقط." />
           </label>
         </div>
         <div className="grid gap-3 md:grid-cols-3">

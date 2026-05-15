@@ -3,6 +3,7 @@ export const appointmentStatusLabels = {
   PENDING: 'قيد الانتظار',
   CONFIRMED: 'مؤكد',
   COMPLETED: 'تم الكشف',
+  NO_SHOW: 'لم يأت',
   CANCELLED: 'ملغي',
   REJECTED: 'مرفوض',
   EXPIRED: 'منتهي',
@@ -13,6 +14,7 @@ export const appointmentStatusTone = {
   PENDING: 'amber',
   CONFIRMED: 'green',
   COMPLETED: 'blue',
+  NO_SHOW: 'red',
   CANCELLED: 'red',
   REJECTED: 'red',
   EXPIRED: 'slate',
@@ -23,12 +25,14 @@ export const todayInputValue = () => new Date().toISOString().slice(0, 10);
 
 export const formatDateTime = (value) => {
   if (!value) return '-';
-  return new Intl.DateTimeFormat('ar-EG', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(value)) + ` - ${formatTime(value)}`;
+  return (
+    new Intl.DateTimeFormat('ar-EG', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    }).format(new Date(value)) + ` - ${formatTime(value)}`
+  );
 };
 
 export const formatDetailedDate = (value) => {

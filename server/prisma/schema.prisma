@@ -16,6 +16,17 @@ enum AppointmentStatus {
   EXPIRED
   BLOCKED
   COMPLETED
+  NO_SHOW
+}
+
+enum AppointmentType {
+  SCHEDULED
+  WALK_IN
+}
+
+enum PatientProfileType {
+  LEAD
+  BOOKED
 }
 
 enum MessageType {
@@ -101,11 +112,12 @@ model Patient {
   id           String        @id @default(uuid())
   name         String
   displayName  String?       @map("display_name")
-  phone         String         @unique
+  phone         String
   email         String?
   age           Int?
   gender        String?
   platform      Platform       @default(WHATSAPP)
+  profileType   PatientProfileType @default(LEAD) @map("profile_type")
   whatsappId    String?        @unique @map("whatsapp_id")
   facebookId    String?        @unique @map("facebook_id")
   instagramId   String?        @unique @map("instagram_id")
@@ -132,6 +144,8 @@ model Patient {
   updatedAt     DateTime       @updatedAt @map("updated_at")
 
   @@map("patients")
+  @@index([phone])
+  @@index([profileType])
 }
 
 model Service {
@@ -166,20 +180,22 @@ model DoctorService {
 }
 
 model Appointment {
-  id            String            @id @default(uuid())
-  bookingRef    String?           @unique @map("booking_ref")
-  patientId     String            @map("patient_id")
+    id            String            @id @default(uuid())
+    bookingRef    String?           @unique @map("booking_ref")
+    patientId     String            @map("patient_id")
   patient       Patient           @relation(fields: [patientId], references: [id])
   doctorId      String            @map("doctor_id")
   doctor        Doctor            @relation(fields: [doctorId], references: [id])
   serviceId     String            @map("service_id")
   service       Service           @relation(fields: [serviceId], references: [id])
+  appointmentType AppointmentType @default(SCHEDULED) @map("appointment_type")
   scheduledTime DateTime          @map("scheduled_time")
-  status        AppointmentStatus @default(PENDING)
-  lockedUntil   DateTime?         @map("locked_until")
-  notes         String?
-  reviewSent    Boolean           @default(false) @map("review_sent")
-  notifications Notification[]
+    status        AppointmentStatus @default(PENDING)
+    lockedUntil   DateTime?         @map("locked_until")
+    notes         String?
+    completedAt   DateTime?         @map("completed_at")
+    reviewSent    Boolean           @default(false) @map("review_sent")
+    notifications Notification[]
   review        Review?
   prescriptions Prescription[]
   payment       Payment?

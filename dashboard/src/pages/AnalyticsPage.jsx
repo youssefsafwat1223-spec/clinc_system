@@ -16,6 +16,15 @@ import { ar } from 'date-fns/locale';
 import { toast } from 'react-toastify';
 import AppLayout from '../components/Layout';
 import api from '../api/client';
+import {
+  DataCard,
+  Field,
+  PageHeader,
+  PrimaryButton,
+  SecondaryButton,
+  StatCard,
+  inputClass,
+} from '../components/ui';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend, ArcElement);
 
@@ -44,22 +53,6 @@ const chartOptions = {
   },
 };
 
-function SummaryCard({ title, value, hint, icon: Icon, accentClass }) {
-  return (
-    <div className={`glass-card border p-5 ${accentClass}`}>
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-sm font-medium text-dark-muted">{title}</p>
-          <p className="text-3xl font-bold tracking-tight text-white">{value}</p>
-          <p className="text-xs font-medium text-slate-400">{hint}</p>
-        </div>
-        <div className="rounded-2xl bg-dark-bg/70 p-3">
-          <Icon className="h-5 w-5 text-white" />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function formatStatusLabel(status) {
   if (status === 'CONFIRMED') return 'مؤكد';
@@ -183,7 +176,7 @@ export default function AnalyticsPage() {
     return (
       <AppLayout>
         <div className="flex h-screen items-center justify-center">
-          <span className="h-10 w-10 animate-spin rounded-full border-4 border-primary-500 border-t-transparent"></span>
+          <span className="h-10 w-10 animate-spin rounded-full border-4 border-sky-500 border-t-transparent"></span>
         </div>
       </AppLayout>
     );
@@ -191,160 +184,155 @@ export default function AnalyticsPage() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 pb-12 fade-in">
-        <div className="flex flex-col items-start justify-between gap-4 lg:flex-row lg:items-end">
-          <div>
-            <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-white">
-              <Activity className="h-6 w-6 text-primary-500" />
-              التقارير والتحليلات
-            </h1>
-            <p className="mt-1 text-sm text-dark-muted">نظرة أعمق على المرضى والمواعيد والرسائل مع فلترة زمنية مباشرة.</p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <button onClick={() => fetchAnalytics()} className="btn-secondary rounded-xl px-4 py-2.5 text-sm">
+      <PageHeader
+        title="التقارير والتحليلات"
+        description="نظرة أعمق على المرضى والمواعيد والرسائل مع فلترة زمنية مباشرة."
+        actions={
+          <>
+            <SecondaryButton type="button" onClick={() => fetchAnalytics()}>
               <RefreshCw className="h-4 w-4" />
               تحديث
-            </button>
-            <button onClick={handleExportCSV} className="btn-primary rounded-xl px-4 py-2.5 text-sm">
+            </SecondaryButton>
+            <PrimaryButton type="button" onClick={handleExportCSV}>
               <Download className="h-4 w-4" />
               تصدير CSV
-            </button>
-          </div>
+            </PrimaryButton>
+          </>
+        }
+      />
+
+      <DataCard className="mb-6">
+        <div className="mb-4 flex items-center gap-2">
+          <Filter className="h-4 w-4 text-sky-400" />
+          <h2 className="font-bold text-white">فلترة التقرير</h2>
         </div>
 
-        <section className="glass-card p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <Filter className="h-4 w-4 text-primary-400" />
-            <h2 className="font-bold text-white">فلترة التقرير</h2>
+        <div className="grid gap-4 md:grid-cols-[1fr,1fr,auto,auto]">
+          <Field label="من تاريخ">
+            <input
+              type="date"
+              value={filters.from}
+              onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))}
+              className={inputClass}
+            />
+          </Field>
+
+          <Field label="إلى تاريخ">
+            <input
+              type="date"
+              value={filters.to}
+              onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))}
+              className={inputClass}
+            />
+          </Field>
+
+          <PrimaryButton onClick={handleApplyFilters} className="mt-auto">
+            تطبيق
+          </PrimaryButton>
+
+          <SecondaryButton onClick={handleResetFilters} className="mt-auto">
+            إعادة ضبط
+          </SecondaryButton>
+        </div>
+      </DataCard>
+
+      <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <StatCard title="إجمالي المرضى" value={overview.totalPatients} hint="ضمن النطاق الزمني الحالي" icon={Users} tone="blue" />
+        <StatCard title="إجمالي المواعيد" value={overview.totalAppointments} hint="كل الحجوزات المطابقة للفلاتر" icon={Calendar} tone="green" />
+        <StatCard title="إجمالي الرسائل" value={overview.totalMessages} hint="الرسائل الواردة والصادرة المرتبطة" icon={MessageSquare} tone="blue" />
+        <StatCard title="الخدمات الأعلى طلبًا" value={topServices.length} hint="عدد الخدمات الظاهرة في التحليل" icon={Activity} tone="amber" />
+      </section>
+
+      <section className="mb-6 grid gap-6 lg:grid-cols-2">
+        <DataCard>
+          <h3 className="mb-6 font-bold text-white">حالة المواعيد</h3>
+          <div className="h-72">
+            <Bar data={statusChartData} options={chartOptions} />
           </div>
+        </DataCard>
 
-          <div className="grid gap-4 md:grid-cols-[1fr,1fr,auto,auto]">
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dark-muted">من تاريخ</label>
-              <input
-                type="date"
-                value={filters.from}
-                onChange={(event) => setFilters((current) => ({ ...current, from: event.target.value }))}
-                className="input-field"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-dark-muted">إلى تاريخ</label>
-              <input
-                type="date"
-                value={filters.to}
-                onChange={(event) => setFilters((current) => ({ ...current, to: event.target.value }))}
-                className="input-field"
-              />
-            </div>
-
-            <button onClick={handleApplyFilters} className="btn-primary mt-auto rounded-xl px-5 py-2.5">
-              تطبيق
-            </button>
-
-            <button onClick={handleResetFilters} className="btn-secondary mt-auto rounded-xl px-5 py-2.5">
-              إعادة ضبط
-            </button>
+        <DataCard>
+          <h3 className="mb-6 font-bold text-white">توزيع الرسائل حسب المنصة</h3>
+          <div className="h-72">
+            <Doughnut
+              data={platformsData}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1' } } },
+                cutout: '70%',
+              }}
+            />
           </div>
-        </section>
+        </DataCard>
+      </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard title="إجمالي المرضى" value={overview.totalPatients} hint="ضمن النطاق الزمني الحالي" icon={Users} accentClass="border-primary-500/20" />
-          <SummaryCard title="إجمالي المواعيد" value={overview.totalAppointments} hint="كل الحجوزات المطابقة للفلاتر" icon={Calendar} accentClass="border-emerald-500/20" />
-          <SummaryCard title="إجمالي الرسائل" value={overview.totalMessages} hint="الرسائل الواردة والصادرة المرتبطة" icon={MessageSquare} accentClass="border-sky-500/20" />
-          <SummaryCard title="الخدمات الأعلى طلبًا" value={topServices.length} hint="عدد الخدمات الظاهرة في التحليل" icon={Activity} accentClass="border-amber-500/20" />
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-2">
-          <div className="glass-card p-6">
-            <h3 className="mb-6 font-bold text-white">حالة المواعيد</h3>
-            <div className="h-72">
-              <Bar data={statusChartData} options={chartOptions} />
-            </div>
-          </div>
-
-          <div className="glass-card p-6">
-            <h3 className="mb-6 font-bold text-white">توزيع الرسائل حسب المنصة</h3>
-            <div className="h-72">
-              <Doughnut
-                data={platformsData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: { legend: { position: 'bottom', labels: { color: '#cbd5e1' } } },
-                  cutout: '70%',
-                }}
-              />
-            </div>
-          </div>
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-[0.9fr,1.1fr]">
-          <div className="glass-card p-6">
-            <h3 className="mb-4 font-bold text-white">الخدمات الأكثر طلبًا</h3>
-            {topServices.length === 0 ? (
-              <p className="py-4 text-center text-sm text-dark-muted">لا توجد بيانات كافية في هذا النطاق الزمني.</p>
-            ) : (
-              <div className="space-y-3">
-                {topServices.map((service, index) => (
-                  <div key={service.serviceId || index} className="flex items-center justify-between rounded-xl border border-dark-border bg-dark-bg/50 p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-500/10 text-sm font-bold text-primary-300">
-                        {index + 1}
-                      </div>
-                      <div>
-                        <p className="font-bold text-white">{service.serviceName}</p>
-                        <p className="text-xs text-dark-muted">عدد الحجوزات</p>
-                      </div>
+      <section className="grid gap-6 xl:grid-cols-[0.9fr,1.1fr]">
+        <DataCard>
+          <h3 className="mb-4 font-bold text-white">الخدمات الأكثر طلبًا</h3>
+          {topServices.length === 0 ? (
+            <p className="py-4 text-center text-sm text-slate-400">لا توجد بيانات كافية في هذا النطاق الزمني.</p>
+          ) : (
+            <div className="space-y-3">
+              {topServices.map((service, index) => (
+                <div
+                  key={service.serviceId || index}
+                  className="flex items-center justify-between rounded-xl border border-white/10 bg-white/5 p-4"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/10 text-sm font-bold text-sky-300">
+                      {index + 1}
                     </div>
-                    <span className="text-lg font-bold text-emerald-300">{service._count?.serviceId || 0}</span>
+                    <div>
+                      <p className="font-bold text-white">{service.serviceName}</p>
+                      <p className="text-xs text-slate-400">عدد الحجوزات</p>
+                    </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  <span className="text-lg font-bold text-emerald-300">{service._count?.serviceId || 0}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </DataCard>
 
-          <div className="glass-card p-6">
-            <h3 className="mb-4 font-bold text-white">آخر الحجوزات</h3>
-            {recentAppointments.length === 0 ? (
-              <p className="py-4 text-center text-sm text-dark-muted">لا توجد حجوزات حديثة ضمن الفلاتر الحالية.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-right text-sm">
-                  <thead className="border-b border-dark-border text-dark-muted">
-                    <tr>
-                      <th className="px-3 py-3 font-medium">المريض</th>
-                      <th className="px-3 py-3 font-medium">الخدمة</th>
-                      <th className="px-3 py-3 font-medium">الطبيب</th>
-                      <th className="px-3 py-3 font-medium">الموعد</th>
-                      <th className="px-3 py-3 font-medium">الحالة</th>
+        <DataCard>
+          <h3 className="mb-4 font-bold text-white">آخر الحجوزات</h3>
+          {recentAppointments.length === 0 ? (
+            <p className="py-4 text-center text-sm text-slate-400">لا توجد حجوزات حديثة ضمن الفلاتر الحالية.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-right text-sm">
+                <thead className="border-b border-white/10 text-slate-400">
+                  <tr>
+                    <th className="px-3 py-3 font-medium">المريض</th>
+                    <th className="px-3 py-3 font-medium">الخدمة</th>
+                    <th className="px-3 py-3 font-medium">الطبيب</th>
+                    <th className="px-3 py-3 font-medium">الموعد</th>
+                    <th className="px-3 py-3 font-medium">الحالة</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {recentAppointments.map((appointment) => (
+                    <tr key={appointment.id} className="transition-colors hover:bg-white/5">
+                      <td className="px-3 py-4 font-medium text-white">{appointment.patient?.name || 'غير معروف'}</td>
+                      <td className="px-3 py-4 text-slate-300">{appointment.service?.nameAr || 'خدمة'}</td>
+                      <td className="px-3 py-4 text-slate-300">{appointment.doctor?.name || 'طبيب'}</td>
+                      <td className="px-3 py-4 text-slate-300" dir="ltr">
+                        {format(parseISO(appointment.scheduledTime), 'dd/MM/yyyy - hh:mm a', { locale: ar })}
+                      </td>
+                      <td className="px-3 py-4">
+                        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-slate-300">
+                          {formatStatusLabel(appointment.status)}
+                        </span>
+                      </td>
                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-dark-border/50">
-                    {recentAppointments.map((appointment) => (
-                      <tr key={appointment.id} className="transition-colors hover:bg-dark-bg/30">
-                        <td className="px-3 py-4 font-medium text-white">{appointment.patient?.name || 'غير معروف'}</td>
-                        <td className="px-3 py-4 text-slate-300">{appointment.service?.nameAr || 'خدمة'}</td>
-                        <td className="px-3 py-4 text-slate-300">{appointment.doctor?.name || 'طبيب'}</td>
-                        <td className="px-3 py-4 text-slate-300" dir="ltr">
-                          {format(parseISO(appointment.scheduledTime), 'dd/MM/yyyy - hh:mm a', { locale: ar })}
-                        </td>
-                        <td className="px-3 py-4">
-                          <span className="rounded-full bg-dark-bg px-2.5 py-1 text-[10px] font-bold text-slate-300">
-                            {formatStatusLabel(appointment.status)}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        </section>
-      </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </DataCard>
+      </section>
     </AppLayout>
   );
 }

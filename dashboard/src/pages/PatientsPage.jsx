@@ -6,7 +6,7 @@ import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 import { useNavigate } from 'react-router-dom';
-import { DataCard, Field, PrimaryButton, SecondaryButton, inputClass } from '../components/ui';
+import { DataCard, Field, LoadingSpinner, PrimaryButton, SecondaryButton, inputClass } from '../components/ui';
 
 const formatMedicationLine = (medication, index) => {
   if (typeof medication === 'string') {
@@ -43,6 +43,7 @@ export default function PatientsPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [periodFilter, setPeriodFilter] = useState('ALL');
+  const [profileFilter, setProfileFilter] = useState('ALL');
   const [sortBy, setSortBy] = useState('recent');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -112,6 +113,7 @@ export default function PatientsPage() {
           limit: 12,
           search: currentSearch || undefined,
           period: periodFilter === 'ALL' ? undefined : periodFilter,
+          profileType: profileFilter === 'ALL' ? undefined : profileFilter,
           sortBy,
         },
       });
@@ -148,7 +150,7 @@ export default function PatientsPage() {
 
   useEffect(() => {
     fetchPatients(page, searchTerm);
-  }, [page, searchTerm, periodFilter, sortBy]);
+  }, [page, searchTerm, periodFilter, profileFilter, sortBy]);
 
   const openPatientModal = (patient) => {
     navigate(`/patients/${patient.id}`);
@@ -264,7 +266,7 @@ export default function PatientsPage() {
           </div>
         </div>
 
-        <div className="grid gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm md:grid-cols-3">
+        <div className="grid gap-3 rounded-lg border border-gray-200 bg-white p-4 shadow-sm md:grid-cols-4">
           <label className="text-sm font-bold text-gray-700">
             الفترة
             <select
@@ -296,12 +298,28 @@ export default function PatientsPage() {
               <option value="leastBooked">الأقل حجزاً</option>
             </select>
           </label>
+          <label className="text-sm font-bold text-gray-700">
+            التصنيف
+            <select
+              className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+              value={profileFilter}
+              onChange={(event) => {
+                setPage(1);
+                setProfileFilter(event.target.value);
+              }}
+            >
+              <option value="ALL">الكل</option>
+              <option value="BOOKED">حجزوا فعلياً</option>
+              <option value="CONTACT_ONLY">تواصلوا ولم يحجزوا</option>
+            </select>
+          </label>
           <div className="flex items-end">
             <button
               type="button"
               onClick={() => {
                 setSearchTerm('');
                 setPeriodFilter('ALL');
+                setProfileFilter('ALL');
                 setSortBy('recent');
                 setPage(1);
               }}
@@ -339,7 +357,7 @@ export default function PatientsPage() {
         {/* Patients Grid */}
         {loading && patients.length === 0 ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
+            <LoadingSpinner size="md" />
           </div>
         ) : patients.length === 0 ? (
           <div className="bg-white rounded-lg p-12 text-center border border-gray-200">
@@ -431,6 +449,7 @@ export default function PatientsPage() {
                 </div>
                 <button
                   onClick={closePatientModal}
+                  aria-label="إغلاق"
                   className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
                 >
                   <X className="h-4 w-4" />
@@ -462,7 +481,7 @@ export default function PatientsPage() {
               <div className="p-6 overflow-y-auto max-h-[calc(100vh-300px)]">
                 {patientDetailsLoading && !patientDetails ? (
                   <div className="flex justify-center py-8">
-                    <div className="animate-spin rounded-full h-8 w-8 border-4 border-green-500 border-t-transparent"></div>
+                    <LoadingSpinner size="md" />
                   </div>
                 ) : modalTab === 'OVERVIEW' ? (
                   <div className="space-y-4">
