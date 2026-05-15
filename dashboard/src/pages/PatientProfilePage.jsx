@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { Calendar, CreditCard, FileText, MessageSquare, Save, Stethoscope, Trash2, Users } from 'lucide-react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { Calendar, CreditCard, FileText, MessageSquare, Pill, Save, Stethoscope, Trash2, Users } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
@@ -85,6 +85,15 @@ const timeOptions = [
 
 export default function PatientProfilePage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const currentUserRole = (() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || '{}').role || 'STAFF';
+    } catch {
+      return 'STAFF';
+    }
+  })();
+  const canPrescribe = currentUserRole === 'ADMIN' || currentUserRole === 'DOCTOR';
   const [patient, setPatient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -337,6 +346,15 @@ export default function PatientProfilePage() {
         actions={
           <>
             <SecondaryButton type="button" onClick={() => window.history.back()}>رجوع</SecondaryButton>
+            {canPrescribe ? (
+              <SecondaryButton
+                type="button"
+                onClick={() => navigate(`/prescriptions?patientId=${encodeURIComponent(patient.id)}`)}
+              >
+                <Pill className="h-4 w-4" />
+                إنشاء روشتة
+              </SecondaryButton>
+            ) : null}
             <PrimaryButton type="button" onClick={savePatient} disabled={saving}>
               <Save className="h-4 w-4" />
               حفظ

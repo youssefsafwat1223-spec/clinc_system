@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, FileText, Plus, Printer, Search, Send, Trash2 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { ChevronDown, FileText, Plus, Printer, Search, Send, Trash2, UserRound } from 'lucide-react';
 import { toast } from 'react-toastify';
 import AppLayout from '../components/Layout';
 import api from '../api/client';
@@ -34,6 +35,9 @@ const todayLabel = () =>
   );
 
 export default function PrescriptionsPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedPatientId = searchParams.get('patientId') || '';
   const [appointmentId, setAppointmentId] = useState('');
   const [appointment, setAppointment] = useState(null);
   const [patients, setPatients] = useState([]);
@@ -60,16 +64,37 @@ export default function PrescriptionsPage() {
           api.get('/settings/public').catch(() => null),
         ]);
         setDoctors(doctorsRes.data.doctors || []);
-        setPatients(patientsRes.data.patients || []);
+        const list = patientsRes.data.patients || [];
         if (settingsRes?.data?.clinic) {
           setClinic((current) => ({ ...current, ...settingsRes.data.clinic }));
+        }
+
+        if (requestedPatientId) {
+          let target = list.find((patient) => patient.id === requestedPatientId);
+          if (!target) {
+            try {
+              const patientRes = await api.get(`/patients/${requestedPatientId}`);
+              target = patientRes.data.patient;
+            } catch {
+              target = null;
+            }
+          }
+          if (target) {
+            setPatients(list.some((p) => p.id === target.id) ? list : [target, ...list]);
+            setSelectedPatientId(target.id);
+            if (target.name) setSearch(target.name);
+          } else {
+            setPatients(list);
+          }
+        } else {
+          setPatients(list);
         }
       } catch {
         toast.error('فشل تحميل بيانات الروشتة');
       }
     };
     loadBasics();
-  }, []);
+  }, [requestedPatientId]);
 
   const selectedPatient = useMemo(
     () => appointment?.patient || patients.find((patient) => patient.id === selectedPatientId),
@@ -89,6 +114,15 @@ export default function PrescriptionsPage() {
       .slice(0, 8);
   }, [patients, search]);
 
+  // Always keep the chosen patient (e.g. resolved from a booking ref or deep
+  // link) in the dropdown, even when search/slice would exclude it.
+  const selectablePatients = useMemo(() => {
+    if (!selectedPatient || filteredPatients.some((patient) => patient.id === selectedPatient.id)) {
+      return filteredPatients;
+    }
+    return [selectedPatient, ...filteredPatients];
+  }, [filteredPatients, selectedPatient]);
+
   const resolveAppointment = async () => {
     if (!appointmentId.trim()) {
       toast.warn('اكتب رقم الحجز أولاً');
@@ -97,9 +131,17 @@ export default function PrescriptionsPage() {
     setLoading(true);
     try {
       const res = await api.get('/prescriptions/resolve', { params: { appointmentId: appointmentId.trim() } });
-      setAppointment(res.data.appointment);
-      setSelectedPatientId(res.data.appointment.patientId);
-      setDoctorId(res.data.appointment.doctorId);
+      const resolved = res.data.appointment;
+      setAppointment(resolved);
+      setSelectedPatientId(resolved.patientId);
+      setDoctorId(resolved.doctorId);
+      if (resolved.patient) {
+        setPatients((current) =>
+          current.some((patient) => patient.id === resolved.patient.id)
+            ? current
+            : [resolved.patient, ...current]
+        );
+      }
       toast.success('تم تحميل بيانات الحجز');
     } catch (error) {
       toast.error(error.message || 'لم يتم العثور على الحجز');
@@ -234,7 +276,7 @@ export default function PrescriptionsPage() {
                   }}
                 >
                   <option value="">اختر المريض</option>
-                  {filteredPatients.map((patient) => (
+                  {selectablePatients.map((patient) => (
                     <option key={patient.id} value={patient.id}>
                       {patient.name} - {patient.phone}
                     </option>
@@ -419,6 +461,15 @@ export default function PrescriptionsPage() {
               <Printer className="h-4 w-4" />
               طباعة
             </SecondaryButton>
+            {selectedPatient?.id ? (
+              <SecondaryButton
+                type="button"
+                onClick={() => navigate(`/patients/${selectedPatient.id}`)}
+              >
+                <UserRound className="h-4 w-4" />
+                ملف المريض
+              </SecondaryButton>
+            ) : null}
             {createdPrescription ? (
               <SecondaryButton type="button" onClick={sendExisting} disabled={saving}>
                 إعادة الإرسال
