@@ -125,10 +125,10 @@ const getAll = async (req, res, next) => {
     }
 
     const profileTypeWhere =
-      profileType === 'BOOKED' || profileType === 'LEAD'
-        ? { profileType }
+      profileType === 'BOOKED'
+        ? { appointments: { some: {} } }
         : profileType === 'CONTACT_ONLY'
-          ? { profileType: 'LEAD' }
+          ? { appointments: { none: {} } }
           : null;
 
     const where = combineWhere(accessWhere, searchWhere, groupWhere, periodWhere, profileTypeWhere);

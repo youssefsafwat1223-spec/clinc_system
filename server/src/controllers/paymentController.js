@@ -70,7 +70,7 @@ const serializeAppointmentPayment = async (appointment) => {
 
 const list = async (req, res, next) => {
   try {
-    const { status, search, month, limit = 100 } = req.query;
+    const { status, search, month, from, to, limit = 100 } = req.query;
     const filters = [];
 
     if (status && status !== 'ALL') {
@@ -99,6 +99,19 @@ const list = async (req, res, next) => {
         monthEnd.setMonth(monthEnd.getMonth() + 1);
         filters.push({ scheduledTime: { gte: monthStart, lt: monthEnd } });
       }
+    }
+
+    if (from || to) {
+      const range = {};
+      if (from) {
+        const fromDate = new Date(`${from}T00:00:00`);
+        if (!Number.isNaN(fromDate.getTime())) range.gte = fromDate;
+      }
+      if (to) {
+        const toDate = new Date(`${to}T23:59:59.999`);
+        if (!Number.isNaN(toDate.getTime())) range.lte = toDate;
+      }
+      if (range.gte || range.lte) filters.push({ scheduledTime: range });
     }
 
     const where = filters.length ? { AND: filters } : {};

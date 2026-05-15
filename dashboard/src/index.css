@@ -177,3 +177,25 @@
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Print: isolate the prescription paper, force clean white output */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #prescription-print,
+  #prescription-print * {
+    visibility: visible;
+  }
+  #prescription-print {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    width: 100%;
+    box-shadow: none !important;
+    border: none !important;
+  }
+  @page {
+    margin: 14mm;
+  }
+}

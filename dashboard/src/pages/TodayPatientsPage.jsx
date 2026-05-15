@@ -30,12 +30,24 @@ export default function TodayPatientsPage() {
   const [status, setStatus] = useState('ALL');
   const [doctorFilter, setDoctorFilter] = useState('ALL');
 
+  // Local (not UTC) YYYY-MM-DD so "today" matches the user's calendar day.
+  const localDateValue = (date = new Date()) => {
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  };
+
+  // For single-day filters, push the date to the server so the 500-row cap
+  // (ordered by scheduledTime desc) can't hide the matching appointments.
+  const serverDate =
+    dateRange === 'today' ? localDateValue() : dateRange === 'day' ? selectedDate : '';
+
   const loadAppointments = async () => {
     setLoading(true);
     try {
       const res = await api.get('/appointments', {
         params: {
           status: status === 'ALL' ? undefined : status,
+          date: serverDate || undefined,
           limit: 500,
         },
       });
@@ -49,7 +61,7 @@ export default function TodayPatientsPage() {
 
   useEffect(() => {
     loadAppointments();
-  }, [status]);
+  }, [status, serverDate]);
 
   const weekOptions = useMemo(() => getMonthWeekOptions(selectedMonth), [selectedMonth]);
 

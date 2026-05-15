@@ -19,22 +19,56 @@ const statusTone = {
   PAID: 'green',
 };
 
+const dateChips = [
+  { value: 'all', label: 'الكل' },
+  { value: 'today', label: 'اليوم' },
+  { value: 'week', label: 'آخر أسبوع' },
+  { value: 'month', label: 'آخر شهر' },
+  { value: 'day', label: 'يوم محدد' },
+];
+
+const pad = (value) => String(value).padStart(2, '0');
+const localDateValue = (date = new Date()) =>
+  `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+
 export default function PaymentsPage() {
   const [payments, setPayments] = useState([]);
   const [summary, setSummary] = useState({});
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState('ALL');
   const [search, setSearch] = useState('');
-  const [month, setMonth] = useState('');
+  const [dateRange, setDateRange] = useState('all');
+  const [selectedDate, setSelectedDate] = useState(() => localDateValue());
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ paidAmount: 0, discountAmount: 0, method: 'cash', notes: '' });
   const [saving, setSaving] = useState(false);
   const [markingPaidId, setMarkingPaidId] = useState(null);
 
+  const computeRange = () => {
+    const today = new Date();
+    const end = localDateValue(today);
+    if (dateRange === 'today') return { from: end, to: end };
+    if (dateRange === 'week') {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 6);
+      return { from: localDateValue(start), to: end };
+    }
+    if (dateRange === 'month') {
+      const start = new Date(today);
+      start.setDate(start.getDate() - 29);
+      return { from: localDateValue(start), to: end };
+    }
+    if (dateRange === 'day') return { from: selectedDate, to: selectedDate };
+    return { from: '', to: '' };
+  };
+
   const loadPayments = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/payments', { params: { status, search, month: month || undefined, limit: 200 } });
+      const { from, to } = computeRange();
+      const res = await api.get('/payments', {
+        params: { status, search, from: from || undefined, to: to || undefined, limit: 200 },
+      });
       setPayments(res.data.payments || []);
       setSummary(res.data.summary || {});
     } catch (error) {
@@ -46,7 +80,7 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     loadPayments();
-  }, [status, month]);
+  }, [status, dateRange, selectedDate]);
 
   const filteredPayments = useMemo(() => payments, [payments]);
 
@@ -128,14 +162,35 @@ export default function PaymentsPage() {
         <StatCard title="حجوزات مدفوعة" value={summary.paidCount || 0} hint={`غير مدفوع: ${summary.unpaidCount || 0} - جزئي: ${summary.partialCount || 0}`} icon={CreditCard} tone="slate" />
       </div>
 
-      <DataCard className="mb-6">
-        <div className="grid gap-4 lg:grid-cols-[1fr_180px_220px_auto]">
+      <DataCard className="mb-6 space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {dateChips.map((chip) => (
+            <button
+              key={chip.value}
+              type="button"
+              onClick={() => setDateRange(chip.value)}
+              className={`rounded-full px-3 py-1.5 text-xs font-bold transition ${
+                dateRange === chip.value
+                  ? 'bg-sky-500 text-white shadow-lg shadow-sky-500/20'
+                  : 'border border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+              }`}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_200px_220px_auto]">
           <Field label="بحث">
             <input className={inputClass} value={search} onChange={(event) => setSearch(event.target.value)} placeholder="رقم الكشف أو اسم أو رقم المريض" />
           </Field>
-          <Field label="الشهر">
-            <input className={inputClass} type="month" value={month} onChange={(event) => setMonth(event.target.value)} />
-          </Field>
+          {dateRange === 'day' ? (
+            <Field label="اليوم المحدد">
+              <input className={inputClass} type="date" value={selectedDate} onChange={(event) => setSelectedDate(event.target.value)} />
+            </Field>
+          ) : (
+            <div className="hidden lg:block" />
+          )}
           <Field label="حالة الدفع">
             <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}>
               <option value="ALL">كل الحالات</option>
