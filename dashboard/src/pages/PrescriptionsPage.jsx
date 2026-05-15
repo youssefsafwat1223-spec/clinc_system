@@ -25,7 +25,7 @@ const emptyToothNote = () => ({
 });
 
 const formatDate = (value) => {
-  if (!value) return '-';
+  if (!value) return '—';
   return new Date(value).toLocaleString('ar-EG', { dateStyle: 'medium', timeStyle: 'short' });
 };
 
@@ -38,7 +38,8 @@ export default function PrescriptionsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedPatientId = searchParams.get('patientId') || '';
-  const [appointmentId, setAppointmentId] = useState('');
+  const requestedAppointmentId = searchParams.get('appointmentId') || '';
+  const [appointmentId, setAppointmentId] = useState(requestedAppointmentId);
   const [appointment, setAppointment] = useState(null);
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
@@ -80,7 +81,7 @@ export default function PrescriptionsPage() {
             }
           }
           if (target) {
-            setPatients(list.some((p) => p.id === target.id) ? list : [target, ...list]);
+            setPatients(list.some((patient) => patient.id === target.id) ? list : [target, ...list]);
             setSelectedPatientId(target.id);
             if (target.name) setSearch(target.name);
           } else {
@@ -114,8 +115,6 @@ export default function PrescriptionsPage() {
       .slice(0, 8);
   }, [patients, search]);
 
-  // Always keep the chosen patient (e.g. resolved from a booking ref or deep
-  // link) in the dropdown, even when search/slice would exclude it.
   const selectablePatients = useMemo(() => {
     if (!selectedPatient || filteredPatients.some((patient) => patient.id === selectedPatient.id)) {
       return filteredPatients;
@@ -137,9 +136,7 @@ export default function PrescriptionsPage() {
       setDoctorId(resolved.doctorId);
       if (resolved.patient) {
         setPatients((current) =>
-          current.some((patient) => patient.id === resolved.patient.id)
-            ? current
-            : [resolved.patient, ...current]
+          current.some((patient) => patient.id === resolved.patient.id) ? current : [resolved.patient, ...current]
         );
       }
       toast.success('تم تحميل بيانات الحجز');
@@ -156,6 +153,7 @@ export default function PrescriptionsPage() {
 
   const addMedication = () => setMedications((current) => [...current, emptyMedication()]);
   const removeMedication = (index) => setMedications((current) => current.filter((_, itemIndex) => itemIndex !== index));
+
   const updateToothNote = (index, key, value) => {
     setToothNotes((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)));
   };
@@ -178,7 +176,7 @@ export default function PrescriptionsPage() {
   const savePrescription = async (sendAfterSave = false) => {
     const cleanMedications = medications.filter((medication) => medication.name.trim());
     if (!selectedPatient?.id || !diagnosis.trim() || cleanMedications.length === 0) {
-      toast.warn('اختار المريض واكتب التشخيص ودواء واحد على الأقل');
+      toast.warn('اختر المريض واكتب التشخيص ودواء واحد على الأقل');
       return;
     }
 
@@ -224,6 +222,9 @@ export default function PrescriptionsPage() {
 
   const enteredMedications = medications.filter((medication) => medication.name.trim());
   const clinicName = clinic.nameAr || clinic.name || 'عيادتي';
+  const prescriptionDate = appointment?.scheduledTime ? formatDate(appointment.scheduledTime) : todayLabel();
+  const patientAge = selectedPatient?.age || selectedPatient?.birthDate;
+  const doctorName = selectedDoctor?.name ? `د. ${selectedDoctor.name}` : '—';
 
   return (
     <AppLayout>
@@ -238,8 +239,7 @@ export default function PrescriptionsPage() {
       />
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
-        {/* ── Form column ── */}
-        <div className="space-y-6">
+        <div className="space-y-6 print-hidden">
           <DataCard>
             <div className="grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
               <Field label="رقم الحجز (Booking Ref)">
@@ -312,7 +312,6 @@ export default function PrescriptionsPage() {
             </div>
           </DataCard>
 
-          {/* Medications */}
           <DataCard>
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-black text-white">الأدوية</h2>
@@ -342,26 +341,54 @@ export default function PrescriptionsPage() {
                   </div>
                   <div className="grid gap-3 md:grid-cols-3">
                     <Field label="اسم الدواء">
-                      <input className={inputClass} value={medication.name} onChange={(event) => updateMedication(index, 'name', event.target.value)} placeholder="Augmentin 1gm" />
+                      <input
+                        className={inputClass}
+                        value={medication.name}
+                        onChange={(event) => updateMedication(index, 'name', event.target.value)}
+                        placeholder="Augmentin 1gm"
+                      />
                     </Field>
                     <Field label="الجرعة">
-                      <input className={inputClass} value={medication.dosage} onChange={(event) => updateMedication(index, 'dosage', event.target.value)} placeholder="قرص" />
+                      <input
+                        className={inputClass}
+                        value={medication.dosage}
+                        onChange={(event) => updateMedication(index, 'dosage', event.target.value)}
+                        placeholder="قرص"
+                      />
                     </Field>
                     <Field label="التكرار">
-                      <select className={inputClass} value={medication.frequency} onChange={(event) => updateMedication(index, 'frequency', event.target.value)}>
+                      <select
+                        className={inputClass}
+                        value={medication.frequency}
+                        onChange={(event) => updateMedication(index, 'frequency', event.target.value)}
+                      >
                         {frequencyOptions.map((option) => (
                           <option key={option}>{option}</option>
                         ))}
                       </select>
                     </Field>
                     <Field label="كل كام ساعة/يوم">
-                      <input className={inputClass} value={medication.interval} onChange={(event) => updateMedication(index, 'interval', event.target.value)} placeholder="كل 12 ساعة" />
+                      <input
+                        className={inputClass}
+                        value={medication.interval}
+                        onChange={(event) => updateMedication(index, 'interval', event.target.value)}
+                        placeholder="كل 12 ساعة"
+                      />
                     </Field>
                     <Field label="المدة">
-                      <input className={inputClass} value={medication.duration} onChange={(event) => updateMedication(index, 'duration', event.target.value)} placeholder="5 أيام" />
+                      <input
+                        className={inputClass}
+                        value={medication.duration}
+                        onChange={(event) => updateMedication(index, 'duration', event.target.value)}
+                        placeholder="5 أيام"
+                      />
                     </Field>
-                    <Field label="قبل/بعد الأكل">
-                      <select className={inputClass} value={medication.timing} onChange={(event) => updateMedication(index, 'timing', event.target.value)}>
+                    <Field label="التعليمات">
+                      <select
+                        className={inputClass}
+                        value={medication.timing}
+                        onChange={(event) => updateMedication(index, 'timing', event.target.value)}
+                      >
                         {timingOptions.map((option) => (
                           <option key={option}>{option}</option>
                         ))}
@@ -369,7 +396,12 @@ export default function PrescriptionsPage() {
                     </Field>
                   </div>
                   <div className="mt-3">
-                    <input className={inputClass} value={medication.notes} onChange={(event) => updateMedication(index, 'notes', event.target.value)} placeholder="ملاحظات خاصة بالدواء (اختياري)" />
+                    <input
+                      className={inputClass}
+                      value={medication.notes}
+                      onChange={(event) => updateMedication(index, 'notes', event.target.value)}
+                      placeholder="ملاحظات خاصة بالدواء (اختياري)"
+                    />
                   </div>
                 </div>
               ))}
@@ -377,12 +409,16 @@ export default function PrescriptionsPage() {
 
             <div className="mt-5">
               <Field label="ملاحظات عامة للمريض">
-                <textarea className={`${inputClass} min-h-24`} value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="تعليمات إضافية للمريض" />
+                <textarea
+                  className={`${inputClass} min-h-24`}
+                  value={notes}
+                  onChange={(event) => setNotes(event.target.value)}
+                  placeholder="تعليمات إضافية للمريض"
+                />
               </Field>
             </div>
           </DataCard>
 
-          {/* Tooth notes (collapsible) */}
           <DataCard>
             <button
               type="button"
@@ -392,7 +428,9 @@ export default function PrescriptionsPage() {
             >
               <div className="text-right">
                 <h2 className="text-lg font-black text-white">ملاحظات الأسنان</h2>
-                <p className="mt-1 text-sm text-slate-400">اكتب رقم السن ثم الملاحظة — تُحفظ داخل الروشتة وملف المريض.</p>
+                <p className="mt-1 text-sm text-slate-400">
+                  اكتب رقم السن ثم الملاحظة. تحفظ داخل الروشتة وملف المريض.
+                </p>
               </div>
               <ChevronDown
                 className={`h-5 w-5 shrink-0 text-slate-400 transition-transform ${showToothChart ? 'rotate-180' : ''}`}
@@ -420,15 +458,26 @@ export default function PrescriptionsPage() {
                   {toothNotes.map((item, index) => (
                     <div key={index} className="grid gap-3 md:grid-cols-[130px_1fr_auto]">
                       <Field label="رقم السن">
-                        <select className={inputClass} value={item.toothNumber} onChange={(event) => updateToothNote(index, 'toothNumber', event.target.value)}>
+                        <select
+                          className={inputClass}
+                          value={item.toothNumber}
+                          onChange={(event) => updateToothNote(index, 'toothNumber', event.target.value)}
+                        >
                           <option value="">اختر</option>
                           {Array.from({ length: 32 }, (_, toothIndex) => toothIndex + 1).map((number) => (
-                            <option key={number} value={number}>سن {number}</option>
+                            <option key={number} value={number}>
+                              سن {number}
+                            </option>
                           ))}
                         </select>
                       </Field>
                       <Field label="الملاحظة">
-                        <input className={inputClass} value={item.note} onChange={(event) => updateToothNote(index, 'note', event.target.value)} placeholder="مثال: تسوس، حشو، خلع، ألم عند الضغط..." />
+                        <input
+                          className={inputClass}
+                          value={item.note}
+                          onChange={(event) => updateToothNote(index, 'note', event.target.value)}
+                          placeholder="مثال: تسوس، حشو، خلع، ألم عند الضغط..."
+                        />
                       </Field>
                       {toothNotes.length > 1 ? (
                         <button
@@ -447,7 +496,6 @@ export default function PrescriptionsPage() {
             ) : null}
           </DataCard>
 
-          {/* Action bar */}
           <div className="sticky bottom-4 z-10 flex flex-wrap gap-3 rounded-2xl border border-white/10 bg-[#0b1020]/90 p-4 backdrop-blur-xl">
             <PrimaryButton type="button" onClick={() => savePrescription(false)} disabled={saving}>
               <FileText className="h-4 w-4" />
@@ -459,13 +507,10 @@ export default function PrescriptionsPage() {
             </PrimaryButton>
             <SecondaryButton type="button" onClick={handlePrint}>
               <Printer className="h-4 w-4" />
-              طباعة
+              طباعة / حفظ PDF
             </SecondaryButton>
             {selectedPatient?.id ? (
-              <SecondaryButton
-                type="button"
-                onClick={() => navigate(`/patients/${selectedPatient.id}`)}
-              >
+              <SecondaryButton type="button" onClick={() => navigate(`/patients/${selectedPatient.id}`)}>
                 <UserRound className="h-4 w-4" />
                 ملف المريض
               </SecondaryButton>
@@ -478,121 +523,137 @@ export default function PrescriptionsPage() {
           </div>
         </div>
 
-        {/* ── Prescription paper preview ── */}
-        <div className="xl:sticky xl:top-24 xl:self-start">
-          <p className="mb-3 text-sm font-bold text-slate-400">معاينة الروشتة (هكذا ستُطبع)</p>
-          <div
-            id="prescription-print"
-            className="overflow-hidden rounded-2xl bg-white text-slate-900 shadow-2xl shadow-black/40"
-            dir="rtl"
-          >
-            {/* Letterhead */}
-            <div className="flex items-start justify-between gap-4 border-b-4 border-sky-600 bg-sky-50 px-6 py-5">
-              <div className="flex items-center gap-3">
+        <div className="prescription-print-root xl:sticky xl:top-24 xl:self-start">
+          <p className="print-hidden mb-3 text-sm font-bold text-slate-400">معاينة الروشتة كما ستظهر في الطباعة</p>
+
+          <article id="prescription-print" className="prescription-paper" dir="rtl">
+            <header className="prescription-letterhead prescription-section">
+              <div className="prescription-clinic-identity">
                 {clinic.logoUrl ? (
-                  <img src={clinic.logoUrl} alt={clinicName} className="h-14 w-14 rounded-xl object-cover" />
+                  <img src={clinic.logoUrl} alt={clinicName} className="prescription-logo" />
                 ) : (
-                  <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-sky-600 text-2xl font-black text-white">
-                    {clinicName.slice(0, 1)}
-                  </div>
+                  <div className="prescription-logo-fallback">{clinicName.slice(0, 1)}</div>
                 )}
                 <div>
-                  <p className="text-xl font-black text-sky-800">{clinicName}</p>
-                  <p className="text-xs font-medium text-slate-500">لطب وتجميل الأسنان</p>
+                  <p className="prescription-kicker">عيادة أسنان</p>
+                  <h1>{clinicName}</h1>
+                  <p className="prescription-muted">لطب وتجميل الأسنان</p>
                 </div>
               </div>
-              <div className="text-left text-[11px] leading-5 text-slate-600">
+              <div className="prescription-contact">
+                <p className="prescription-date">{prescriptionDate}</p>
                 {clinic.phone ? <p dir="ltr">{clinic.phone}</p> : null}
                 {clinic.address ? <p>{clinic.address}</p> : null}
               </div>
-            </div>
+            </header>
 
-            <div className="px-6 py-5">
-              {/* Patient / date row */}
-              <div className="mb-4 flex items-end justify-between gap-4 border-b border-dashed border-slate-300 pb-4">
-                <div className="space-y-1 text-sm">
-                  <p>
-                    <span className="font-bold text-slate-500">المريض:</span>{' '}
-                    <span className="font-bold">{selectedPatient?.name || '—'}</span>
-                  </p>
-                  <p className="text-slate-600">
-                    <span className="font-bold text-slate-500">الهاتف:</span>{' '}
-                    <span dir="ltr">{selectedPatient?.phone || '—'}</span>
-                  </p>
-                </div>
-                <div className="text-left text-xs text-slate-600">
-                  <p>{appointment?.scheduledTime ? formatDate(appointment.scheduledTime) : todayLabel()}</p>
-                  {appointment?.bookingRef ? (
-                    <p className="font-mono" dir="ltr">{appointment.bookingRef}</p>
-                  ) : null}
-                </div>
+            <section className="prescription-patient-grid prescription-section">
+              <div>
+                <span>اسم المريض</span>
+                <strong>{selectedPatient?.name || '—'}</strong>
               </div>
-
-              {/* Rx + diagnosis */}
-              <div className="mb-4 flex items-center gap-3">
-                <span className="font-serif text-4xl font-black leading-none text-sky-700">℞</span>
+              <div>
+                <span>الهاتف</span>
+                <strong dir="ltr">{selectedPatient?.phone || '—'}</strong>
+              </div>
+              <div>
+                <span>العمر / تاريخ الميلاد</span>
+                <strong>{patientAge || '—'}</strong>
+              </div>
+              <div>
+                <span>الطبيب</span>
+                <strong>{doctorName}</strong>
+              </div>
+              {appointment?.bookingRef ? (
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">التشخيص</p>
-                  <p className="text-base font-bold text-slate-800">{diagnosis || '—'}</p>
+                  <span>رقم الحجز</span>
+                  <strong dir="ltr">{appointment.bookingRef}</strong>
                 </div>
-              </div>
+              ) : null}
+            </section>
 
-              {/* Medications */}
-              <div className="space-y-2">
+            <main className="prescription-body">
+              <section className="prescription-diagnosis prescription-section">
+                <div className="prescription-rx">℞</div>
+                <div>
+                  <span>التشخيص</span>
+                  <p>{diagnosis || '—'}</p>
+                </div>
+              </section>
+
+              <section className="prescription-section">
+                <div className="prescription-section-title">
+                  <span>العلاج</span>
+                  <strong>{enteredMedications.length || 0} أدوية</strong>
+                </div>
                 {enteredMedications.length === 0 ? (
-                  <p className="rounded-lg border border-dashed border-slate-300 px-3 py-6 text-center text-sm text-slate-400">
-                    لم يتم إدخال أدوية بعد.
-                  </p>
+                  <p className="prescription-empty">لم يتم إدخال أدوية بعد.</p>
                 ) : (
-                  enteredMedications.map((medication, index) => (
-                    <div key={index} className="flex gap-3 border-b border-slate-100 pb-2">
-                      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-sky-100 text-xs font-black text-sky-700">
-                        {index + 1}
-                      </span>
-                      <div className="text-sm">
-                        <p className="font-black text-slate-900">{medication.name}</p>
-                        <p className="text-slate-600">
-                          {[medication.dosage, medication.frequency, medication.interval, medication.duration, medication.timing]
-                            .filter(Boolean)
-                            .join(' — ')}
-                        </p>
-                        {medication.notes ? <p className="text-xs text-slate-500">{medication.notes}</p> : null}
-                      </div>
-                    </div>
-                  ))
+                  <ol className="prescription-medications">
+                    {enteredMedications.map((medication, index) => {
+                      const instructionLine = [
+                        medication.dosage,
+                        medication.frequency,
+                        medication.interval,
+                        medication.duration,
+                        medication.timing,
+                      ]
+                        .filter(Boolean)
+                        .join(' - ');
+
+                      return (
+                        <li key={`${medication.name}-${index}`} className="prescription-medication-row">
+                          <div className="prescription-med-number">{index + 1}</div>
+                          <div>
+                            <h3>{medication.name}</h3>
+                            {instructionLine ? <p>{instructionLine}</p> : null}
+                            {medication.notes ? <small>{medication.notes}</small> : null}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
                 )}
-              </div>
+              </section>
 
-              {/* Tooth notes */}
               {cleanToothNotes.length > 0 ? (
-                <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-                  <p className="mb-1 font-bold text-sky-700">ملاحظات الأسنان</p>
-                  {cleanToothNotes.map((item) => (
-                    <p key={`${item.toothNumber}-${item.note}`} className="text-slate-700">
-                      سن {item.toothNumber}: {item.note}
-                    </p>
-                  ))}
-                </div>
+                <section className="prescription-section prescription-tooth-notes">
+                  <div className="prescription-section-title">
+                    <span>ملاحظات الأسنان</span>
+                    <strong>{cleanToothNotes.length} أسنان</strong>
+                  </div>
+                  <div className="prescription-tooth-grid">
+                    {cleanToothNotes.map((item) => (
+                      <p key={`${item.toothNumber}-${item.note}`}>
+                        <strong>سن {item.toothNumber}</strong>
+                        <span>{item.note}</span>
+                      </p>
+                    ))}
+                  </div>
+                </section>
               ) : null}
 
-              {/* General notes */}
               {notes.trim() ? (
-                <p className="mt-4 whitespace-pre-line rounded-lg bg-slate-50 p-3 text-sm text-slate-600">{notes}</p>
+                <section className="prescription-section prescription-notes">
+                  <div className="prescription-section-title">
+                    <span>ملاحظات</span>
+                  </div>
+                  <p>{notes}</p>
+                </section>
               ) : null}
+            </main>
 
-              {/* Signature */}
-              <div className="mt-8 flex items-end justify-between">
-                <div className="text-xs text-slate-400">
-                  <p>روشتة طبية إلكترونية صادرة من نظام {clinicName}</p>
-                </div>
-                <div className="text-center">
-                  <div className="mb-1 h-10 w-44 border-b border-slate-400" />
-                  <p className="text-xs font-bold text-slate-600">توقيع الطبيب</p>
-                  <p className="text-sm font-black text-slate-800">{selectedDoctor?.name ? `د. ${selectedDoctor.name}` : '—'}</p>
-                </div>
+            <footer className="prescription-footer prescription-section">
+              <div>
+                <span>توقيع الطبيب</span>
+                <strong>{doctorName}</strong>
               </div>
-            </div>
-          </div>
+              <p>
+                هذه الروشتة صادرة إلكترونياً من نظام {clinicName}. يرجى الالتزام بتعليمات الطبيب وعدم تغيير الجرعات
+                دون مراجعة العيادة.
+              </p>
+            </footer>
+          </article>
         </div>
       </div>
     </AppLayout>
