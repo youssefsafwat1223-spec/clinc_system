@@ -14,6 +14,8 @@ export default function AppointmentCard({
   onComplete,
   onNoShow,
   onCancel,
+  onOpenPatientProfile,
+  onCreatePrescription,
   compact = false,
 }) {
   const patientName = appointment.patient?.displayName || appointment.patient?.name || 'مريض غير محدد';
@@ -75,6 +77,20 @@ export default function AppointmentCard({
         </div>
 
         <div className="flex flex-wrap gap-2 xl:justify-end">
+          {onOpenPatientProfile ? (
+            <SecondaryButton type="button" onClick={() => onOpenPatientProfile(appointment)}>
+              <User className="h-4 w-4" />
+              ملف المريض
+            </SecondaryButton>
+          ) : null}
+
+          {onCreatePrescription ? (
+            <SecondaryButton type="button" onClick={() => onCreatePrescription(appointment)}>
+              <Stethoscope className="h-4 w-4" />
+              إنشاء روشتة
+            </SecondaryButton>
+          ) : null}
+
           {appointment.status === 'PENDING' ? (
             <>
               <PrimaryButton type="button" onClick={() => onConfirm?.(appointment)}>

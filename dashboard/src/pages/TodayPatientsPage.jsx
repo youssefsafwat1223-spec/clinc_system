@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { CalendarDays, Filter, RefreshCw, Users } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../api/client';
@@ -21,6 +22,7 @@ const todayFirstFilterOptions = [
 ];
 
 export default function TodayPatientsPage() {
+  const navigate = useNavigate();
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dateRange, setDateRange] = useState('today');
@@ -210,7 +212,13 @@ export default function TodayPatientsPage() {
       ) : (
         <div className="grid gap-4">
           {filteredAppointments.map((appointment) => (
-            <AppointmentCard key={appointment.id} appointment={appointment} compact />
+            <AppointmentCard
+              key={appointment.id}
+              appointment={appointment}
+              compact
+              onOpenPatientProfile={(item) => item.patientId && navigate(`/patients/${item.patientId}`)}
+              onCreatePrescription={(item) => item.patientId && navigate(`/prescriptions?patientId=${encodeURIComponent(item.patientId)}&appointmentId=${encodeURIComponent(item.id)}`)}
+            />
           ))}
         </div>
       )}
