@@ -157,7 +157,6 @@ const readIncomingText = (body) => {
     body?.comment_text,
     body?.comment_message,
     body?.last_comment_text,
-    body?.last_text_input,
     body?.text,
     body?.message,
     body?.input,
@@ -169,6 +168,7 @@ const readIncomingText = (body) => {
     body?.data?.message,
     body?.trigger?.comment_text,
     body?.trigger?.message_text,
+    body?.last_text_input,
     fullContactData?.last_text_input,
     fullContactData?.comment_text,
     fullContactData?.comment?.text,
@@ -186,6 +186,7 @@ const readIncomingText = (body) => {
     .filter(({ path, value }) => {
       if (value.length < 2) return false;
       if (/token|authorization|verify|webhook|subscriber_id|contact_id|platform|channel|full_name/i.test(path)) return false;
+      if (/api_|reply_text|image_url|callback|intent|custom_fields|fields/i.test(path)) return false;
       return /(comment|message|text|caption|content|reply|input)/i.test(path);
     })
     .map(({ value }) => value);
@@ -900,6 +901,7 @@ const manychatWebhook = async (req, res) => {
     writeManyChatLog('response', {
       intent,
       incomingText,
+      incomingTextRaw,
       sourceType,
       platform,
       patientId: patient?.id || null,
