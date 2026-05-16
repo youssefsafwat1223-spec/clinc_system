@@ -108,6 +108,14 @@ const sendContent = async ({ subscriberId, platform, text, imageUrl = '', quickR
   return response.data;
 };
 
+const sendText = async ({ subscriberId, platform, text, quickReplies = [] }) =>
+  sendContent({ subscriberId, platform, text, imageUrl: '', quickReplies });
+
+const sendImage = async ({ subscriberId, platform, imageUrl }) =>
+  sendContent({ subscriberId, platform, text: '', imageUrl, quickReplies: [] });
+
 module.exports = {
   sendContent,
+  sendText,
+  sendImage,
 };

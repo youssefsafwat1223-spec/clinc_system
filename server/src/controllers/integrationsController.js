@@ -872,16 +872,26 @@ const manychatWebhook = async (req, res) => {
 
     if (autoSendReply && senderId) {
       try {
-        await manychatService.sendContent({
+        if (publicImageUrl) {
+          await manychatService.sendImage({
+            subscriberId: senderId,
+            platform,
+            imageUrl: publicImageUrl,
+          });
+        }
+        await manychatService.sendText({
           subscriberId: senderId,
           platform,
           text: replyText,
-          imageUrl: publicImageUrl || '',
           quickReplies: [],
         });
         autoSent = true;
       } catch (error) {
-        autoSendError = error.response?.data || error.message;
+        autoSendError = {
+          status: error.response?.status || null,
+          data: error.response?.data || null,
+          message: error.message,
+        };
         console.error('[ManyChat] Auto send failed:', autoSendError);
       }
     }
