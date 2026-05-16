@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const prisma = require('../lib/prisma');
+const config = require('../config/env');
 const openaiService = require('../services/openaiService');
 const { getDiscountForService } = require('../services/discountService');
 const { formatCurrency } = require('../utils/helpers');
@@ -77,6 +78,24 @@ const parseJsonObject = (value) => {
   }
 };
 const getFullContactData = (body) => parseJsonObject(body?.full_contact_data);
+
+const toAbsoluteUrl = (req, url) => {
+  const raw = String(url || '').trim();
+  if (!raw) return null;
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const baseUrl = (
+    config.publicBaseUrl ||
+    config.dashboardUrl ||
+    `${req.protocol}://${req.get('host')}`
+  ).replace(/\/$/, '');
+
+  try {
+    return new URL(raw, `${baseUrl}/`).toString();
+  } catch {
+    return raw;
+  }
+};
 
 const pickFirstString = (...values) => {
   for (const value of values) {
@@ -844,6 +863,8 @@ const manychatWebhook = async (req, res) => {
       });
     }
 
+    const publicImageUrl = toAbsoluteUrl(req, imageUrl);
+
     writeManyChatLog('response', {
       intent,
       incomingText,
@@ -852,7 +873,7 @@ const manychatWebhook = async (req, res) => {
       patientId: patient?.id || null,
       senderId: senderId || null,
       commentId: commentMeta.commentId || null,
-      imageUrl,
+      imageUrl: publicImageUrl,
       callbackSaved,
     });
 
@@ -861,7 +882,7 @@ const manychatWebhook = async (req, res) => {
       intent,
       reply_text: replyText,
       quick_replies: DEFAULT_QUICK_REPLIES,
-      image_url: imageUrl,
+      image_url: publicImageUrl,
       callback_saved: callbackSaved,
       callback_prompt: buildCallbackPrompt(settings),
     });

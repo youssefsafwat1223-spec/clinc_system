@@ -76,6 +76,24 @@ const normalizeQuickReplies = (quickReplies = []) =>
         .filter(Boolean)
     : [];
 
+const toAbsoluteUrl = (req, url) => {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+
+  const baseUrl = (
+    config.publicBaseUrl ||
+    config.dashboardUrl ||
+    `${req.protocol}://${req.get('host')}`
+  ).replace(/\/$/, '');
+
+  try {
+    return new URL(raw, `${baseUrl}/`).toString();
+  } catch {
+    return raw;
+  }
+};
+
 const shouldUseManychat = (patient, platform) =>
   Boolean(
     config.manychat.apiKey &&
@@ -278,6 +296,7 @@ const sendManual = async (req, res, next) => {
 
     const trimmedContent = String(content || '').trim();
     const trimmedImageUrl = String(imageUrl || '').trim();
+    const resolvedImageUrl = toAbsoluteUrl(req, trimmedImageUrl);
     const normalizedQuickReplies = normalizeQuickReplies(quickReplies);
 
     if (!trimmedContent && !trimmedImageUrl) {
@@ -298,14 +317,14 @@ const sendManual = async (req, res, next) => {
 
       switch (sendPlatform) {
       case 'WHATSAPP':
-        if (trimmedImageUrl) {
-          await whatsappService.sendImageMessage(patient.phone, trimmedImageUrl, deliveredContent || '');
+        if (resolvedImageUrl) {
+          await whatsappService.sendImageMessage(patient.phone, resolvedImageUrl, deliveredContent || '');
           if (deliveredContent) {
             metadata = {
               source: 'MANUAL_REPLY',
               delivery: 'DIRECT_MESSAGE',
               manual: true,
-              imageUrl: trimmedImageUrl,
+              imageUrl: resolvedImageUrl,
             };
           }
         } else {
@@ -320,7 +339,7 @@ const sendManual = async (req, res, next) => {
             ...(metadata || {}),
             originalContent: trimmedContent || null,
             senderName: senderName || null,
-            imageUrl: trimmedImageUrl || null,
+            imageUrl: resolvedImageUrl || null,
             quickReplies: [],
           },
           reviewedById: req.user?.id,
@@ -344,7 +363,7 @@ const sendManual = async (req, res, next) => {
             subscriberId: patient.manychatSubscriberId,
             platform: 'FACEBOOK',
             text: deliveredContent,
-            imageUrl: trimmedImageUrl,
+            imageUrl: resolvedImageUrl,
             quickReplies: normalizedQuickReplies,
           });
           metadata = {
@@ -369,7 +388,7 @@ const sendManual = async (req, res, next) => {
             ...(metadata || {}),
             originalContent: trimmedContent || null,
             senderName: senderName || null,
-            imageUrl: trimmedImageUrl || null,
+            imageUrl: resolvedImageUrl || null,
             quickReplies: normalizedQuickReplies,
           },
           reviewedById: req.user?.id,
@@ -394,7 +413,7 @@ const sendManual = async (req, res, next) => {
             subscriberId: patient.manychatSubscriberId,
             platform: 'INSTAGRAM',
             text: deliveredContent,
-            imageUrl: trimmedImageUrl,
+            imageUrl: resolvedImageUrl,
             quickReplies: normalizedQuickReplies,
           });
           metadata = {
@@ -419,7 +438,7 @@ const sendManual = async (req, res, next) => {
             ...(metadata || {}),
             originalContent: trimmedContent || null,
             senderName: senderName || null,
-            imageUrl: trimmedImageUrl || null,
+            imageUrl: resolvedImageUrl || null,
             quickReplies: normalizedQuickReplies,
           },
           reviewedById: req.user?.id,
