@@ -1,5 +1,5 @@
 const express = require('express');
-const { getAll, getOne, create, confirm, reject, update, block, complete, noShow, cancel, getStats, availability, previewRescheduleByDoctor, rescheduleByDoctor } = require('../controllers/appointmentController');
+const { getAll, getOne, create, confirm, reject, update, block, complete, noShow, cancel, getStats, availability, previewRescheduleByDoctor, rescheduleByDoctor, updateQueuePosition } = require('../controllers/appointmentController');
 const { auth } = require('../middleware/auth');
 
 const router = express.Router();
@@ -19,5 +19,6 @@ router.post('/:id/block', block);
 router.post('/:id/complete', complete);
 router.post('/:id/no-show', noShow);
 router.post('/:id/cancel', cancel);
+router.patch('/:id/queue-position', updateQueuePosition);
 
 module.exports = router;

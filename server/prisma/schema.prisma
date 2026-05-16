@@ -190,6 +190,7 @@ model Appointment {
   service       Service           @relation(fields: [serviceId], references: [id])
   appointmentType AppointmentType @default(SCHEDULED) @map("appointment_type")
   scheduledTime DateTime          @map("scheduled_time")
+  queuePosition Int?              @map("queue_position")
     status        AppointmentStatus @default(PENDING)
     lockedUntil   DateTime?         @map("locked_until")
     notes         String?

@@ -61,6 +61,16 @@ export default function TodayPatientsPage() {
     }
   };
 
+  const handleQueueChange = async (appointment, position, mode) => {
+    try {
+      await api.patch(`/appointments/${appointment.id}/queue-position`, { position, mode });
+      toast.success('تم تحديث دور المريض');
+      await loadAppointments();
+    } catch (error) {
+      toast.error(error.message || 'فشل تحديث الدور');
+    }
+  };
+
   useEffect(() => {
     loadAppointments();
   }, [status, serverDate]);
@@ -218,6 +228,7 @@ export default function TodayPatientsPage() {
               compact
               onOpenPatientProfile={(item) => item.patientId && navigate(`/patients/${item.patientId}`)}
               onCreatePrescription={(item) => item.patientId && navigate(`/prescriptions?patientId=${encodeURIComponent(item.patientId)}&appointmentId=${encodeURIComponent(item.id)}`)}
+              onQueueChange={handleQueueChange}
             />
           ))}
         </div>

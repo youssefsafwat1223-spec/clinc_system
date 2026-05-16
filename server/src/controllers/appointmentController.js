@@ -603,6 +603,29 @@ const getStats = async (req, res, next) => {
   }
 };
 
+const updateQueuePosition = async (req, res, next) => {
+  try {
+    const { appointment: existingAppointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!existingAppointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    const { position, mode } = req.body || {};
+    const appointment = await appointmentService.setQueuePosition({
+      appointmentId: req.params.id,
+      position,
+      mode: mode === 'shift' ? 'shift' : 'swap',
+    });
+
+    res.json({ appointment });
+  } catch (error) {
+    if (error.message && /غير صالح|بدون موعد|غير موجود/.test(error.message)) {
+      return res.status(400).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
 module.exports = {
   getAll,
   getOne,
@@ -618,4 +641,5 @@ module.exports = {
   availability,
   previewRescheduleByDoctor,
   rescheduleByDoctor,
+  updateQueuePosition,
 };

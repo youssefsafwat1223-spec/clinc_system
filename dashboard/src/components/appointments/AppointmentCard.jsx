@@ -1,5 +1,6 @@
-import { CalendarDays, CheckCircle, Clock3, Stethoscope, User, XCircle } from 'lucide-react';
-import { DataCard, PrimaryButton, SecondaryButton, StatusBadge } from '../ui';
+import { useState } from 'react';
+import { CalendarDays, CheckCircle, Clock3, Hash, Stethoscope, User, XCircle } from 'lucide-react';
+import { DataCard, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../ui';
 import {
   appointmentStatusLabels,
   appointmentStatusTone,
@@ -16,12 +17,30 @@ export default function AppointmentCard({
   onCancel,
   onOpenPatientProfile,
   onCreatePrescription,
+  onQueueChange,
   compact = false,
 }) {
   const patientName = appointment.patient?.displayName || appointment.patient?.name || 'مريض غير محدد';
   const serviceName = appointment.service?.nameAr || appointment.service?.name || 'خدمة غير محددة';
   const doctorName = appointment.doctor?.name || 'طبيب غير محدد';
   const isWalkIn = appointment.appointmentType === 'WALK_IN';
+  const hasQueue = isWalkIn && appointment.queuePosition != null;
+
+  const [editingQueue, setEditingQueue] = useState(false);
+  const [queueDraft, setQueueDraft] = useState(String(appointment.queuePosition ?? ''));
+  const [savingQueue, setSavingQueue] = useState(false);
+
+  const submitQueue = async (mode) => {
+    const next = Number(queueDraft);
+    if (!Number.isInteger(next) || next < 1) return;
+    setSavingQueue(true);
+    try {
+      await onQueueChange?.(appointment, next, mode);
+      setEditingQueue(false);
+    } finally {
+      setSavingQueue(false);
+    }
+  };
 
   return (
     <DataCard className={compact ? 'p-4' : undefined}>
@@ -42,9 +61,75 @@ export default function AppointmentCard({
                 دخول حسب الحضور
               </span>
             ) : null}
+            {hasQueue ? (
+              <span className="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/15 px-3 py-1 text-xs font-black text-sky-200">
+                <Hash className="h-3.5 w-3.5" />
+                دور رقم {appointment.queuePosition}
+              </span>
+            ) : null}
           </div>
 
           <h3 className="truncate text-lg font-black text-white">{patientName}</h3>
+
+          {hasQueue && onQueueChange ? (
+            <div className="mt-3">
+              {editingQueue ? (
+                <div className="flex flex-wrap items-end gap-2 rounded-xl border border-white/10 bg-white/5 p-3">
+                  <label className="text-xs font-bold text-slate-300">
+                    رقم الدور الجديد
+                    <input
+                      type="number"
+                      min="1"
+                      value={queueDraft}
+                      onChange={(event) => setQueueDraft(event.target.value)}
+                      className={`${inputClass} mt-1 w-24`}
+                    />
+                  </label>
+                  <PrimaryButton
+                    type="button"
+                    onClick={() => submitQueue('swap')}
+                    disabled={savingQueue}
+                    className="px-3 py-2 text-xs"
+                  >
+                    تبديل
+                  </PrimaryButton>
+                  <SecondaryButton
+                    type="button"
+                    onClick={() => submitQueue('shift')}
+                    disabled={savingQueue}
+                    className="px-3 py-2 text-xs"
+                  >
+                    إزاحة
+                  </SecondaryButton>
+                  <SecondaryButton
+                    type="button"
+                    onClick={() => {
+                      setEditingQueue(false);
+                      setQueueDraft(String(appointment.queuePosition ?? ''));
+                    }}
+                    disabled={savingQueue}
+                    className="px-3 py-2 text-xs"
+                  >
+                    إلغاء
+                  </SecondaryButton>
+                  <p className="w-full text-[11px] leading-5 text-slate-400">
+                    تبديل: يتبادل الرقم مع صاحب نفس الدور. إزاحة: يدخل في هذا الترتيب ويتحرك الباقي.
+                  </p>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQueueDraft(String(appointment.queuePosition ?? ''));
+                    setEditingQueue(true);
+                  }}
+                  className="text-xs font-bold text-sky-300 transition hover:text-sky-200"
+                >
+                  تعديل الدور
+                </button>
+              )}
+            </div>
+          ) : null}
 
           <div className={`mt-3 grid gap-2 text-sm text-slate-300 ${isWalkIn ? 'md:grid-cols-3 xl:grid-cols-3' : 'md:grid-cols-2 xl:grid-cols-4'}`}>
             <span className="inline-flex items-center gap-2">
