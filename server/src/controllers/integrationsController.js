@@ -514,6 +514,7 @@ const detectIntent = (text) => {
   if (/^(استفسار|استفسار عادي|استفسر|ابي استفسر|اريد استفسر|بس دا استفسر)$/i.test(text)) return 'inquiry_menu';
   if (/^(احجز|حجز)$/i.test(text)) return 'booking';
   if (/(اتصلوا|اتواصلوا|حد\s*يكلمني|حد\s*يتواصل|اكلم\s*الدعم|عاوز\s*رقم|عاوز\s*حد)/i.test(text)) return 'callback_request';
+  if (/(عنوان|العنوان|لوكيشن|location|map|maps|google maps|موقع|الموقع|مكان|المكان|فين العيادة|العيادة فين|الموقع فين|فين الموقع|وين العيادة|العيادة وين|وين المكان|مكان العيادة)/i.test(text)) return 'address';
   if (/(استفسار|استفسر|مشكلة|الم|ألم|تورم|نزيف|حساسية|كسر|رائحة|شكوى)/i.test(text)) return 'problem_inquiry';
   if (/(احجز|حجز|موعد|appointment|book)/i.test(text)) return 'booking';
   if (/(اسعار|أسعار|سعر|تكلفة|الكشف|الخدمات|service|price|بكم|حشوات|الحشوات|حشوة|التركيب|تركيب|جلسة|جلسه|كاملة|كامل)/i.test(text)) return 'prices';
