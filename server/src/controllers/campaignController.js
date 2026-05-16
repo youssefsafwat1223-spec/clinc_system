@@ -1,6 +1,7 @@
 const prisma = require('../lib/prisma');
 const config = require('../config/env');
 const whatsappService = require('../services/whatsappService');
+const manychatService = require('../services/manychatService');
 
 const toAbsoluteUrl = (req, url) => {
   if (!url) return null;
@@ -297,24 +298,41 @@ const sendBroadcast = async (req, res, next) => {
 const sendOffers = async (req, res, next) => {
   try {
     const reviewerIds = Array.isArray(req.body.reviewerIds) ? req.body.reviewerIds.filter(Boolean) : [];
+    const platform = ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'].includes(req.body.platform) ? req.body.platform : 'WHATSAPP';
     const message = String(req.body.message || '').trim();
     const templateName = String(req.body.templateName || 'clinic_custom_message_ar').trim();
     const imageUrl = toAbsoluteUrl(req, String(req.body.imageUrl || '').trim());
     const allowedTemplates = ['clinic_custom_message_ar', 'clinic_offer_text_ar', 'clinic_offer_image_ar'];
 
     if (!reviewerIds.length) return res.status(400).json({ error: 'اختر مراجعين للإرسال' });
-    if (!message) return res.status(400).json({ error: 'نص العرض مطلوب' });
+    if (!message && templateName !== 'clinic_offer_image_ar') return res.status(400).json({ error: 'نص العرض مطلوب' });
     if (!allowedTemplates.includes(templateName)) return res.status(400).json({ error: 'قالب العرض غير مدعوم' });
     if (templateName === 'clinic_offer_image_ar' && !imageUrl) return res.status(400).json({ error: 'رابط الصورة مطلوب لقالب العرض بصورة' });
 
     const patients = await prisma.patient.findMany({
-      where: { id: { in: reviewerIds }, platform: 'WHATSAPP', phone: { not: '' } },
-      select: { id: true, name: true, displayName: true, phone: true, platform: true },
+      where: {
+        id: { in: reviewerIds },
+        platform,
+        ...(platform === 'WHATSAPP' ? { phone: { not: '' } } : {}),
+      },
+      select: {
+        id: true,
+        name: true,
+        displayName: true,
+        phone: true,
+        platform: true,
+        manychatSubscriberId: true,
+        manychatContactId: true,
+        facebookId: true,
+        instagramId: true,
+      },
     });
 
     let successCount = 0;
     let failCount = 0;
+    let skippedCount = reviewerIds.length - patients.length;
     const failures = [];
+    const skipped = [];
 
     for (const patient of patients) {
       try {
@@ -323,13 +341,37 @@ const sendOffers = async (req, res, next) => {
           .replace(/\{\{name\}\}/g, patientName)
           .replace(/\{\{phone\}\}/g, patient.phone || '');
 
-        await whatsappService.sendTemplateMessage(
-          patient.phone,
-          templateName,
-          'ar',
-          templateName === 'clinic_offer_image_ar' ? imageUrl : null,
-          [patientName, body]
-        );
+        if (platform === 'WHATSAPP') {
+          const bodyParams = templateName === 'clinic_offer_image_ar' ? [] : [patientName, body];
+          await whatsappService.sendTemplateMessage(
+            patient.phone,
+            templateName,
+            'ar',
+            templateName === 'clinic_offer_image_ar' ? imageUrl : null,
+            bodyParams
+          );
+        } else {
+          const subscriberId =
+            patient.manychatSubscriberId ||
+            patient.manychatContactId ||
+            (platform === 'FACEBOOK' ? patient.facebookId : patient.instagramId);
+
+          if (!subscriberId) {
+            skippedCount++;
+            skipped.push({ patientId: patient.id, reason: 'missing_manychat_subscriber_id' });
+            continue;
+          }
+
+          await manychatService.sendContent({
+            subscriberId,
+            platform,
+            text:
+              templateName === 'clinic_offer_image_ar'
+                ? 'يسر عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان تقديم عرض خاص وخدمات مميزة. للحجز أو الاستفسار تواصل معنا الآن.'
+                : body,
+            imageUrl: templateName === 'clinic_offer_image_ar' ? imageUrl : '',
+          });
+        }
         successCount++;
         await new Promise((resolve) => setTimeout(resolve, 250));
       } catch (error) {
@@ -338,7 +380,43 @@ const sendOffers = async (req, res, next) => {
       }
     }
 
-    res.json({ success: true, successCount, failCount, failures, skippedNonWhatsApp: reviewerIds.length - patients.length });
+    res.json({ success: true, successCount, failCount, skippedCount, failures, skipped });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const listSegments = async (req, res, next) => {
+  try {
+    const { platform = 'WHATSAPP', search, serviceId, segment = 'ALL', limit = 500 } = req.query;
+    const normalizedPlatform = ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'].includes(platform) ? platform : 'WHATSAPP';
+    const filters = [{ platform: normalizedPlatform }];
+
+    if (search) {
+      filters.push({
+        OR: [
+          { name: { contains: search, mode: 'insensitive' } },
+          { displayName: { contains: search, mode: 'insensitive' } },
+          { phone: { contains: search } },
+        ],
+      });
+    }
+
+    if (segment === 'CONTACT_ONLY') filters.push({ appointments: { none: {} } });
+    if (segment === 'BOOKED_SERVICE' && serviceId) filters.push({ appointments: { some: { serviceId } } });
+    if (segment === 'NOT_BOOKED_SERVICE' && serviceId) filters.push({ appointments: { none: { serviceId } } });
+
+    const patients = await prisma.patient.findMany({
+      where: { AND: filters },
+      take: Math.min(Number(limit) || 500, 1000),
+      orderBy: { createdAt: 'desc' },
+      include: {
+        groups: { include: { group: true } },
+        _count: { select: { appointments: true, messages: true } },
+      },
+    });
+
+    res.json({ patients });
   } catch (error) {
     next(error);
   }
@@ -348,6 +426,7 @@ module.exports = {
   createTemplate,
   updateTemplate,
   removeTemplate,
+  listSegments,
   sendBroadcast,
   sendOffers,
 };

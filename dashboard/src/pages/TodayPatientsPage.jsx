@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 import AppointmentCard from '../components/appointments/AppointmentCard';
+import ManualBookingPanel from '../components/appointments/ManualBookingPanel';
 import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, StatCard, inputClass } from '../components/ui';
 import EmptyState from '../components/EmptyState';
 import { appointmentStatusLabels, todayInputValue } from '../utils/appointmentUi';
@@ -71,6 +72,26 @@ export default function TodayPatientsPage() {
     }
   };
 
+  const handleQueueAssign = async (appointment) => {
+    try {
+      await api.post(`/appointments/${appointment.id}/assign-queue-position`);
+      toast.success('تمت إضافة الموعد إلى الدور');
+      await loadAppointments();
+    } catch (error) {
+      toast.error(error.message || 'فشل إضافة الدور');
+    }
+  };
+
+  const updateAppointmentStatus = async (appointment, action, successMessage) => {
+    try {
+      await api.post(`/appointments/${appointment.id}/${action}`);
+      toast.success(successMessage);
+      await loadAppointments();
+    } catch (error) {
+      toast.error(error.message || 'فشل تحديث الموعد');
+    }
+  };
+
   useEffect(() => {
     loadAppointments();
   }, [status, serverDate]);
@@ -134,6 +155,10 @@ export default function TodayPatientsPage() {
         <StatCard title="مؤكد" value={stats.confirmed} icon={CalendarDays} tone="green" />
         <StatCard title="تم الكشف" value={stats.completed} icon={CalendarDays} tone="slate" />
       </div>
+
+      <DataCard className="mb-6">
+        <ManualBookingPanel onCreated={loadAppointments} />
+      </DataCard>
 
       <DataCard className="mb-6 space-y-4">
         <div className="flex flex-wrap gap-2">
@@ -228,6 +253,11 @@ export default function TodayPatientsPage() {
               compact
               onOpenPatientProfile={(item) => item.patientId && navigate(`/patients/${item.patientId}`)}
               onCreatePrescription={(item) => item.patientId && navigate(`/prescriptions?patientId=${encodeURIComponent(item.patientId)}&appointmentId=${encodeURIComponent(item.id)}`)}
+              onConfirm={(item) => updateAppointmentStatus(item, 'confirm', 'تم تأكيد الموعد')}
+              onComplete={(item) => updateAppointmentStatus(item, 'complete', 'تم تسجيل الكشف')}
+              onNoShow={(item) => updateAppointmentStatus(item, 'no-show', 'تم تسجيل عدم الحضور')}
+              onCancel={(item) => updateAppointmentStatus(item, 'cancel', 'تم إلغاء الموعد')}
+              onQueueAssign={handleQueueAssign}
               onQueueChange={handleQueueChange}
             />
           ))}

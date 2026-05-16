@@ -352,8 +352,23 @@ const saveTeethNotes = async (req, res, next) => {
     const teeth = {};
     for (const [key, value] of Object.entries(rawTeeth)) {
       if (!/^\d{1,2}$/.test(String(key))) continue;
-      const note = value === null || value === undefined ? '' : String(value).trim();
-      if (note) teeth[String(key)] = note;
+      if (value && typeof value === 'object' && !Array.isArray(value)) {
+        const note = String(value.note || '').trim();
+        const serviceId = String(value.serviceId || '').trim();
+        const doctorId = String(value.doctorId || '').trim();
+        const done = Boolean(value.done);
+        if (note || serviceId || doctorId || done) {
+          teeth[String(key)] = {
+            note,
+            serviceId: serviceId || null,
+            doctorId: doctorId || null,
+            done,
+          };
+        }
+      } else {
+        const note = value === null || value === undefined ? '' : String(value).trim();
+        if (note) teeth[String(key)] = { note, serviceId: null, doctorId: null, done: false };
+      }
     }
 
     const patient = await prisma.patient.update({

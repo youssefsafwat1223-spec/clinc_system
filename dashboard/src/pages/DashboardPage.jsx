@@ -34,14 +34,6 @@ const QUICK_LINKS = [
     roles: ['ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'],
   },
   {
-    href: '/appointment-requests',
-    label: 'طلبات المواعيد',
-    description: 'قبول أو رفض طلبات الحجز',
-    icon: ClipboardCheck,
-    tone: 'amber',
-    roles: ['ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'],
-  },
-  {
     href: '/inbox',
     label: 'صندوق الوارد',
     description: 'الرد على رسائل المرضى',
@@ -133,7 +125,7 @@ export default function DashboardPage() {
       hint: 'طلبات حجز لم يُتخذ بها قرار بعد',
       icon: ClipboardCheck,
       tone: 'amber',
-      href: '/appointment-requests',
+      href: '/appointments',
     },
     {
       title: 'رسائل تحتاج متابعة',

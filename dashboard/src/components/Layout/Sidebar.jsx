@@ -4,9 +4,7 @@ import {
   Bot,
   Calendar,
   ChevronDown,
-  ClipboardCheck,
   CreditCard,
-  FileText,
   HelpCircle,
   Home,
   LineChart,
@@ -33,7 +31,6 @@ const navGroups = [
       { path: '/dashboard', label: 'الرئيسية', icon: Home },
       { path: '/today-patients', label: 'مرضى اليوم', icon: Users, allowedRoles: ['ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'] },
       { path: '/inbox', label: 'صندوق الوارد', icon: MessageSquare },
-      { path: '/appointment-requests', label: 'طلبات المواعيد', icon: ClipboardCheck, allowedRoles: ['ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'] },
       { path: '/callback-requests', label: 'طلبات التواصل', icon: MessageSquare, allowedRoles: ['ADMIN', 'STAFF', 'RECEPTION'] },
     ],
   },
@@ -44,7 +41,6 @@ const navGroups = [
       { path: '/add-patient', label: 'إضافة مريض / موعد', icon: UserPlus, allowedRoles: ['ADMIN', 'DOCTOR', 'STAFF', 'RECEPTION'] },
       { path: '/appointments', label: 'المواعيد', icon: Calendar },
       { path: '/patients', label: 'المرضى', icon: Users },
-      { path: '/consultations', label: 'الاستشارات', icon: FileText },
       { path: '/reschedule-doctor', label: 'إعادة جدولة طبيب', icon: Repeat2, allowedRoles: ['ADMIN'] },
       { path: '/doctor-tasks', label: 'مهام الأطباء', icon: Stethoscope, allowedRoles: ['ADMIN'] },
     ],
@@ -154,7 +150,6 @@ export default function Sidebar({ isOpen = false, isCollapsed = false, onClose }
     () => ({
       '/inbox': counts.unreadMessages > 0 ? counts.unreadMessages : null,
       '/appointments': counts.pendingAppointments > 0 ? counts.pendingAppointments : null,
-      '/appointment-requests': counts.pendingAppointments > 0 ? counts.pendingAppointments : null,
       '/callback-requests': counts.callbackRequests > 0 ? counts.callbackRequests : null,
     }),
     [counts]

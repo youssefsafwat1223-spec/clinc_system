@@ -498,6 +498,20 @@ const noShow = async (req, res, next) => {
   }
 };
 
+const assignQueuePosition = async (req, res, next) => {
+  try {
+    const { appointment: existingAppointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!existingAppointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    const appointment = await appointmentService.assignQueuePosition({ appointmentId: req.params.id });
+    res.json({ appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
 
 const cancel = async (req, res, next) => {
   try {
@@ -641,5 +655,6 @@ module.exports = {
   availability,
   previewRescheduleByDoctor,
   rescheduleByDoctor,
+  assignQueuePosition,
   updateQueuePosition,
 };

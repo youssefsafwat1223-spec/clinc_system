@@ -9,7 +9,7 @@ router.get('/public', getPublic);
 
 router.use(auth);
 router.get('/', getAll);
-router.post('/', requireRole('ADMIN'), create);
+router.post('/', requireRole('ADMIN', 'DOCTOR', 'STAFF'), create);
 router.put('/:id', requireRole('ADMIN'), update);
 router.delete('/:id', requireRole('ADMIN'), remove);
 

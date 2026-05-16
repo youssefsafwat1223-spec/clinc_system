@@ -153,6 +153,155 @@ const list = async (req, res, next) => {
   }
 };
 
+const revenueReport = async (req, res, next) => {
+  try {
+    const {
+      from,
+      to,
+      status,
+      paymentStatus,
+      method,
+      search,
+      patientId,
+      cashierExpenses = 0,
+      limit = 500,
+    } = req.query;
+
+    const filters = [];
+    const appointmentFilters = [];
+    const resolvedStatus = paymentStatus || status;
+
+    if (patientId) filters.push({ patientId });
+    if (resolvedStatus && resolvedStatus !== 'ALL') filters.push({ status: resolvedStatus });
+    if (method && method !== 'ALL') filters.push({ method });
+
+    if (from || to) {
+      const range = {};
+      if (from) {
+        const fromDate = new Date(`${from}T00:00:00`);
+        if (!Number.isNaN(fromDate.getTime())) range.gte = fromDate;
+      }
+      if (to) {
+        const toDate = new Date(`${to}T23:59:59.999`);
+        if (!Number.isNaN(toDate.getTime())) range.lte = toDate;
+      }
+      if (range.gte || range.lte) appointmentFilters.push({ scheduledTime: range });
+    }
+
+    if (search) {
+      appointmentFilters.push({
+        OR: [
+          { bookingRef: { contains: search, mode: 'insensitive' } },
+          { patient: { name: { contains: search, mode: 'insensitive' } } },
+          { patient: { displayName: { contains: search, mode: 'insensitive' } } },
+          { patient: { phone: { contains: search } } },
+          { service: { name: { contains: search, mode: 'insensitive' } } },
+          { service: { nameAr: { contains: search, mode: 'insensitive' } } },
+        ],
+      });
+    }
+
+    if (appointmentFilters.length) {
+      filters.push({ appointment: { AND: appointmentFilters } });
+    }
+
+    const where = filters.length ? { AND: filters } : {};
+    const payments = await prisma.payment.findMany({
+      where,
+      take: Math.min(Number(limit) || 500, 1000),
+      orderBy: [{ paidAt: 'desc' }, { createdAt: 'desc' }],
+      include: {
+        patient: true,
+        service: true,
+        appointment: { include: { patient: true, doctor: true, service: true } },
+      },
+    });
+
+    const rowsMap = new Map();
+    const patientPaidIds = new Set();
+    const patientDebtIds = new Set();
+
+    const summary = payments.reduce(
+      (acc, payment) => {
+        const finalAmount = toNumber(payment.finalAmount);
+        const paidAmount = toNumber(payment.paidAmount);
+        const remaining = Math.max(0, finalAmount - paidAmount);
+        const service = payment.service || payment.appointment?.service;
+        const serviceId = service?.id || 'unknown';
+        const serviceName = service?.nameAr || service?.name || 'خدمة غير محددة';
+
+        if (!rowsMap.has(serviceId)) {
+          rowsMap.set(serviceId, {
+            serviceId,
+            serviceName,
+            caseType: serviceName,
+            netAmount: 0,
+            debtAmount: 0,
+            receivedAmount: 0,
+            caseCount: 0,
+          });
+        }
+
+        const row = rowsMap.get(serviceId);
+        row.netAmount += finalAmount;
+        row.debtAmount += remaining;
+        row.receivedAmount += paidAmount;
+        row.caseCount += 1;
+
+        acc.totalRevenue += finalAmount;
+        acc.totalReceived += paidAmount;
+        acc.totalDebt += remaining;
+        acc.caseCount += 1;
+        if (paidAmount > 0) {
+          acc.casesWithPayments += 1;
+          patientPaidIds.add(payment.patientId);
+        } else {
+          acc.casesWithoutPayments += 1;
+        }
+        if (remaining > 0) patientDebtIds.add(payment.patientId);
+        return acc;
+      },
+      {
+        totalRevenue: 0,
+        totalReceived: 0,
+        totalDebt: 0,
+        totalProfit: 0,
+        caseCount: 0,
+        casesWithPayments: 0,
+        casesWithoutPayments: 0,
+        patientsWithPayments: 0,
+        patientsWithDebts: 0,
+        cashierExpenses: Math.max(0, Number(cashierExpenses) || 0),
+      }
+    );
+
+    summary.totalProfit = summary.totalRevenue - summary.cashierExpenses;
+    summary.patientsWithPayments = patientPaidIds.size;
+    summary.patientsWithDebts = patientDebtIds.size;
+
+    res.json({
+      summary,
+      rows: Array.from(rowsMap.values()).sort((a, b) => b.receivedAmount - a.receivedAmount),
+      payments: payments.map((payment) => ({
+        id: payment.id,
+        patientId: payment.patientId,
+        patientName: payment.patient?.displayName || payment.patient?.name || payment.appointment?.patient?.name || '',
+        patientPhone: payment.patient?.phone || payment.appointment?.patient?.phone || '',
+        treatmentType: payment.service?.nameAr || payment.service?.name || payment.appointment?.service?.nameAr || payment.appointment?.service?.name || '',
+        doctorName: payment.appointment?.doctor?.name || '',
+        amount: toNumber(payment.finalAmount),
+        paidAmount: toNumber(payment.paidAmount),
+        remainingAmount: Math.max(0, toNumber(payment.finalAmount) - toNumber(payment.paidAmount)),
+        paymentDate: payment.paidAt || payment.createdAt,
+        method: payment.method,
+        status: payment.status,
+      })),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const upsertByAppointment = async (req, res, next) => {
   try {
     const { appointmentId } = req.body;
@@ -217,4 +366,4 @@ const update = async (req, res, next) => {
   }
 };
 
-module.exports = { list, upsertByAppointment, update };
+module.exports = { list, revenueReport, upsertByAppointment, update };

@@ -7,7 +7,6 @@ const QUICK_LINKS = [
   { label: 'مرضى اليوم', path: '/today-patients', keywords: ['اليوم', 'مرضى', 'today'] },
   { label: 'إضافة مريض / موعد', path: '/add-patient', keywords: ['إضافة', 'جديد', 'add'] },
   { label: 'صندوق الوارد', path: '/inbox', keywords: ['رسائل', 'وارد', 'inbox'] },
-  { label: 'طلبات المواعيد', path: '/appointment-requests', keywords: ['طلبات', 'حجز', 'requests'] },
   { label: 'المواعيد', path: '/appointments', keywords: ['مواعيد', 'appointments'] },
   { label: 'المرضى', path: '/patients', keywords: ['مرضى', 'patients'] },
   { label: 'الإعدادات', path: '/settings', keywords: ['إعدادات', 'settings'] },

@@ -55,21 +55,32 @@ const getDoctorWalkInCount = async ({ doctorId, dateValue, excludeAppointmentId 
   });
 };
 
-// Walk-in queue is scoped per doctor per day. Returns the next free number.
+// Queue is scoped per doctor per day. Walk-ins are assigned automatically;
+// scheduled appointments can be explicitly inserted later.
 const getNextQueuePosition = async ({ doctorId, dateValue }) => {
   const { dayStart, dayEnd } = getDayBounds(dateValue);
   const result = await prisma.appointment.aggregate({
     _max: { queuePosition: true },
     where: {
       doctorId,
-      appointmentType: 'WALK_IN',
       scheduledTime: { gte: dayStart, lte: dayEnd },
+      queuePosition: { not: null },
     },
   });
   return (result._max.queuePosition || 0) + 1;
 };
 
-// Reorder a walk-in within its doctor+day queue.
+const renumberQueue = async (items) =>
+  prisma.$transaction(
+    items.map((item, index) =>
+      prisma.appointment.update({
+        where: { id: item.id },
+        data: { queuePosition: index + 1 },
+      })
+    )
+  );
+
+// Reorder an appointment within its doctor+day queue.
 // mode "swap": exchange numbers with whoever currently holds the target.
 // mode "shift": pull/push everyone in between so the queue stays 1..n.
 const setQueuePosition = async ({ appointmentId, position, mode = 'swap' }) => {
@@ -82,16 +93,16 @@ const setQueuePosition = async ({ appointmentId, position, mode = 'swap' }) => {
   if (!appointment) {
     throw new Error('الموعد غير موجود');
   }
-  if (appointment.appointmentType !== 'WALK_IN') {
-    throw new Error('الترقيم متاح لمرضى بدون موعد فقط');
+  if (appointment.queuePosition == null) {
+    throw new Error('أضف الموعد إلى الدور أولاً');
   }
 
   const { dayStart, dayEnd } = getDayBounds(appointment.scheduledTime);
   const peers = await prisma.appointment.findMany({
     where: {
       doctorId: appointment.doctorId,
-      appointmentType: 'WALK_IN',
       scheduledTime: { gte: dayStart, lte: dayEnd },
+      queuePosition: { not: null },
     },
     orderBy: [{ queuePosition: 'asc' }, { createdAt: 'asc' }],
   });
@@ -130,6 +141,43 @@ const setQueuePosition = async ({ appointmentId, position, mode = 'swap' }) => {
     }
     await prisma.$transaction(updates);
   }
+
+  return prisma.appointment.findUnique({
+    where: { id: appointmentId },
+    include: { patient: true, doctor: true, service: true },
+  });
+};
+
+const assignQueuePosition = async ({ appointmentId }) => {
+  const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+  if (!appointment) {
+    throw new Error('الموعد غير موجود');
+  }
+
+  if (appointment.queuePosition != null) {
+    return prisma.appointment.findUnique({
+      where: { id: appointmentId },
+      include: { patient: true, doctor: true, service: true },
+    });
+  }
+
+  const { dayStart, dayEnd } = getDayBounds(appointment.scheduledTime);
+  const queued = await prisma.appointment.findMany({
+    where: {
+      doctorId: appointment.doctorId,
+      scheduledTime: { gte: dayStart, lte: dayEnd },
+      queuePosition: { not: null },
+    },
+    orderBy: [{ scheduledTime: 'asc' }, { queuePosition: 'asc' }, { createdAt: 'asc' }],
+  });
+
+  const ordered = [...queued, appointment].sort((a, b) => {
+    const timeDiff = new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime();
+    if (timeDiff !== 0) return timeDiff;
+    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+  });
+
+  await renumberQueue(ordered);
 
   return prisma.appointment.findUnique({
     where: { id: appointmentId },
@@ -496,4 +544,5 @@ module.exports = {
   isDoctorAvailableAt,
   expirePendingAppointments,
   setQueuePosition,
+  assignQueuePosition,
 };

@@ -17,6 +17,7 @@ export default function AppointmentCard({
   onCancel,
   onOpenPatientProfile,
   onCreatePrescription,
+  onQueueAssign,
   onQueueChange,
   compact = false,
 }) {
@@ -24,7 +25,8 @@ export default function AppointmentCard({
   const serviceName = appointment.service?.nameAr || appointment.service?.name || 'خدمة غير محددة';
   const doctorName = appointment.doctor?.name || 'طبيب غير محدد';
   const isWalkIn = appointment.appointmentType === 'WALK_IN';
-  const hasQueue = isWalkIn && appointment.queuePosition != null;
+  const hasQueue = appointment.queuePosition != null;
+  const canAssignQueue = !isWalkIn && !hasQueue && onQueueAssign;
 
   const [editingQueue, setEditingQueue] = useState(false);
   const [queueDraft, setQueueDraft] = useState(String(appointment.queuePosition ?? ''));
@@ -173,6 +175,13 @@ export default function AppointmentCard({
             <SecondaryButton type="button" onClick={() => onCreatePrescription(appointment)}>
               <Stethoscope className="h-4 w-4" />
               إنشاء روشتة
+            </SecondaryButton>
+          ) : null}
+
+          {canAssignQueue ? (
+            <SecondaryButton type="button" onClick={() => onQueueAssign?.(appointment)}>
+              <Hash className="h-4 w-4" />
+              إضافة دور
             </SecondaryButton>
           ) : null}
 
