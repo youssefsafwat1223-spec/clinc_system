@@ -4,6 +4,7 @@ const path = require('path');
 const prisma = require('../lib/prisma');
 const config = require('../config/env');
 const openaiService = require('../services/openaiService');
+const manychatService = require('../services/manychatService');
 const { getDiscountForService } = require('../services/discountService');
 const { formatCurrency } = require('../utils/helpers');
 const { resolveWhatsAppChatLink } = require('../utils/clinicLinks');
@@ -865,6 +866,26 @@ const manychatWebhook = async (req, res) => {
 
     const publicImageUrl = toAbsoluteUrl(req, imageUrl);
 
+    const autoSendReply = req.body?.auto_send_reply === true || req.body?.auto_send_reply === 'true';
+    let autoSent = false;
+    let autoSendError = null;
+
+    if (autoSendReply && senderId) {
+      try {
+        await manychatService.sendContent({
+          subscriberId: senderId,
+          platform,
+          text: replyText,
+          imageUrl: publicImageUrl || '',
+          quickReplies: [],
+        });
+        autoSent = true;
+      } catch (error) {
+        autoSendError = error.response?.data || error.message;
+        console.error('[ManyChat] Auto send failed:', autoSendError);
+      }
+    }
+
     writeManyChatLog('response', {
       intent,
       incomingText,
@@ -875,6 +896,9 @@ const manychatWebhook = async (req, res) => {
       commentId: commentMeta.commentId || null,
       imageUrl: publicImageUrl,
       callbackSaved,
+      autoSendReply,
+      autoSent,
+      autoSendError,
     });
 
     return res.json({
@@ -885,6 +909,8 @@ const manychatWebhook = async (req, res) => {
       image_url: publicImageUrl,
       callback_saved: callbackSaved,
       callback_prompt: buildCallbackPrompt(settings),
+      auto_sent: autoSent,
+      auto_send_error: autoSendError,
     });
   } catch (error) {
     console.error('[ManyChat] Webhook error:', error.message);
