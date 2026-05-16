@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarPlus, CheckCircle2, Clock3, Phone, PlusCircle, UserPlus } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../api/client';
@@ -124,6 +124,39 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
     () => patients.find((patient) => patient.id === form.patientId) || null,
     [form.patientId, patients]
   );
+
+  // Server-side search: the initial fetch is capped, so without this any
+  // patient outside that window can never be found by name or phone.
+  const searchTimer = useRef(null);
+  useEffect(() => {
+    const term = patientSearch.trim();
+    if (term.length < 2) return undefined;
+
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(async () => {
+      try {
+        const digits = normalizePhone(term);
+        const queryTerm = digits.length >= 4 ? digits : term;
+        const res = await api.get('/patients', { params: { search: queryTerm, limit: 25 } });
+        const found = res.data.patients || [];
+        if (found.length === 0) return;
+        setPatients((current) => {
+          const seen = new Set(current.map((patient) => patient.id));
+          const merged = [...current];
+          found.forEach((patient) => {
+            if (!seen.has(patient.id)) merged.push(patient);
+          });
+          return merged;
+        });
+      } catch {
+        // Search failures are non-fatal; the locally loaded list still works.
+      }
+    }, 300);
+
+    return () => {
+      if (searchTimer.current) clearTimeout(searchTimer.current);
+    };
+  }, [patientSearch]);
 
   const filteredPatients = useMemo(() => {
     const term = patientSearch.trim().toLowerCase();
