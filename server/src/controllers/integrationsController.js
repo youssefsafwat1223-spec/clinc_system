@@ -744,7 +744,7 @@ const manychatWebhook = async (req, res) => {
     let imageUrl = null;
     let callbackSaved = false;
 
-    if (sourceType === 'comment') {
+    if (sourceType === 'comment' && !incomingText) {
       replyText = buildDefaultReply(clinicName);
     } else if (intent === 'greeting') {
       replyText = buildDefaultReply(clinicName);
