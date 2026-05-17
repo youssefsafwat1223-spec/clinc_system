@@ -47,6 +47,7 @@ export default function PatientProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('info');
+  const [prescriptionAppointmentRef, setPrescriptionAppointmentRef] = useState('');
   const [teethSaveSignal, setTeethSaveSignal] = useState(0);
   const [draft, setDraft] = useState({
     name: '',
@@ -233,7 +234,10 @@ export default function PatientProfilePage() {
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => {
+                  if (tab.id === 'prescriptions') setPrescriptionAppointmentRef('');
+                  setActiveTab(tab.id);
+                }}
                 className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black transition ${
                   activeTab === tab.id ? 'bg-sky-500 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'
                 }`}
@@ -418,6 +422,7 @@ export default function PatientProfilePage() {
                 onQueueAssign={handleQueueAssign}
                 onQueueChange={handleQueueChange}
                 onCreatePrescription={() => {
+                  setPrescriptionAppointmentRef(appointment.bookingRef || appointment.id || '');
                   setActiveTab('prescriptions');
                 }}
               />
@@ -427,7 +432,12 @@ export default function PatientProfilePage() {
       ) : null}
 
       {activeTab === 'prescriptions' ? (
-        <PrescriptionsWorkspace embedded initialPatientId={patient.id} onCreated={loadPatient} />
+        <PrescriptionsWorkspace
+          embedded
+          initialPatientId={patient.id}
+          initialAppointmentId={prescriptionAppointmentRef}
+          onCreated={loadPatient}
+        />
       ) : null}
 
       {false && activeTab === 'prescriptions' ? (
