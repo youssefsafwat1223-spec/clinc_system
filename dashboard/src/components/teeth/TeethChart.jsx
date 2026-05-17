@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { PlusCircle, Save } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../api/client';
 import { DataCard, Field, PrimaryButton, SecondaryButton, inputClass } from '../ui';
+
+const Teeth3DChart = lazy(() => import('./Teeth3DChart'));
 
 const normalizeEntry = (value) => {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -32,6 +34,7 @@ export default function TeethChart({ patientId, value = {}, onSaved, saveSignal 
   const [services, setServices] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [viewMode, setViewMode] = useState('3D');
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [serviceForm, setServiceForm] = useState(defaultServiceForm);
   const previousSaveSignal = useRef(saveSignal);
@@ -139,7 +142,38 @@ export default function TeethChart({ patientId, value = {}, onSaved, saveSignal 
       <div className="grid gap-6 xl:grid-cols-[1fr_390px]">
         <div>
           <h3 className="mb-4 text-lg font-black text-white">خريطة الأسنان</h3>
-          <div className="relative mx-auto aspect-[0.78] min-h-[430px] w-full max-w-[480px] overflow-hidden rounded-3xl border border-white/10 bg-white p-4 shadow-inner">
+          <div className="mb-4 flex justify-end">
+            <div className="flex rounded-2xl border border-white/10 bg-white/5 p-1">
+              {['3D', '2D'].map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setViewMode(mode)}
+                  className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
+                    viewMode === mode ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-white/10'
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+          {viewMode === '3D' ? (
+            <Suspense
+              fallback={
+                <div className="flex h-[520px] items-center justify-center rounded-3xl border border-white/10 bg-slate-950 text-sm font-bold text-slate-300">
+                  Loading 3D dental chart...
+                </div>
+              }
+            >
+              <Teeth3DChart
+                teethNotes={teeth}
+                selectedTooth={selectedTooth}
+                onSelectTooth={(toothNumber) => setSelectedTooth(String(toothNumber))}
+              />
+            </Suspense>
+          ) : null}
+          <div className={`${viewMode === '2D' ? '' : 'hidden'} relative mx-auto aspect-[0.78] min-h-[430px] w-full max-w-[480px] overflow-hidden rounded-3xl border border-white/10 bg-white p-4 shadow-inner`}>
             <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden="true">
               <ellipse cx="50" cy="50" rx="24" ry="36" fill="none" stroke="#111827" strokeWidth="1.5" />
               <ellipse cx="50" cy="50" rx="36" ry="45" fill="none" stroke="#d1d5db" strokeWidth="1" />
