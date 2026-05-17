@@ -48,6 +48,7 @@ export default function PatientProfilePage() {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('info');
   const [showPrescriptionForm, setShowPrescriptionForm] = useState(false);
+  const [teethSaveSignal, setTeethSaveSignal] = useState(0);
   const [draft, setDraft] = useState({
     name: '',
     phone: '',
@@ -79,6 +80,7 @@ export default function PatientProfilePage() {
         accountingNotes: nextPatient.accountingNotes || '',
         creditBalance: nextPatient.creditBalance ?? nextPatient.accountBalance ?? 0,
       });
+      return true;
     } catch (error) {
       toast.error(error.message || 'فشل تحميل ملف المريض');
     } finally {
@@ -111,9 +113,15 @@ export default function PatientProfilePage() {
       toast.success('تم حفظ بيانات المريض');
     } catch (error) {
       toast.error(error.message || 'فشل حفظ بيانات المريض');
+      return false;
     } finally {
       setSaving(false);
     }
+  };
+
+  const saveAllNotes = async () => {
+    const saved = await saveNotes();
+    if (saved) setTeethSaveSignal((current) => current + 1);
   };
 
   const handleAppointmentAction = async (appointment, action) => {
@@ -252,6 +260,49 @@ export default function PatientProfilePage() {
             .join('، ');
           return (
             <div className="grid gap-4 lg:grid-cols-2">
+              <DataCard className="lg:col-span-2">
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-black text-white">General Information</h3>
+                    <p className="mt-1 text-sm text-slate-400">تعديل بيانات المريض الأساسية من نفس الصفحة.</p>
+                  </div>
+                  <PrimaryButton type="button" onClick={saveNotes} disabled={saving}>
+                    <Save className="h-4 w-4" />
+                    حفظ البيانات
+                  </PrimaryButton>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                  <Field label="اسم المريض">
+                    <input className={inputClass} value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} />
+                  </Field>
+                  <Field label="اسم العرض">
+                    <input className={inputClass} value={draft.displayName} onChange={(event) => updateDraft('displayName', event.target.value)} />
+                  </Field>
+                  <Field label="رقم الهاتف">
+                    <input className={inputClass} value={draft.phone} onChange={(event) => updateDraft('phone', event.target.value)} dir="ltr" />
+                  </Field>
+                  <Field label="العمر">
+                    <input className={inputClass} type="number" min="0" value={draft.age} onChange={(event) => updateDraft('age', event.target.value)} />
+                  </Field>
+                  <Field label="النوع">
+                    <select className={inputClass} value={draft.gender} onChange={(event) => updateDraft('gender', event.target.value)}>
+                      <option value="">غير محدد</option>
+                      <option value="male">ذكر</option>
+                      <option value="female">أنثى</option>
+                    </select>
+                  </Field>
+                  <Field label="المنصة">
+                    <select className={inputClass} value={draft.platform} onChange={(event) => updateDraft('platform', event.target.value)}>
+                      {PLATFORMS.map((value) => (
+                        <option key={value} value={value}>{value}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="رصيد / دين">
+                    <input className={inputClass} type="number" value={draft.creditBalance} onChange={(event) => updateDraft('creditBalance', event.target.value)} />
+                  </Field>
+                </div>
+              </DataCard>
               <DataCard>
                 <h3 className="mb-3 text-lg font-black text-white">البيانات الأساسية</h3>
                 <InfoRow label="الاسم" value={patient.name} />
@@ -296,7 +347,19 @@ export default function PatientProfilePage() {
       ) : null}
 
       {activeTab === 'notes' ? (
-        <DataCard className="space-y-4">
+        <div className="space-y-4">
+          <TeethChart
+            patientId={patient.id}
+            value={patient.teethNotes || {}}
+            saveSignal={teethSaveSignal}
+            showSaveButton={false}
+            onSaved={(teethNotes) => setPatient((current) => ({ ...current, teethNotes }))}
+          />
+          <DataCard className="space-y-4">
+            <div>
+              <h3 className="text-lg font-black text-white">الملاحظات</h3>
+              <p className="mt-1 text-sm text-slate-400">ملاحظات طبية وإدارية وحسابية / شكوى مرتبطة بملف المريض.</p>
+            </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <Field label="الاسم">
               <input className={inputClass} value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} />
@@ -337,14 +400,23 @@ export default function PatientProfilePage() {
               <textarea className={inputClass} rows={5} value={draft.accountingNotes} onChange={(event) => updateDraft('accountingNotes', event.target.value)} />
             </Field>
           </div>
-          <PrimaryButton type="button" onClick={saveNotes} disabled={saving}>
+          <div className="flex flex-wrap gap-2">
+          <PrimaryButton type="button" onClick={saveAllNotes} disabled={saving}>
             <Save className="h-4 w-4" />
             حفظ الملاحظات
           </PrimaryButton>
+          <SecondaryButton type="button" onClick={() => setTeethSaveSignal((current) => current + 1)}>
+            حفظ خريطة الأسنان
+          </SecondaryButton>
+          <SecondaryButton type="button" onClick={saveNotes} disabled={saving}>
+            حفظ الملاحظات
+          </SecondaryButton>
+          </div>
         </DataCard>
+        </div>
       ) : null}
 
-      {activeTab === 'notes' ? (
+      {false && activeTab === 'notes' ? (
         <div className="mt-4">
           <TeethChart
             patientId={patient.id}
@@ -387,10 +459,39 @@ export default function PatientProfilePage() {
 
       {activeTab === 'prescriptions' ? (
         <div className="space-y-5">
+          <DataCard>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-black text-white">الروشتات</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  استخدم صفحة الروشتات الأصلية لنفس التصميم وربط Booking Ref تلقائيا.
+                </p>
+              </div>
+              <PrimaryButton type="button" onClick={() => navigate(`/prescriptions?patientId=${patient.id}`)}>
+                صفحة الروشتات الأصلية
+              </PrimaryButton>
+            </div>
+            {(patient.appointments || []).length ? (
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                {(patient.appointments || []).slice(0, 6).map((appointment) => (
+                  <button
+                    key={appointment.id}
+                    type="button"
+                    onClick={() => navigate(`/prescriptions?patientId=${patient.id}&appointmentId=${appointment.bookingRef || appointment.id}`)}
+                    className="rounded-2xl border border-white/10 bg-white/5 p-4 text-right transition hover:border-sky-400/50 hover:bg-sky-500/10"
+                  >
+                    <span className="block text-sm font-black text-white">{appointment.service?.nameAr || appointment.service?.name || 'حجز'}</span>
+                    <span className="mt-1 block text-xs text-slate-400">Booking Ref: {appointment.bookingRef || appointment.id}</span>
+                    <span className="mt-1 block text-xs text-slate-400">{formatDateTime(appointment.scheduledTime)}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </DataCard>
           <div className="flex justify-end">
-            <PrimaryButton type="button" onClick={() => setShowPrescriptionForm((current) => !current)}>
+            <SecondaryButton type="button" onClick={() => setShowPrescriptionForm((current) => !current)}>
               {showPrescriptionForm ? 'إغلاق النموذج' : 'إضافة روشتة'}
-            </PrimaryButton>
+            </SecondaryButton>
           </div>
           {showPrescriptionForm ? <PrescriptionForm initialPatientId={patient.id} onCreated={loadPatient} /> : null}
           <DataCard>

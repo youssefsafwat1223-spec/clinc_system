@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PlusCircle, Save } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../api/client';
@@ -26,7 +26,7 @@ const defaultServiceForm = {
   duration: 30,
 };
 
-export default function TeethChart({ patientId, value = {}, onSaved }) {
+export default function TeethChart({ patientId, value = {}, onSaved, saveSignal = 0, showSaveButton = true }) {
   const [selectedTooth, setSelectedTooth] = useState('1');
   const [teeth, setTeeth] = useState({});
   const [services, setServices] = useState([]);
@@ -34,6 +34,7 @@ export default function TeethChart({ patientId, value = {}, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [serviceForm, setServiceForm] = useState(defaultServiceForm);
+  const previousSaveSignal = useRef(saveSignal);
 
   useEffect(() => {
     const normalized = {};
@@ -59,6 +60,21 @@ export default function TeethChart({ patientId, value = {}, onSaved }) {
 
   const entry = useMemo(() => teeth[selectedTooth] || normalizeEntry(''), [selectedTooth, teeth]);
   const toothNumbers = Array.from({ length: 32 }, (_, index) => String(index + 1));
+  const positionedTeeth = useMemo(() => {
+    const cx = 50;
+    const cy = 50;
+    const rx = 35;
+    const ry = 43;
+    return toothNumbers.map((number, index) => {
+      const angle = -155 + index * (310 / 31);
+      const radians = (angle * Math.PI) / 180;
+      return {
+        number,
+        left: cx + rx * Math.cos(radians),
+        top: cy + ry * Math.sin(radians),
+      };
+    });
+  }, [toothNumbers]);
 
   const updateEntry = (field, nextValue) => {
     setTeeth((current) => ({
@@ -84,6 +100,12 @@ export default function TeethChart({ patientId, value = {}, onSaved }) {
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (saveSignal === previousSaveSignal.current) return;
+    previousSaveSignal.current = saveSignal;
+    if (saveSignal > 0) saveTeeth();
+  }, [saveSignal]);
 
   const createService = async () => {
     if (!serviceForm.nameAr.trim() && !serviceForm.name.trim()) {
@@ -114,23 +136,28 @@ export default function TeethChart({ patientId, value = {}, onSaved }) {
 
   return (
     <DataCard>
-      <div className="grid gap-6 xl:grid-cols-[1fr_360px]">
+      <div className="grid gap-6 xl:grid-cols-[1fr_390px]">
         <div>
           <h3 className="mb-4 text-lg font-black text-white">خريطة الأسنان</h3>
-          <div className="grid grid-cols-8 gap-2 rounded-3xl border border-white/10 bg-white/5 p-4">
-            {toothNumbers.map((number) => {
+          <div className="relative mx-auto aspect-[0.78] min-h-[430px] w-full max-w-[480px] overflow-hidden rounded-3xl border border-white/10 bg-white p-4 shadow-inner">
+            <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden="true">
+              <ellipse cx="50" cy="50" rx="24" ry="36" fill="none" stroke="#111827" strokeWidth="1.5" />
+              <ellipse cx="50" cy="50" rx="36" ry="45" fill="none" stroke="#d1d5db" strokeWidth="1" />
+            </svg>
+            {positionedTeeth.map(({ number, left, top }) => {
               const hasData = teeth[number]?.note || teeth[number]?.serviceId;
               return (
                 <button
                   key={number}
                   type="button"
                   onClick={() => setSelectedTooth(number)}
-                  className={`aspect-square rounded-2xl border text-sm font-black transition ${
+                  style={{ left: `${left}%`, top: `${top}%` }}
+                  className={`absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[42%] border text-sm font-black shadow-sm transition md:h-14 md:w-14 ${
                     selectedTooth === number
-                      ? 'border-sky-300 bg-sky-500 text-white'
+                      ? 'border-sky-500 bg-sky-500 text-white'
                       : hasData
-                        ? 'border-emerald-400/30 bg-emerald-500/15 text-emerald-200'
-                        : 'border-white/10 bg-[#0d1225] text-slate-300 hover:border-sky-400/40'
+                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
+                        : 'border-slate-400 bg-white text-slate-900 hover:border-sky-500 hover:bg-sky-50'
                   }`}
                 >
                   {number}
@@ -199,10 +226,12 @@ export default function TeethChart({ patientId, value = {}, onSaved }) {
             </SecondaryButton>
           )}
 
+          {showSaveButton ? (
           <PrimaryButton type="button" onClick={saveTeeth} disabled={saving} className="w-full">
             <Save className="h-4 w-4" />
             حفظ ملاحظات الأسنان
           </PrimaryButton>
+          ) : null}
         </div>
       </div>
     </DataCard>
