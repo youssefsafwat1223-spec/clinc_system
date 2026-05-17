@@ -188,16 +188,111 @@ export default function PatientProfilePage() {
   };
 
   const printFullFile = () => {
-    document.body.classList.remove('print-prescription', 'print-payment-receipt');
-    document.body.classList.add('print-patient-full-file');
+    const printable = document.getElementById('patient-full-file');
+    if (!printable) return;
 
-    const cleanup = () => {
-      document.body.classList.remove('print-patient-full-file');
-      window.removeEventListener('afterprint', cleanup);
-    };
+    const printWindow = window.open('', '_blank', 'width=900,height=1200');
+    if (!printWindow) {
+      window.print();
+      return;
+    }
 
-    window.addEventListener('afterprint', cleanup);
-    window.setTimeout(() => window.print(), 50);
+    printWindow.document.open();
+    printWindow.document.write(`
+      <!doctype html>
+      <html lang="ar" dir="rtl">
+        <head>
+          <meta charset="utf-8" />
+          <title>Patient File</title>
+          <style>
+            @page { size: A4; margin: 12mm; }
+            * { box-sizing: border-box; }
+            html, body {
+              margin: 0;
+              padding: 0;
+              background: #ffffff;
+              color: #111827;
+              font-family: Arial, Tahoma, sans-serif;
+              direction: rtl;
+            }
+            body { font-size: 12px; line-height: 1.65; }
+            h3 {
+              margin: 0 0 4px;
+              font-size: 24px;
+              font-weight: 900;
+              color: #111827;
+            }
+            h4 {
+              margin: 0 0 10px;
+              font-size: 15px;
+              font-weight: 900;
+              color: #111827;
+            }
+            p { margin: 0; }
+            header {
+              border-bottom: 2px solid #111827;
+              padding-bottom: 14px;
+              margin-bottom: 14px;
+            }
+            section {
+              border: 1px solid #d1d5db;
+              border-radius: 12px;
+              padding: 12px;
+              margin: 10px 0;
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+            .grid {
+              display: grid;
+              grid-template-columns: repeat(4, minmax(0, 1fr));
+              gap: 8px;
+              margin-bottom: 10px;
+            }
+            .grid > div {
+              border: 1px solid #d1d5db;
+              border-radius: 10px;
+              padding: 8px;
+            }
+            .border-b {
+              border-bottom: 1px solid #e5e7eb;
+              padding-bottom: 7px;
+              margin-bottom: 7px;
+            }
+            .text-white, .text-slate-300, .text-slate-400, .text-slate-500, .text-emerald-300, .text-amber-300 {
+              color: #111827 !important;
+            }
+            .font-bold, .font-black { font-weight: 900; }
+            .text-xs { font-size: 11px; }
+            .text-sm { font-size: 12px; }
+            .text-lg { font-size: 16px; }
+            .text-2xl { font-size: 24px; }
+            .space-y-1 > * + * { margin-top: 4px; }
+            .space-y-2 > * + * { margin-top: 7px; }
+            .space-y-3 > * + * { margin-top: 10px; }
+            .space-y-5 > * + * { margin-top: 14px; }
+            .flex {
+              display: flex;
+              justify-content: space-between;
+              gap: 8px;
+            }
+            .rounded-2xl, .bg-white\\/5 {
+              background: transparent !important;
+              box-shadow: none !important;
+            }
+            @media print {
+              html, body { width: auto; min-height: auto; overflow: visible; }
+            }
+          </style>
+        </head>
+        <body>${printable.outerHTML}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.setTimeout(() => {
+      printWindow.print();
+      printWindow.close();
+    }, 250);
   };
 
   if (loading) {
