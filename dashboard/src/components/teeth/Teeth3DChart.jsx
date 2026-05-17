@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
-import { Environment, OrbitControls } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei';
 import { ToothMesh } from './Tooth3D';
 
 function buildDentalArch() {
@@ -35,11 +35,12 @@ export default function Teeth3DChart({ teethNotes = {}, selectedTooth, onSelectT
   return (
     <div className="h-[520px] w-full overflow-hidden rounded-3xl border border-white/10 bg-slate-950">
       <Canvas camera={{ position: [0, 0, 9], fov: 45 }}>
-        <ambientLight intensity={0.8} />
-        <directionalLight position={[4, 6, 8]} intensity={1.5} />
-        <Environment preset="city" />
+        <ambientLight intensity={0.95} />
+        <directionalLight position={[4, 6, 8]} intensity={1.3} />
+        <directionalLight position={[-4, -2, -6]} intensity={0.5} />
         {teeth.map((tooth) => {
-          const data = teethNotes?.[tooth.toothNumber] || teethNotes?.[String(tooth.toothNumber)];
+          const entry =
+            teethNotes?.[tooth.toothNumber] || teethNotes?.[String(tooth.toothNumber)] || null;
           return (
             <ToothMesh
               key={tooth.toothNumber}
@@ -48,7 +49,7 @@ export default function Teeth3DChart({ teethNotes = {}, selectedTooth, onSelectT
               rotation={tooth.rotation}
               scale={0.65}
               selected={Number(selectedTooth) === tooth.toothNumber}
-              hasData={Boolean(data?.note || data?.serviceId)}
+              entry={entry}
               onClick={onSelectTooth}
             />
           );

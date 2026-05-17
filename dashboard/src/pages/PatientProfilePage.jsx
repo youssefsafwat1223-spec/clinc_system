@@ -47,6 +47,7 @@ export default function PatientProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('info');
+  const [showTeeth, setShowTeeth] = useState(true);
   const [prescriptionAppointmentRef, setPrescriptionAppointmentRef] = useState('');
   const [teethSaveSignal, setTeethSaveSignal] = useState(0);
   const [draft, setDraft] = useState({
@@ -214,6 +215,31 @@ export default function PatientProfilePage() {
             <StatusBadge tone={patient.profileType === 'BOOKED' ? 'green' : 'amber'}>
               {patient.profileType === 'BOOKED' ? 'مريض حجز' : 'تواصل فقط'}
             </StatusBadge>
+            {patient.phone ? (
+              <>
+                <SecondaryButton
+                  type="button"
+                  onClick={() => window.open(`https://wa.me/${String(patient.phone).replace(/\D/g, '')}`, '_blank')}
+                >
+                  واتساب
+                </SecondaryButton>
+                <SecondaryButton type="button" onClick={() => window.open(`tel:${patient.phone}`)}>
+                  اتصال
+                </SecondaryButton>
+                <SecondaryButton
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard?.writeText(patient.phone);
+                    toast.success('تم نسخ الرقم');
+                  }}
+                >
+                  نسخ الرقم
+                </SecondaryButton>
+              </>
+            ) : null}
+            <PrimaryButton type="button" onClick={() => setActiveTab('booking')}>
+              حجز موعد
+            </PrimaryButton>
             <SecondaryButton type="button" onClick={() => navigate('/today-patients')}>مرضى اليوم</SecondaryButton>
           </>
         }
@@ -227,19 +253,26 @@ export default function PatientProfilePage() {
       </div>
 
       <DataCard className="mb-6">
-        <div className="flex flex-wrap gap-2">
+        <div
+          role="tablist"
+          aria-label="أقسام ملف المريض"
+          className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]"
+        >
           {tabs.map((tab) => {
             const Icon = tab.icon;
+            const selected = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 type="button"
+                role="tab"
+                aria-selected={selected}
                 onClick={() => {
                   if (tab.id === 'prescriptions') setPrescriptionAppointmentRef('');
                   setActiveTab(tab.id);
                 }}
-                className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-black transition ${
-                  activeTab === tab.id ? 'bg-sky-500 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'
+                className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-black transition ${
+                  selected ? 'bg-sky-500 text-white' : 'bg-white/5 text-slate-300 hover:bg-white/10'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -266,7 +299,7 @@ export default function PatientProfilePage() {
               <DataCard className="lg:col-span-2">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="text-lg font-black text-white">General Information</h3>
+                    <h3 className="text-lg font-black text-white">المعلومات العامة</h3>
                     <p className="mt-1 text-sm text-slate-400">تعديل بيانات المريض الأساسية من نفس الصفحة.</p>
                   </div>
                   <PrimaryButton type="button" onClick={saveNotes} disabled={saving}>
@@ -306,42 +339,25 @@ export default function PatientProfilePage() {
                   </Field>
                 </div>
               </DataCard>
-              <DataCard>
-                <h3 className="mb-3 text-lg font-black text-white">البيانات الأساسية</h3>
-                <InfoRow label="الاسم" value={patient.name} />
-                <InfoRow label="اسم العرض" value={patient.displayName} />
-                <InfoRow label="رقم الهاتف" value={patient.phone} />
-                <InfoRow label="البريد" value={patient.email} />
-                <InfoRow
-                  label="النوع"
-                  value={patient.gender === 'female' ? 'أنثى' : patient.gender === 'male' ? 'ذكر' : ''}
-                />
-                <InfoRow label="العمر" value={patient.age} />
-                <InfoRow
-                  label="نوع الملف"
-                  value={patient.profileType === 'BOOKED' ? 'مريض حجز' : 'تواصل فقط'}
-                />
-                <InfoRow label="المجموعات" value={groupNames} />
-              </DataCard>
-
-              <DataCard>
-                <h3 className="mb-3 text-lg font-black text-white">القناة والتواريخ</h3>
-                <InfoRow label="المنصة" value={patient.platform} />
-                <InfoRow label="WhatsApp ID" value={patient.whatsappId} />
-                <InfoRow label="Facebook ID" value={patient.facebookId} />
-                <InfoRow label="Instagram ID" value={patient.instagramId} />
-                <InfoRow label="ManyChat ID" value={patient.manychatSubscriberId || patient.manychatContactId} />
-                <InfoRow label="تاريخ الإنشاء" value={patient.createdAt ? formatDateTime(patient.createdAt) : ''} />
-                <InfoRow label="آخر زيارة" value={lastVisit ? formatDateTime(lastVisit) : 'لا يوجد'} />
-              </DataCard>
-
               <DataCard className="lg:col-span-2">
-                <h3 className="mb-3 text-lg font-black text-white">ملخص</h3>
-                <div className="grid gap-4 md:grid-cols-4">
-                  <StatCard title="المواعيد" value={stats.appointments} icon={CalendarDays} tone="blue" />
-                  <StatCard title="الروشتات" value={stats.prescriptions} icon={FileText} tone="slate" />
-                  <StatCard title="المدفوع" value={money(stats.paid)} icon={Wallet} tone="green" />
-                  <StatCard title="الدين" value={money(stats.debt)} icon={Wallet} tone="amber" />
+                <h3 className="mb-3 text-lg font-black text-white">القناة والمعرّفات والتواريخ</h3>
+                <div className="grid gap-x-8 md:grid-cols-2">
+                  <div>
+                    <InfoRow label="البريد" value={patient.email} />
+                    <InfoRow
+                      label="نوع الملف"
+                      value={patient.profileType === 'BOOKED' ? 'مريض حجز' : 'تواصل فقط'}
+                    />
+                    <InfoRow label="المجموعات" value={groupNames} />
+                    <InfoRow label="تاريخ الإنشاء" value={patient.createdAt ? formatDateTime(patient.createdAt) : ''} />
+                    <InfoRow label="آخر زيارة" value={lastVisit ? formatDateTime(lastVisit) : 'لا يوجد'} />
+                  </div>
+                  <div>
+                    <InfoRow label="WhatsApp ID" value={patient.whatsappId} />
+                    <InfoRow label="Facebook ID" value={patient.facebookId} />
+                    <InfoRow label="Instagram ID" value={patient.instagramId} />
+                    <InfoRow label="ManyChat ID" value={patient.manychatSubscriberId || patient.manychatContactId} />
+                  </div>
                 </div>
               </DataCard>
             </div>
@@ -351,52 +367,56 @@ export default function PatientProfilePage() {
 
       {activeTab === 'notes' ? (
         <div className="space-y-4">
-          <TeethChart
-            patientId={patient.id}
-            value={patient.teethNotes || {}}
-            saveSignal={teethSaveSignal}
-            showSaveButton={false}
-            onSaved={(teethNotes) => setPatient((current) => ({ ...current, teethNotes }))}
-          />
           <DataCard className="space-y-4">
             <div>
               <h3 className="text-lg font-black text-white">الملاحظات</h3>
               <p className="mt-1 text-sm text-slate-400">ملاحظات طبية وإدارية وحسابية / شكوى مرتبطة بملف المريض.</p>
             </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <Field label="ملاحظات طبية">
-              <textarea className={inputClass} rows={5} value={draft.notes} onChange={(event) => updateDraft('notes', event.target.value)} />
-            </Field>
-            <Field label="ملاحظات إدارية">
-              <textarea className={inputClass} rows={5} value={draft.accountNotes} onChange={(event) => updateDraft('accountNotes', event.target.value)} />
-            </Field>
-            <Field label="ملاحظات حسابية / شكوى">
-              <textarea className={inputClass} rows={5} value={draft.accountingNotes} onChange={(event) => updateDraft('accountingNotes', event.target.value)} />
-            </Field>
-          </div>
-          <div className="flex flex-wrap gap-2">
-          <PrimaryButton type="button" onClick={saveAllNotes} disabled={saving}>
-            <Save className="h-4 w-4" />
-            حفظ الكل
-          </PrimaryButton>
-          <SecondaryButton type="button" onClick={() => setTeethSaveSignal((current) => current + 1)}>
-            حفظ خريطة الأسنان
-          </SecondaryButton>
-          <SecondaryButton type="button" onClick={saveNotes} disabled={saving}>
-            حفظ الملاحظات
-          </SecondaryButton>
-          </div>
-        </DataCard>
-        </div>
-      ) : null}
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <Field label="ملاحظات طبية">
+                <textarea className={inputClass} rows={5} value={draft.notes} onChange={(event) => updateDraft('notes', event.target.value)} />
+              </Field>
+              <Field label="ملاحظات إدارية">
+                <textarea className={inputClass} rows={5} value={draft.accountNotes} onChange={(event) => updateDraft('accountNotes', event.target.value)} />
+              </Field>
+              <Field label="ملاحظات حسابية / شكوى">
+                <textarea className={inputClass} rows={5} value={draft.accountingNotes} onChange={(event) => updateDraft('accountingNotes', event.target.value)} />
+              </Field>
+            </div>
+          </DataCard>
 
-      {false && activeTab === 'notes' ? (
-        <div className="mt-4">
-          <TeethChart
-            patientId={patient.id}
-            value={patient.teethNotes || {}}
-            onSaved={(teethNotes) => setPatient((current) => ({ ...current, teethNotes }))}
-          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowTeeth((current) => !current)}
+              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-black text-slate-200 transition hover:bg-white/10"
+            >
+              {showTeeth ? 'إخفاء خريطة الأسنان' : 'إظهار خريطة الأسنان'}
+            </button>
+          </div>
+
+          {showTeeth ? (
+            <TeethChart
+              patientId={patient.id}
+              value={patient.teethNotes || {}}
+              saveSignal={teethSaveSignal}
+              showSaveButton={false}
+              onSaved={(teethNotes) => setPatient((current) => ({ ...current, teethNotes }))}
+            />
+          ) : null}
+
+          <div className="sticky bottom-4 z-10 flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-[#0b1020]/90 p-3 backdrop-blur-xl">
+            <PrimaryButton type="button" onClick={saveAllNotes} disabled={saving}>
+              <Save className="h-4 w-4" />
+              حفظ الكل
+            </PrimaryButton>
+            <SecondaryButton type="button" onClick={saveNotes} disabled={saving}>
+              حفظ الملاحظات
+            </SecondaryButton>
+            <SecondaryButton type="button" onClick={() => setTeethSaveSignal((current) => current + 1)}>
+              حفظ خريطة الأسنان
+            </SecondaryButton>
+          </div>
         </div>
       ) : null}
 
@@ -440,58 +460,6 @@ export default function PatientProfilePage() {
         />
       ) : null}
 
-      {false && activeTab === 'prescriptions' ? (
-        <div className="space-y-5">
-          <DataCard>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h3 className="text-lg font-black text-white">الروشتات</h3>
-                <p className="mt-1 text-sm text-slate-400">
-                  استخدم صفحة الروشتات الأصلية لنفس التصميم وربط Booking Ref تلقائيا.
-                </p>
-              </div>
-              <PrimaryButton type="button" onClick={() => navigate(`/prescriptions?patientId=${patient.id}`)}>
-                صفحة الروشتات الأصلية
-              </PrimaryButton>
-            </div>
-            {(patient.appointments || []).length ? (
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                {(patient.appointments || []).slice(0, 6).map((appointment) => (
-                  <button
-                    key={appointment.id}
-                    type="button"
-                    onClick={() => navigate(`/prescriptions?patientId=${patient.id}&appointmentId=${appointment.bookingRef || appointment.id}`)}
-                    className="rounded-2xl border border-white/10 bg-white/5 p-4 text-right transition hover:border-sky-400/50 hover:bg-sky-500/10"
-                  >
-                    <span className="block text-sm font-black text-white">{appointment.service?.nameAr || appointment.service?.name || 'حجز'}</span>
-                    <span className="mt-1 block text-xs text-slate-400">Booking Ref: {appointment.bookingRef || appointment.id}</span>
-                    <span className="mt-1 block text-xs text-slate-400">{formatDateTime(appointment.scheduledTime)}</span>
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </DataCard>
-          <div className="flex justify-end">
-            <SecondaryButton type="button" onClick={() => setShowPrescriptionForm((current) => !current)}>
-              {showPrescriptionForm ? 'إغلاق النموذج' : 'إضافة روشتة'}
-            </SecondaryButton>
-          </div>
-          {showPrescriptionForm ? <PrescriptionForm initialPatientId={patient.id} onCreated={loadPatient} /> : null}
-          <DataCard>
-            <div className="grid gap-3">
-              {(patient.prescriptions || []).map((prescription) => (
-                <div key={prescription.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="font-black text-white">{prescription.diagnosis || 'بدون تشخيص'}</p>
-                  <p className="text-sm text-slate-400">د. {prescription.doctor?.name || '-'} · {formatDateTime(prescription.createdAt)}</p>
-                  <div className="mt-2 text-sm text-slate-300">
-                    {(prescription.medications || []).map((medication, index) => <p key={index}>{medicationLine(medication, index)}</p>)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </DataCard>
-        </div>
-      ) : null}
 
       {activeTab === 'payments' ? <RevenueReport patientId={patient.id} compact /> : null}
 

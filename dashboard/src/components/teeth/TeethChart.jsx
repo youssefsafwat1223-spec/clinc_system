@@ -3,6 +3,7 @@ import { PlusCircle, Save } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../api/client';
 import { DataCard, Field, PrimaryButton, SecondaryButton, inputClass } from '../ui';
+import { TOOTH_2D_CLASS, TOOTH_LEGEND, toothState } from './toothState';
 
 const Teeth3DChart = lazy(() => import('./Teeth3DChart'));
 
@@ -34,7 +35,7 @@ export default function TeethChart({ patientId, value = {}, onSaved, saveSignal 
   const [services, setServices] = useState([]);
   const [doctors, setDoctors] = useState([]);
   const [saving, setSaving] = useState(false);
-  const [viewMode, setViewMode] = useState('3D');
+  const [viewMode, setViewMode] = useState('2D');
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [serviceForm, setServiceForm] = useState(defaultServiceForm);
   const previousSaveSignal = useRef(saveSignal);
@@ -144,7 +145,7 @@ export default function TeethChart({ patientId, value = {}, onSaved, saveSignal 
           <h3 className="mb-4 text-lg font-black text-white">خريطة الأسنان</h3>
           <div className="mb-4 flex justify-end">
             <div className="flex rounded-2xl border border-white/10 bg-white/5 p-1">
-              {['3D', '2D'].map((mode) => (
+              {['2D', '3D'].map((mode) => (
                 <button
                   key={mode}
                   type="button"
@@ -179,36 +180,47 @@ export default function TeethChart({ patientId, value = {}, onSaved, saveSignal 
               <ellipse cx="50" cy="50" rx="36" ry="45" fill="none" stroke="#d1d5db" strokeWidth="1" />
             </svg>
             {positionedTeeth.map(({ number, left, top }) => {
-              const hasData = teeth[number]?.note || teeth[number]?.serviceId;
+              const isSelected = selectedTooth === number;
+              const state = toothState(teeth[number]);
+              const shapeClass = isSelected ? TOOTH_2D_CLASS.selected : TOOTH_2D_CLASS[state];
+              const entryData = teeth[number] || {};
+              const serviceName = services.find((s) => s.id === entryData.serviceId)?.nameAr
+                || services.find((s) => s.id === entryData.serviceId)?.name;
+              const tip = [
+                `سن ${number}`,
+                entryData.note ? `ملاحظة: ${entryData.note}` : null,
+                serviceName ? `خدمة: ${serviceName}` : null,
+                entryData.done ? 'تمت' : null,
+              ].filter(Boolean).join(' — ');
               return (
                 <button
                   key={number}
                   type="button"
                   onClick={() => setSelectedTooth(number)}
                   style={{ left: `${left}%`, top: `${top}%` }}
-                  className={`absolute h-14 w-12 -translate-x-1/2 -translate-y-1/2 text-sm font-black transition md:h-16 md:w-14 ${
-                    selectedTooth === number
-                      ? 'text-white'
-                      : hasData
-                        ? 'text-emerald-700'
-                        : 'text-slate-900 hover:text-sky-600'
+                  title={tip}
+                  aria-label={tip}
+                  aria-pressed={isSelected}
+                  className={`group absolute h-14 w-12 -translate-x-1/2 -translate-y-1/2 text-sm font-black transition md:h-16 md:w-14 ${
+                    isSelected ? 'text-white' : 'text-slate-900'
                   }`}
                 >
                   <svg viewBox="0 0 64 76" className="absolute inset-0 h-full w-full drop-shadow-sm" aria-hidden="true">
+                    {isSelected ? (
+                      <path
+                        d="M32 4C19.5 4 10 13.5 10 27.5c0 9.5 4.7 17.6 8 25.8 2.2 5.5 3.2 15.8 9.2 16.7 3.1.5 3.8-6.1 4.8-11.2 1 5.1 1.7 11.7 4.8 11.2 6-.9 7-11.2 9.2-16.7 3.3-8.2 8-16.3 8-25.8C54 13.5 44.5 4 32 4Z"
+                        className="fill-none stroke-sky-400"
+                        strokeWidth="5"
+                      />
+                    ) : null}
                     <path
                       d="M32 4C19.5 4 10 13.5 10 27.5c0 9.5 4.7 17.6 8 25.8 2.2 5.5 3.2 15.8 9.2 16.7 3.1.5 3.8-6.1 4.8-11.2 1 5.1 1.7 11.7 4.8 11.2 6-.9 7-11.2 9.2-16.7 3.3-8.2 8-16.3 8-25.8C54 13.5 44.5 4 32 4Z"
-                      className={`transition ${
-                        selectedTooth === number
-                          ? 'fill-sky-500 stroke-sky-700'
-                          : hasData
-                            ? 'fill-emerald-50 stroke-emerald-500'
-                            : 'fill-white stroke-slate-500'
-                      }`}
+                      className={`transition ${shapeClass}`}
                       strokeWidth="2.5"
                     />
                     <path
                       d="M19 24c5 3 10 3 13 0 3 3 8 3 13 0M23 38c4 2 14 2 18 0"
-                      className={selectedTooth === number ? 'stroke-white/60' : 'stroke-slate-300'}
+                      className={isSelected ? 'stroke-white/60' : 'stroke-slate-300'}
                       fill="none"
                       strokeWidth="2"
                       strokeLinecap="round"
@@ -218,6 +230,15 @@ export default function TeethChart({ patientId, value = {}, onSaved, saveSignal 
                 </button>
               );
             })}
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-300">
+            {TOOTH_LEGEND.map((item) => (
+              <span key={item.state} className="inline-flex items-center gap-1.5">
+                <span className={`h-3 w-3 rounded-full ${item.dot}`} />
+                {item.label}
+              </span>
+            ))}
           </div>
         </div>
 
