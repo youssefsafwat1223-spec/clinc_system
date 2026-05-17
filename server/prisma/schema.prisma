@@ -102,6 +102,7 @@ model Doctor {
   prescriptions  Prescription[]
   reviews        Review[]
   tasks          DoctorService[]
+  extraCharges   ExtraCharge[]
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 
@@ -140,12 +141,77 @@ model Patient {
   reviews       Review[]
   callbackRequests CallbackRequest[]
   groups        PatientGroupMember[]
+  offerLogs     OfferLog[]
+  extraCharges  ExtraCharge[]
   createdAt     DateTime       @default(now()) @map("created_at")
   updatedAt     DateTime       @updatedAt @map("updated_at")
 
   @@map("patients")
   @@index([phone])
   @@index([profileType])
+}
+
+model OfferLog {
+  id           String   @id @default(uuid())
+  patientId    String   @map("patient_id")
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  templateName String   @map("template_name")
+  channel      String
+  serviceId    String?  @map("service_id")
+  offerDraftId String?  @map("offer_draft_id")
+  offerDraft   OfferDraft? @relation(fields: [offerDraftId], references: [id], onDelete: SetNull)
+  status       String   @default("SENT")
+  message      String?
+  sentById     String?  @map("sent_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([patientId])
+  @@index([templateName])
+  @@index([offerDraftId])
+  @@index([createdAt])
+  @@map("offer_logs")
+}
+
+model ExtraCharge {
+  id           String   @id @default(uuid())
+  patientId    String   @map("patient_id")
+  patient      Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  serviceId    String?  @map("service_id")
+  service      Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  doctorId     String?  @map("doctor_id")
+  doctor       Doctor?  @relation(fields: [doctorId], references: [id], onDelete: SetNull)
+  description  String?
+  amount       Float    @default(0)
+  paidAmount   Float    @default(0) @map("paid_amount")
+  status       String   @default("UNPAID")
+  method       String?
+  notes        String?
+  createdById  String?  @map("created_by")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([patientId])
+  @@index([createdAt])
+  @@map("extra_charges")
+}
+
+model OfferDraft {
+  id           String   @id @default(uuid())
+  title        String
+  templateName String   @map("template_name")
+  bodyText     String?  @map("body_text")
+  imageUrl     String?  @map("image_url")
+  serviceId    String?  @map("service_id")
+  service      Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  channel      String?
+  createdById  String?  @map("created_by")
+  offerLogs    OfferLog[]
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@index([templateName])
+  @@index([createdAt])
+  @@map("offer_drafts")
 }
 
 model Service {
@@ -161,6 +227,8 @@ model Service {
   appointments Appointment[]
   payments     Payment[]
   doctors      DoctorService[]
+  extraCharges ExtraCharge[]
+  offerDrafts  OfferDraft[]
   createdAt    DateTime      @default(now()) @map("created_at")
   updatedAt    DateTime      @updatedAt @map("updated_at")
 

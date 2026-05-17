@@ -37,6 +37,7 @@ export default function SendOffersPage() {
   const [platform, setPlatform] = useState('WHATSAPP');
   const [segment, setSegment] = useState('ALL');
   const [serviceId, setServiceId] = useState('');
+  const [excludeAlreadySent, setExcludeAlreadySent] = useState(false);
   const [search, setSearch] = useState('');
   const [templateName, setTemplateName] = useState('clinic_custom_message_ar');
   const [message, setMessage] = useState('');
@@ -44,8 +45,108 @@ export default function SendOffersPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [drafts, setDrafts] = useState([]);
+  const [selectedDraftId, setSelectedDraftId] = useState('');
+  const [draftTitle, setDraftTitle] = useState('');
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const selectedTemplate = offerTemplates.find((template) => template.name === templateName) || offerTemplates[0];
+
+  const loadDrafts = async () => {
+    try {
+      const res = await api.get('/campaigns/offer-drafts');
+      setDrafts(res.data.drafts || []);
+    } catch {
+      setDrafts([]);
+    }
+  };
+
+  const applyDraft = (id) => {
+    setSelectedDraftId(id);
+    const draft = drafts.find((item) => item.id === id);
+    if (!draft) {
+      setDraftTitle('');
+      return;
+    }
+    setTemplateName(draft.templateName);
+    setMessage(draft.bodyText || '');
+    setImageUrl(draft.imageUrl || '');
+    setDraftTitle(draft.title || '');
+    if (draft.serviceId) setServiceId(draft.serviceId);
+  };
+
+  const draftPayload = () => ({
+    title: draftTitle.trim(),
+    templateName,
+    bodyText: message,
+    imageUrl: imageUrl || undefined,
+    serviceId: serviceId || undefined,
+    channel: platform,
+  });
+
+  const saveDraft = async () => {
+    if (!draftTitle.trim()) return toast.warn('اكتب اسماً للعرض المحفوظ');
+    setSavingDraft(true);
+    try {
+      const res = await api.post('/campaigns/offer-drafts', draftPayload());
+      toast.success('تم حفظ العرض');
+      await loadDrafts();
+      setSelectedDraftId(res.data.draft.id);
+    } catch (error) {
+      toast.error(error.message || 'فشل حفظ العرض');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const updateDraft = async () => {
+    if (!selectedDraftId) return;
+    if (!draftTitle.trim()) return toast.warn('اكتب اسماً للعرض المحفوظ');
+    setSavingDraft(true);
+    try {
+      await api.put(`/campaigns/offer-drafts/${selectedDraftId}`, draftPayload());
+      toast.success('تم تحديث العرض المحفوظ');
+      await loadDrafts();
+    } catch (error) {
+      toast.error(error.message || 'فشل تحديث العرض');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const duplicateDraft = async () => {
+    setSavingDraft(true);
+    try {
+      const res = await api.post('/campaigns/offer-drafts', {
+        ...draftPayload(),
+        title: `${draftTitle.trim() || 'عرض'} - نسخة`,
+      });
+      toast.success('تم إنشاء نسخة');
+      await loadDrafts();
+      setSelectedDraftId(res.data.draft.id);
+      setDraftTitle(res.data.draft.title);
+    } catch (error) {
+      toast.error(error.message || 'فشل إنشاء نسخة');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
+  const deleteDraft = async () => {
+    if (!selectedDraftId) return;
+    setSavingDraft(true);
+    try {
+      await api.delete(`/campaigns/offer-drafts/${selectedDraftId}`);
+      toast.success('تم حذف العرض المحفوظ');
+      setSelectedDraftId('');
+      setDraftTitle('');
+      await loadDrafts();
+    } catch (error) {
+      toast.error(error.message || 'فشل حذف العرض');
+    } finally {
+      setSavingDraft(false);
+    }
+  };
 
   const loadRecipients = async () => {
     setLoading(true);
@@ -55,6 +156,9 @@ export default function SendOffersPage() {
           platform,
           segment,
           serviceId: serviceId || undefined,
+          templateName,
+          offerDraftId: selectedDraftId || undefined,
+          excludeAlreadySent: excludeAlreadySent ? 'true' : undefined,
           search: search || undefined,
           limit: 500,
         },
@@ -78,11 +182,14 @@ export default function SendOffersPage() {
       }
     };
     loadBasics();
+    loadDrafts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     loadRecipients();
-  }, [platform, segment, serviceId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [platform, segment, serviceId, excludeAlreadySent, templateName, selectedDraftId]);
 
   const preview = useMemo(() => {
     const name = patients.find((patient) => selectedIds.includes(patient.id))?.displayName || patients.find((patient) => selectedIds.includes(patient.id))?.name || 'اسم المريض';
@@ -123,6 +230,8 @@ export default function SendOffersPage() {
         reviewerIds: selectedIds,
         templateName,
         message,
+        serviceId: serviceId || undefined,
+        offerDraftId: selectedDraftId || undefined,
         imageUrl: imageUrl || undefined,
       });
       toast.success(`نجاح ${res.data.successCount || 0} · فشل ${res.data.failCount || 0} · تخطي ${res.data.skippedCount || 0}`);
@@ -154,14 +263,22 @@ export default function SendOffersPage() {
               <Field label="تقسيم الجمهور">
                 <select className={inputClass} value={segment} onChange={(event) => setSegment(event.target.value)}>
                   <option value="ALL">كل جهات القناة</option>
+                  <option value="BOOKED_ANY">حجزوا (أي خدمة)</option>
                   <option value="BOOKED_SERVICE">حجزوا خدمة محددة</option>
                   <option value="NOT_BOOKED_SERVICE">لم يحجزوا خدمة محددة</option>
                   <option value="CONTACT_ONLY">تواصل فقط بدون حجز</option>
+                  <option value="OFFER_SENT">أُرسل لهم هذا العرض</option>
+                  <option value="OFFER_NOT_SENT">لم يُرسل لهم هذا العرض</option>
                 </select>
               </Field>
               <Field label="الخدمة">
-                <select className={inputClass} value={serviceId} onChange={(event) => setServiceId(event.target.value)} disabled={!['BOOKED_SERVICE', 'NOT_BOOKED_SERVICE'].includes(segment)}>
-                  <option value="">اختر الخدمة</option>
+                <select
+                  className={inputClass}
+                  value={serviceId}
+                  onChange={(event) => setServiceId(event.target.value)}
+                  disabled={!['BOOKED_SERVICE', 'NOT_BOOKED_SERVICE', 'OFFER_SENT', 'OFFER_NOT_SENT'].includes(segment)}
+                >
+                  <option value="">كل الخدمات</option>
                   {services.map((service) => <option key={service.id} value={service.id}>{service.nameAr || service.name}</option>)}
                 </select>
               </Field>
@@ -175,6 +292,14 @@ export default function SendOffersPage() {
                 <PrimaryButton type="button" onClick={loadRecipients} disabled={loading} className="w-full">تطبيق</PrimaryButton>
               </div>
             </div>
+            <label className="flex items-center gap-2 text-sm font-bold text-slate-200">
+              <input
+                type="checkbox"
+                checked={excludeAlreadySent}
+                onChange={(event) => setExcludeAlreadySent(event.target.checked)}
+              />
+              استبعاد من تم إرسال هذا العرض له من قبل
+            </label>
           </DataCard>
 
           <DataCard>
@@ -217,6 +342,52 @@ export default function SendOffersPage() {
         </div>
 
         <DataCard className="h-fit space-y-4">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <Field label="العروض المحفوظة">
+              <select className={inputClass} value={selectedDraftId} onChange={(event) => applyDraft(event.target.value)}>
+                <option value="">— عرض جديد —</option>
+                {drafts.map((draft) => (
+                  <option key={draft.id} value={draft.id}>
+                    {draft.title} ({offerTemplates.find((t) => t.name === draft.templateName)?.label || draft.templateName})
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <div className="mt-3">
+              <Field label="اسم العرض المحفوظ">
+                <input
+                  className={inputClass}
+                  value={draftTitle}
+                  onChange={(event) => setDraftTitle(event.target.value)}
+                  placeholder="مثال: خصم تنظيف مايو"
+                />
+              </Field>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <PrimaryButton type="button" onClick={saveDraft} disabled={savingDraft} className="px-3 py-2 text-xs">
+                حفظ كعرض محفوظ
+              </PrimaryButton>
+              {selectedDraftId ? (
+                <SecondaryButton type="button" onClick={updateDraft} disabled={savingDraft} className="px-3 py-2 text-xs">
+                  تحديث المحفوظ
+                </SecondaryButton>
+              ) : null}
+              <SecondaryButton type="button" onClick={duplicateDraft} disabled={savingDraft} className="px-3 py-2 text-xs">
+                نسخة جديدة
+              </SecondaryButton>
+              {selectedDraftId ? (
+                <SecondaryButton
+                  type="button"
+                  onClick={deleteDraft}
+                  disabled={savingDraft}
+                  className="px-3 py-2 text-xs hover:bg-rose-500/15 hover:text-rose-200"
+                >
+                  حذف
+                </SecondaryButton>
+              ) : null}
+            </div>
+          </div>
+
           <Field label="القالب">
             <select className={inputClass} value={templateName} onChange={(event) => setTemplateName(event.target.value)}>
               {offerTemplates.map((template) => <option key={template.name} value={template.name}>{template.label}</option>)}

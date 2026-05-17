@@ -302,6 +302,10 @@ const sendOffers = async (req, res, next) => {
     const message = String(req.body.message || '').trim();
     const templateName = String(req.body.templateName || 'clinic_custom_message_ar').trim();
     const imageUrl = toAbsoluteUrl(req, String(req.body.imageUrl || '').trim());
+    const serviceId = req.body.serviceId ? String(req.body.serviceId) : null;
+    const offerDraftId = req.body.offerDraftId ? String(req.body.offerDraftId) : null;
+    const sentById = req.user?.id || null;
+    const offerLogs = [];
     const allowedTemplates = ['clinic_custom_message_ar', 'clinic_offer_text_ar', 'clinic_offer_image_ar'];
 
     if (!reviewerIds.length) return res.status(400).json({ error: 'اختر مراجعين للإرسال' });
@@ -359,6 +363,16 @@ const sendOffers = async (req, res, next) => {
           if (!subscriberId) {
             skippedCount++;
             skipped.push({ patientId: patient.id, reason: 'missing_manychat_subscriber_id' });
+            offerLogs.push({
+              patientId: patient.id,
+              templateName,
+              channel: platform,
+              serviceId,
+              offerDraftId,
+              status: 'SKIPPED',
+              message: message || null,
+              sentById,
+            });
             continue;
           }
 
@@ -373,10 +387,39 @@ const sendOffers = async (req, res, next) => {
           });
         }
         successCount++;
+        offerLogs.push({
+          patientId: patient.id,
+          templateName,
+          channel: platform,
+          serviceId,
+          offerDraftId,
+          status: 'SENT',
+          message: message || null,
+          sentById,
+        });
         await new Promise((resolve) => setTimeout(resolve, 250));
       } catch (error) {
         failCount++;
         failures.push({ patientId: patient.id, phone: patient.phone, error: error.message });
+        offerLogs.push({
+          patientId: patient.id,
+          templateName,
+          channel: platform,
+          serviceId,
+          offerDraftId,
+          status: 'FAILED',
+          message: message || null,
+          sentById,
+        });
+      }
+    }
+
+    // Best-effort logging — must never break the send response.
+    if (offerLogs.length) {
+      try {
+        await prisma.offerLog.createMany({ data: offerLogs });
+      } catch (logError) {
+        console.error('OfferLog write failed:', logError.message);
       }
     }
 
@@ -388,7 +431,16 @@ const sendOffers = async (req, res, next) => {
 
 const listSegments = async (req, res, next) => {
   try {
-    const { platform = 'WHATSAPP', search, serviceId, segment = 'ALL', limit = 500 } = req.query;
+    const {
+      platform = 'WHATSAPP',
+      search,
+      serviceId,
+      segment = 'ALL',
+      templateName,
+      offerDraftId,
+      excludeAlreadySent,
+      limit = 500,
+    } = req.query;
     const normalizedPlatform = ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'].includes(platform) ? platform : 'WHATSAPP';
     const filters = [{ platform: normalizedPlatform }];
 
@@ -403,8 +455,29 @@ const listSegments = async (req, res, next) => {
     }
 
     if (segment === 'CONTACT_ONLY') filters.push({ appointments: { none: {} } });
-    if (segment === 'BOOKED_SERVICE' && serviceId) filters.push({ appointments: { some: { serviceId } } });
+    if (segment === 'BOOKED_ANY') filters.push({ appointments: { some: {} } });
+    if (segment === 'BOOKED_SERVICE') {
+      filters.push(serviceId ? { appointments: { some: { serviceId } } } : { appointments: { some: {} } });
+    }
     if (segment === 'NOT_BOOKED_SERVICE' && serviceId) filters.push({ appointments: { none: { serviceId } } });
+
+    // When an exact saved draft is given, scope strictly by offerDraftId so
+    // two drafts using the same template are tracked separately.
+    const offerScope = offerDraftId
+      ? { offerDraftId }
+      : {
+          ...(templateName ? { templateName } : {}),
+          ...(serviceId ? { serviceId } : {}),
+        };
+    if (segment === 'OFFER_SENT') {
+      filters.push({ offerLogs: { some: { ...offerScope, status: 'SENT' } } });
+    }
+    if (segment === 'OFFER_NOT_SENT') {
+      filters.push({ offerLogs: { none: { ...offerScope, status: 'SENT' } } });
+    }
+    if (String(excludeAlreadySent) === 'true' && segment !== 'OFFER_NOT_SENT') {
+      filters.push({ offerLogs: { none: { ...offerScope, status: 'SENT' } } });
+    }
 
     const patients = await prisma.patient.findMany({
       where: { AND: filters },
@@ -421,6 +494,84 @@ const listSegments = async (req, res, next) => {
     next(error);
   }
 };
+const ALLOWED_OFFER_TEMPLATES = ['clinic_custom_message_ar', 'clinic_offer_text_ar', 'clinic_offer_image_ar'];
+
+const listOfferDrafts = async (req, res, next) => {
+  try {
+    const { templateName } = req.query;
+    const drafts = await prisma.offerDraft.findMany({
+      where: templateName ? { templateName } : {},
+      orderBy: { createdAt: 'desc' },
+      include: { service: true },
+    });
+    res.json({ drafts });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createOfferDraft = async (req, res, next) => {
+  try {
+    const { title, templateName, bodyText, imageUrl, serviceId, channel } = req.body;
+    if (!String(title || '').trim()) return res.status(400).json({ error: 'اسم العرض مطلوب' });
+    if (!ALLOWED_OFFER_TEMPLATES.includes(templateName)) {
+      return res.status(400).json({ error: 'قالب العرض غير مدعوم' });
+    }
+    const draft = await prisma.offerDraft.create({
+      data: {
+        title: String(title).trim(),
+        templateName,
+        bodyText: bodyText ? String(bodyText) : null,
+        imageUrl: imageUrl ? String(imageUrl) : null,
+        serviceId: serviceId || null,
+        channel: channel || null,
+        createdById: req.user?.id || null,
+      },
+      include: { service: true },
+    });
+    res.status(201).json({ draft });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateOfferDraft = async (req, res, next) => {
+  try {
+    const existing = await prisma.offerDraft.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'العرض المحفوظ غير موجود' });
+    const { title, templateName, bodyText, imageUrl, serviceId, channel } = req.body;
+    if (templateName !== undefined && !ALLOWED_OFFER_TEMPLATES.includes(templateName)) {
+      return res.status(400).json({ error: 'قالب العرض غير مدعوم' });
+    }
+    const draft = await prisma.offerDraft.update({
+      where: { id: req.params.id },
+      data: {
+        ...(title !== undefined && { title: String(title).trim() }),
+        ...(templateName !== undefined && { templateName }),
+        ...(bodyText !== undefined && { bodyText: bodyText ? String(bodyText) : null }),
+        ...(imageUrl !== undefined && { imageUrl: imageUrl ? String(imageUrl) : null }),
+        ...(serviceId !== undefined && { serviceId: serviceId || null }),
+        ...(channel !== undefined && { channel: channel || null }),
+      },
+      include: { service: true },
+    });
+    res.json({ draft });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteOfferDraft = async (req, res, next) => {
+  try {
+    const existing = await prisma.offerDraft.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'العرض المحفوظ غير موجود' });
+    await prisma.offerDraft.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   listTemplates,
   createTemplate,
@@ -429,4 +580,8 @@ module.exports = {
   listSegments,
   sendBroadcast,
   sendOffers,
+  listOfferDrafts,
+  createOfferDraft,
+  updateOfferDraft,
+  deleteOfferDraft,
 };

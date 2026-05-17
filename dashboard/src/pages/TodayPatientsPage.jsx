@@ -114,15 +114,26 @@ export default function TodayPatientsPage() {
 
   const filteredAppointments = useMemo(
     () =>
-      appointments.filter((appointment) => {
-        const matchesDoctor = doctorFilter === 'ALL' ? true : appointment.doctorId === doctorFilter;
-        const matchesDate = isWithinCalendarFilter(appointment.scheduledTime, dateRange, {
-          exactDate: selectedDate,
-          monthValue: selectedMonth,
-          weekOfMonth: selectedWeek,
-        });
-        return matchesDoctor && matchesDate;
-      }),
+      appointments
+        .filter((appointment) => {
+          const matchesDoctor = doctorFilter === 'ALL' ? true : appointment.doctorId === doctorFilter;
+          const matchesDate = isWithinCalendarFilter(appointment.scheduledTime, dateRange, {
+            exactDate: selectedDate,
+            monthValue: selectedMonth,
+            weekOfMonth: selectedWeek,
+          });
+          return matchesDoctor && matchesDate;
+        })
+        .sort((a, b) => {
+          // Queued patients first, ordered 1..N by queue position.
+          const aQ = a.queuePosition;
+          const bQ = b.queuePosition;
+          if (aQ != null && bQ != null) return aQ - bQ;
+          if (aQ != null) return -1;
+          if (bQ != null) return 1;
+          // Then non-queued patients by appointment time.
+          return new Date(a.scheduledTime) - new Date(b.scheduledTime);
+        }),
     [appointments, doctorFilter, dateRange, selectedDate, selectedMonth, selectedWeek]
   );
 

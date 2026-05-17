@@ -286,6 +286,99 @@ const revenueReport = async (req, res, next) => {
       }
     );
 
+    // ── Extra charges (standalone services with an amount) ──
+    const extraWhere = [];
+    if (patientId) extraWhere.push({ patientId });
+    if (resolvedStatus && resolvedStatus !== 'ALL') extraWhere.push({ status: resolvedStatus });
+    if (method && method !== 'ALL') extraWhere.push({ method });
+    {
+      const range = {};
+      if (from) {
+        const d = new Date(`${from}T00:00:00`);
+        if (!Number.isNaN(d.getTime())) range.gte = d;
+      }
+      if (to) {
+        const d = new Date(`${to}T23:59:59.999`);
+        if (!Number.isNaN(d.getTime())) range.lte = d;
+      }
+      if (range.gte || range.lte) extraWhere.push({ createdAt: range });
+    }
+    if (search) {
+      extraWhere.push({
+        OR: [
+          { description: { contains: search, mode: 'insensitive' } },
+          { patient: { name: { contains: search, mode: 'insensitive' } } },
+          { patient: { displayName: { contains: search, mode: 'insensitive' } } },
+          { patient: { phone: { contains: search } } },
+          { service: { name: { contains: search, mode: 'insensitive' } } },
+          { service: { nameAr: { contains: search, mode: 'insensitive' } } },
+        ],
+      });
+    }
+
+    const extraCharges = await prisma.extraCharge.findMany({
+      where: extraWhere.length ? { AND: extraWhere } : {},
+      take: 1000,
+      orderBy: { createdAt: 'desc' },
+      include: { patient: true, service: true, doctor: true },
+    });
+
+    const extraDetails = extraCharges.map((extra) => {
+      const finalAmount = toNumber(extra.amount);
+      const paidAmount = toNumber(extra.paidAmount);
+      const remaining = Math.max(0, finalAmount - paidAmount);
+      const serviceName = extra.service?.nameAr || extra.service?.name || extra.description || 'خدمة إضافية';
+      const serviceKey = extra.service?.id || 'extra-misc';
+
+      if (!rowsMap.has(serviceKey)) {
+        rowsMap.set(serviceKey, {
+          serviceId: serviceKey,
+          serviceName,
+          caseType: serviceName,
+          netAmount: 0,
+          debtAmount: 0,
+          receivedAmount: 0,
+          caseCount: 0,
+        });
+      }
+      const row = rowsMap.get(serviceKey);
+      row.netAmount += finalAmount;
+      row.debtAmount += remaining;
+      row.receivedAmount += paidAmount;
+      row.caseCount += 1;
+
+      summary.totalRevenue += finalAmount;
+      summary.totalReceived += paidAmount;
+      summary.totalDebt += remaining;
+      summary.caseCount += 1;
+      if (paidAmount > 0) {
+        summary.casesWithPayments += 1;
+        patientPaidIds.add(extra.patientId);
+      } else {
+        summary.casesWithoutPayments += 1;
+      }
+      if (remaining > 0) patientDebtIds.add(extra.patientId);
+
+      return {
+        id: extra.id,
+        source: 'extra',
+        patientId: extra.patientId,
+        patientName: extra.patient?.displayName || extra.patient?.name || '',
+        patientPhone: extra.patient?.phone || '',
+        treatmentType: serviceName,
+        doctorName: extra.doctor?.name || '',
+        amount: finalAmount,
+        baseAmount: finalAmount,
+        discountAmount: 0,
+        paidAmount,
+        remainingAmount: remaining,
+        paymentDate: extra.createdAt,
+        method: extra.method,
+        status: extra.status,
+        notes: extra.notes || '',
+      };
+    });
+
     summary.totalProfit = summary.totalRevenue - summary.cashierExpenses;
     summary.patientsWithPayments = patientPaidIds.size;
     summary.patientsWithDebts = patientDebtIds.size;
@@ -293,8 +386,21 @@ const revenueReport = async (req, res, next) => {
     res.json({
       summary,
       rows: Array.from(rowsMap.values()).sort((a, b) => b.receivedAmount - a.receivedAmount),
-      payments: payments.map((payment) => ({
+      payments: [
+        ...extraDetails,
+        ...payments.map((payment) => ({
+        source: 'payment',
         id: payment.id,
+        appointmentId: payment.appointmentId,
+        appointmentStatus: payment.appointment?.status || null,
+        caseStatus:
+          payment.appointment?.status === 'COMPLETED'
+            ? 'WASEL'
+            : ['EXPIRED', 'CANCELLED', 'REJECTED', 'NO_SHOW'].includes(payment.appointment?.status)
+              ? 'MUNTAHI'
+              : payment.appointment?.status
+                ? 'MOSTAMERA'
+                : null,
         patientId: payment.patientId,
         patientName: payment.patient?.displayName || payment.patient?.name || payment.appointment?.patient?.name || '',
         patientPhone: payment.patient?.phone || payment.appointment?.patient?.phone || '',
@@ -309,7 +415,103 @@ const revenueReport = async (req, res, next) => {
         method: payment.method,
         status: payment.status,
       })),
+      ],
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const extraStatus = (paidAmount, amount) => {
+  if (paidAmount <= 0) return 'UNPAID';
+  if (paidAmount < amount) return 'PARTIAL';
+  return 'PAID';
+};
+
+const listExtraCharges = async (req, res, next) => {
+  try {
+    const { patientId } = req.query;
+    const where = patientId ? { patientId } : {};
+    const items = await prisma.extraCharge.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: { service: true, doctor: true },
+    });
+    res.json({ extraCharges: items });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const createExtraCharge = async (req, res, next) => {
+  try {
+    const { patientId, serviceId, doctorId, description, amount, paidAmount = 0, method, notes } = req.body;
+    if (!patientId) return res.status(400).json({ error: 'المريض مطلوب' });
+    if (!serviceId && !String(description || '').trim()) {
+      return res.status(400).json({ error: 'اختر خدمة أو اكتب وصفاً' });
+    }
+    const amountNum = toNumber(amount);
+    if (!(amountNum > 0)) return res.status(400).json({ error: 'المبلغ غير صالح' });
+    const paidNum = Math.max(0, toNumber(paidAmount));
+
+    const extraCharge = await prisma.extraCharge.create({
+      data: {
+        patientId,
+        serviceId: serviceId || null,
+        doctorId: doctorId || null,
+        description: description ? String(description).trim() : null,
+        amount: amountNum,
+        paidAmount: paidNum,
+        status: extraStatus(paidNum, amountNum),
+        method: method || null,
+        notes: notes || null,
+        createdById: req.user?.id || null,
+      },
+      include: { service: true, doctor: true },
+    });
+    res.status(201).json({ extraCharge });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const updateExtraCharge = async (req, res, next) => {
+  try {
+    const existing = await prisma.extraCharge.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'البند غير موجود' });
+
+    const amountNum = req.body.amount !== undefined ? toNumber(req.body.amount) : existing.amount;
+    const paidNum =
+      req.body.paidAmount !== undefined ? Math.max(0, toNumber(req.body.paidAmount)) : existing.paidAmount;
+
+    const extraCharge = await prisma.extraCharge.update({
+      where: { id: req.params.id },
+      data: {
+        amount: amountNum,
+        paidAmount: paidNum,
+        status: extraStatus(paidNum, amountNum),
+        method: req.body.method ?? existing.method,
+        notes: req.body.notes ?? existing.notes,
+        ...(req.body.serviceId !== undefined && { serviceId: req.body.serviceId || null }),
+        ...(req.body.doctorId !== undefined && { doctorId: req.body.doctorId || null }),
+        ...(req.body.description !== undefined && {
+          description: req.body.description ? String(req.body.description).trim() : null,
+        }),
+      },
+      include: { service: true, doctor: true },
+    });
+    res.json({ extraCharge });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const deleteExtraCharge = async (req, res, next) => {
+  try {
+    const existing = await prisma.extraCharge.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'البند غير موجود' });
+    await prisma.extraCharge.delete({ where: { id: req.params.id } });
+    res.json({ success: true });
   } catch (error) {
     next(error);
   }
@@ -379,4 +581,13 @@ const update = async (req, res, next) => {
   }
 };
 
-module.exports = { list, revenueReport, upsertByAppointment, update };
+module.exports = {
+  list,
+  revenueReport,
+  upsertByAppointment,
+  update,
+  listExtraCharges,
+  createExtraCharge,
+  updateExtraCharge,
+  deleteExtraCharge,
+};

@@ -18,15 +18,22 @@ import { formatDateTime, money } from '../utils/appointmentUi';
 const PLATFORMS = ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
 
 const tabs = [
+  { id: 'info', label: 'معلومات عامة', icon: UserRound },
   { id: 'notes', label: 'الملاحظات', icon: UserRound },
   { id: 'booking', label: 'حجز موعد', icon: CalendarDays },
   { id: 'appointments', label: 'المواعيد', icon: CalendarDays },
   { id: 'prescriptions', label: 'الروشتات', icon: FileText },
   { id: 'payments', label: 'المدفوعات', icon: Wallet },
   { id: 'messages', label: 'الرسائل', icon: MessageSquare },
-  { id: 'teeth', label: 'الأسنان', icon: Stethoscope },
   { id: 'fullFile', label: 'الملف الكامل', icon: FileText },
 ];
+
+const InfoRow = ({ label, value }) => (
+  <div className="flex items-center justify-between gap-3 border-b border-white/5 py-2 text-sm">
+    <span className="text-slate-400">{label}</span>
+    <span className="font-bold text-white" dir="auto">{value || '—'}</span>
+  </div>
+);
 
 const medicationLine = (medication, index) => {
   if (typeof medication === 'string') return `${index + 1}. ${medication}`;
@@ -39,7 +46,7 @@ export default function PatientProfilePage() {
   const [patient, setPatient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState('notes');
+  const [activeTab, setActiveTab] = useState('info');
   const [showPrescriptionForm, setShowPrescriptionForm] = useState(false);
   const [draft, setDraft] = useState({
     name: '',
@@ -232,6 +239,62 @@ export default function PatientProfilePage() {
         </div>
       </DataCard>
 
+      {activeTab === 'info' ? (
+        (() => {
+          const appointments = patient.appointments || [];
+          const lastVisit = appointments
+            .map((item) => item.scheduledTime)
+            .filter(Boolean)
+            .sort((a, b) => new Date(b) - new Date(a))[0];
+          const groupNames = (patient.groups || [])
+            .map((group) => group.group?.name || group.name)
+            .filter(Boolean)
+            .join('، ');
+          return (
+            <div className="grid gap-4 lg:grid-cols-2">
+              <DataCard>
+                <h3 className="mb-3 text-lg font-black text-white">البيانات الأساسية</h3>
+                <InfoRow label="الاسم" value={patient.name} />
+                <InfoRow label="اسم العرض" value={patient.displayName} />
+                <InfoRow label="رقم الهاتف" value={patient.phone} />
+                <InfoRow label="البريد" value={patient.email} />
+                <InfoRow
+                  label="النوع"
+                  value={patient.gender === 'female' ? 'أنثى' : patient.gender === 'male' ? 'ذكر' : ''}
+                />
+                <InfoRow label="العمر" value={patient.age} />
+                <InfoRow
+                  label="نوع الملف"
+                  value={patient.profileType === 'BOOKED' ? 'مريض حجز' : 'تواصل فقط'}
+                />
+                <InfoRow label="المجموعات" value={groupNames} />
+              </DataCard>
+
+              <DataCard>
+                <h3 className="mb-3 text-lg font-black text-white">القناة والتواريخ</h3>
+                <InfoRow label="المنصة" value={patient.platform} />
+                <InfoRow label="WhatsApp ID" value={patient.whatsappId} />
+                <InfoRow label="Facebook ID" value={patient.facebookId} />
+                <InfoRow label="Instagram ID" value={patient.instagramId} />
+                <InfoRow label="ManyChat ID" value={patient.manychatSubscriberId || patient.manychatContactId} />
+                <InfoRow label="تاريخ الإنشاء" value={patient.createdAt ? formatDateTime(patient.createdAt) : ''} />
+                <InfoRow label="آخر زيارة" value={lastVisit ? formatDateTime(lastVisit) : 'لا يوجد'} />
+              </DataCard>
+
+              <DataCard className="lg:col-span-2">
+                <h3 className="mb-3 text-lg font-black text-white">ملخص</h3>
+                <div className="grid gap-4 md:grid-cols-4">
+                  <StatCard title="المواعيد" value={stats.appointments} icon={CalendarDays} tone="blue" />
+                  <StatCard title="الروشتات" value={stats.prescriptions} icon={FileText} tone="slate" />
+                  <StatCard title="المدفوع" value={money(stats.paid)} icon={Wallet} tone="green" />
+                  <StatCard title="الدين" value={money(stats.debt)} icon={Wallet} tone="amber" />
+                </div>
+              </DataCard>
+            </div>
+          );
+        })()
+      ) : null}
+
       {activeTab === 'notes' ? (
         <DataCard className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -279,6 +342,16 @@ export default function PatientProfilePage() {
             حفظ الملاحظات
           </PrimaryButton>
         </DataCard>
+      ) : null}
+
+      {activeTab === 'notes' ? (
+        <div className="mt-4">
+          <TeethChart
+            patientId={patient.id}
+            value={patient.teethNotes || {}}
+            onSaved={(teethNotes) => setPatient((current) => ({ ...current, teethNotes }))}
+          />
+        </div>
       ) : null}
 
       {activeTab === 'booking' ? (
@@ -340,13 +413,6 @@ export default function PatientProfilePage() {
 
       {activeTab === 'messages' ? <ConversationView patientId={patient.id} platform={patient.platform} /> : null}
 
-      {activeTab === 'teeth' ? (
-        <TeethChart
-          patientId={patient.id}
-          value={patient.teethNotes || {}}
-          onSaved={(teethNotes) => setPatient((current) => ({ ...current, teethNotes }))}
-        />
-      ) : null}
 
       {activeTab === 'fullFile' ? (
         <div className="space-y-4">

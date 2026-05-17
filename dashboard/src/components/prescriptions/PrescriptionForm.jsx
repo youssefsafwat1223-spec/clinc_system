@@ -3,6 +3,7 @@ import { Plus, Save, Send, Trash2 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../api/client';
 import { DataCard, Field, PrimaryButton, SecondaryButton, inputClass } from '../ui';
+import TeethChart from '../teeth/TeethChart';
 
 const emptyMedication = () => ({
   name: '',
@@ -23,11 +24,23 @@ export default function PrescriptionForm({ initialPatientId = '', initialAppoint
   const [notes, setNotes] = useState('');
   const [medications, setMedications] = useState([emptyMedication()]);
   const [saving, setSaving] = useState(false);
+  const [teethNotes, setTeethNotes] = useState({});
 
   useEffect(() => {
     setPatientId(initialPatientId || '');
     setAppointmentId(initialAppointmentId || '');
   }, [initialPatientId, initialAppointmentId]);
+
+  useEffect(() => {
+    if (!patientId) {
+      setTeethNotes({});
+      return;
+    }
+    api
+      .get(`/patients/${patientId}`)
+      .then((res) => setTeethNotes(res.data.patient?.teethNotes || {}))
+      .catch(() => setTeethNotes({}));
+  }, [patientId]);
 
   useEffect(() => {
     const loadBasics = async () => {
@@ -156,6 +169,13 @@ export default function PrescriptionForm({ initialPatientId = '', initialAppoint
           حفظ وإرسال
         </SecondaryButton>
       </div>
+
+      {patientId ? (
+        <div className="border-t border-white/10 pt-5">
+          <h4 className="mb-3 text-base font-black text-white">ملاحظات الأسنان</h4>
+          <TeethChart patientId={patientId} value={teethNotes} onSaved={setTeethNotes} />
+        </div>
+      ) : null}
     </DataCard>
   );
 }

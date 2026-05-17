@@ -185,6 +185,43 @@ const assignQueuePosition = async ({ appointmentId }) => {
   });
 };
 
+// Move the selected appointment to queue position 1. Patients who were
+// BEFORE it shift down by one (+1). Patients AFTER it keep their numbers.
+// The selected patient is NOT removed from the queue.
+const moveQueueToFront = async (appointmentId) => {
+  const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
+  if (!appointment || appointment.queuePosition == null) return;
+
+  const oldPosition = appointment.queuePosition;
+  if (oldPosition === 1) return;
+
+  const { dayStart, dayEnd } = getDayBounds(appointment.scheduledTime);
+  const peers = await prisma.appointment.findMany({
+    where: {
+      doctorId: appointment.doctorId,
+      scheduledTime: { gte: dayStart, lte: dayEnd },
+      queuePosition: { not: null },
+      id: { not: appointmentId },
+    },
+  });
+
+  const updates = [
+    prisma.appointment.update({ where: { id: appointmentId }, data: { queuePosition: 1 } }),
+  ];
+  peers.forEach((peer) => {
+    if (peer.queuePosition < oldPosition) {
+      updates.push(
+        prisma.appointment.update({
+          where: { id: peer.id },
+          data: { queuePosition: peer.queuePosition + 1 },
+        })
+      );
+    }
+  });
+
+  await prisma.$transaction(updates);
+};
+
 const getAppointmentConflict = async ({ doctorId, scheduledTime, duration, excludeAppointmentId = null }) => {
   const { dayStart, dayEnd } = getDayBounds(scheduledTime);
   const existingAppointments = await prisma.appointment.findMany({
@@ -545,4 +582,5 @@ module.exports = {
   expirePendingAppointments,
   setQueuePosition,
   assignQueuePosition,
+  moveQueueToFront,
 };

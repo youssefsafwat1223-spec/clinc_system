@@ -469,6 +469,13 @@ const complete = async (req, res, next) => {
       });
     }
 
+    // Patient entered the doctor room → move to front of the queue.
+    try {
+      await appointmentService.moveQueueToFront(req.params.id);
+    } catch (queueError) {
+      console.error('Queue move-to-front failed:', queueError.message);
+    }
+
     res.json({ appointment });
   } catch (error) {
     next(error);

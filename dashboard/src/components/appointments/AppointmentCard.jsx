@@ -46,9 +46,16 @@ export default function AppointmentCard({
 
   return (
     <DataCard className={compact ? 'p-4' : undefined}>
-      <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-center">
+      <div className="grid gap-4 xl:grid-cols-[auto_1fr_auto] xl:items-center">
+        {hasQueue ? (
+          <div className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-sky-500/30 bg-sky-500/15 px-5 py-4 text-sky-100">
+            <span className="text-[10px] font-bold tracking-wide text-sky-300/80">الدور</span>
+            <span className="text-4xl font-black leading-none text-white">{appointment.queuePosition}</span>
+          </div>
+        ) : null}
+
         <div className="min-w-0">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <StatusBadge tone={appointmentStatusTone[appointment.status]}>
               {appointmentStatusLabels[appointment.status] || appointment.status}
             </StatusBadge>
@@ -63,15 +70,9 @@ export default function AppointmentCard({
                 دخول حسب الحضور
               </span>
             ) : null}
-            {hasQueue ? (
-              <span className="inline-flex items-center gap-1 rounded-full border border-sky-500/30 bg-sky-500/15 px-3 py-1 text-xs font-black text-sky-200">
-                <Hash className="h-3.5 w-3.5" />
-                دور رقم {appointment.queuePosition}
-              </span>
-            ) : null}
           </div>
 
-          <h3 className="truncate text-lg font-black text-white">{patientName}</h3>
+          <h3 className="truncate text-2xl font-black text-white">{patientName}</h3>
 
           {hasQueue && onQueueChange ? (
             <div className="mt-3">
@@ -204,8 +205,12 @@ export default function AppointmentCard({
 
           {appointment.status === 'CONFIRMED' ? (
             <>
-              <PrimaryButton type="button" onClick={() => onComplete?.(appointment)}>
-                <CheckCircle className="h-4 w-4" />
+              <PrimaryButton
+                type="button"
+                onClick={() => onComplete?.(appointment)}
+                className="w-full px-6 py-3 text-base xl:w-auto"
+              >
+                <CheckCircle className="h-5 w-5" />
                 تم الكشف
               </PrimaryButton>
               <SecondaryButton

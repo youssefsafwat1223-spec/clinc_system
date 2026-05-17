@@ -5,6 +5,7 @@ import { toast } from 'react-toastify';
 import api from '../../api/client';
 import { DataCard, Field, PageLoader, PrimaryButton, SecondaryButton, StatCard, inputClass } from '../ui';
 import EmptyState from '../EmptyState';
+import { confirmDialog } from '../dialogs';
 import { money, todayInputValue } from '../../utils/appointmentUi';
 
 const pad = (value) => String(value).padStart(2, '0');
@@ -45,6 +46,11 @@ export default function RevenueReport({ patientId = '', compact = false }) {
   const [editing, setEditing] = useState(null);
   const [editForm, setEditForm] = useState({ paidAmount: 0, discountAmount: 0, method: 'cash', notes: '' });
   const [savingEdit, setSavingEdit] = useState(false);
+  const [services, setServices] = useState([]);
+  const [doctors, setDoctors] = useState([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [addForm, setAddForm] = useState({ serviceId: '', description: '', doctorId: '', amount: '', paidAmount: '', method: 'cash', notes: '' });
+  const [savingAdd, setSavingAdd] = useState(false);
 
   const params = useMemo(
     () => ({
@@ -75,6 +81,65 @@ export default function RevenueReport({ patientId = '', compact = false }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId, dateRange, filters.status, filters.method, filters.caseStatus, includeExpenses]);
 
+  useEffect(() => {
+    if (!patientId) return;
+    Promise.all([api.get('/services'), api.get('/doctors')])
+      .then(([servicesRes, doctorsRes]) => {
+        setServices((servicesRes.data.services || []).filter((s) => s.active !== false));
+        setDoctors((doctorsRes.data.doctors || []).filter((d) => d.active !== false));
+      })
+      .catch(() => {});
+  }, [patientId]);
+
+  const saveExtraCharge = async () => {
+    if (!addForm.serviceId && !addForm.description.trim()) {
+      toast.warn('اختر خدمة أو اكتب وصفاً');
+      return;
+    }
+    if (!(Number(addForm.amount) > 0)) {
+      toast.warn('اكتب مبلغاً صحيحاً');
+      return;
+    }
+    setSavingAdd(true);
+    try {
+      await api.post('/payments/extra-charges', {
+        patientId,
+        serviceId: addForm.serviceId || undefined,
+        description: addForm.description || undefined,
+        doctorId: addForm.doctorId || undefined,
+        amount: Number(addForm.amount),
+        paidAmount: Number(addForm.paidAmount) || 0,
+        method: addForm.method,
+        notes: addForm.notes,
+      });
+      toast.success('تمت إضافة الخدمة');
+      setAddOpen(false);
+      setAddForm({ serviceId: '', description: '', doctorId: '', amount: '', paidAmount: '', method: 'cash', notes: '' });
+      loadReport();
+    } catch (error) {
+      toast.error(error.message || 'فشل إضافة الخدمة');
+    } finally {
+      setSavingAdd(false);
+    }
+  };
+
+  const deleteExtra = async (id) => {
+    const ok = await confirmDialog({
+      title: 'حذف البند',
+      message: 'سيتم حذف هذا البند الإضافي نهائياً.',
+      confirmLabel: 'حذف',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/payments/extra-charges/${id}`);
+      toast.success('تم الحذف');
+      loadReport();
+    } catch (error) {
+      toast.error(error.message || 'فشل الحذف');
+    }
+  };
+
   const updateFilter = (field, value) => setFilters((current) => ({ ...current, [field]: value }));
 
   const applyDateChip = (value) => {
@@ -101,6 +166,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
       discountAmount: payment.discountAmount || 0,
       method: payment.method || 'cash',
       notes: payment.notes || '',
+      caseStatus: payment.caseStatus || '',
     });
   };
 
@@ -111,12 +177,37 @@ export default function RevenueReport({ patientId = '', compact = false }) {
     if (!editing) return;
     setSavingEdit(true);
     try {
-      await api.put(`/payments/${editing.id}`, {
-        paidAmount: Number(editForm.paidAmount) || 0,
-        discountAmount: Number(editForm.discountAmount) || 0,
-        method: editForm.method,
-        notes: editForm.notes,
-      });
+      if (editing.source === 'extra') {
+        await api.patch(`/payments/extra-charges/${editing.id}`, {
+          paidAmount: Number(editForm.paidAmount) || 0,
+          method: editForm.method,
+          notes: editForm.notes,
+        });
+      } else {
+        await api.put(`/payments/${editing.id}`, {
+          paidAmount: Number(editForm.paidAmount) || 0,
+          discountAmount: Number(editForm.discountAmount) || 0,
+          method: editForm.method,
+          notes: editForm.notes,
+        });
+        // Case status change → update the linked appointment via its
+        // existing endpoints so side effects stay consistent.
+        if (
+          editing.appointmentId &&
+          editForm.caseStatus &&
+          editForm.caseStatus !== editing.caseStatus
+        ) {
+          if (editForm.caseStatus === 'WASEL') {
+            await api.post(`/appointments/${editing.appointmentId}/complete`);
+          } else if (editForm.caseStatus === 'MOSTAMERA') {
+            await api.post(`/appointments/${editing.appointmentId}/confirm`);
+          } else if (editForm.caseStatus === 'MUNTAHI') {
+            await api.post(`/appointments/${editing.appointmentId}/cancel`, {
+              reason: 'إنهاء الحالة من شاشة المدفوعات',
+            });
+          }
+        }
+      }
       toast.success('تم تحديث الدفع');
       setEditing(null);
       loadReport();
@@ -310,7 +401,14 @@ export default function RevenueReport({ patientId = '', compact = false }) {
           </DataCard>
 
           <DataCard>
-            <h3 className="mb-4 text-lg font-black text-white">تفاصيل المدفوعات المستلمة</h3>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-lg font-black text-white">تفاصيل المدفوعات المستلمة</h3>
+              {patientId ? (
+                <PrimaryButton type="button" onClick={() => setAddOpen(true)}>
+                  إضافة خدمة + مبلغ
+                </PrimaryButton>
+              ) : null}
+            </div>
             <div className="grid gap-3">
               {(report.payments || []).length === 0 ? (
                 <EmptyState title="لا توجد مدفوعات" description="لا توجد مدفوعات مطابقة للفلاتر." />
@@ -327,7 +425,14 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                   className="grid cursor-pointer gap-2 rounded-2xl border border-white/10 bg-white/5 p-3 transition hover:border-sky-500/30 hover:bg-white/10 md:grid-cols-[1fr_auto_auto_auto] md:items-center"
                 >
                   <div>
-                    <p className="font-bold text-white">{payment.patientName || 'مريض غير محدد'}</p>
+                    <p className="font-bold text-white">
+                      {payment.patientName || 'مريض غير محدد'}
+                      {payment.source === 'extra' ? (
+                        <span className="ms-2 rounded-full border border-violet-500/30 bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold text-violet-200">
+                          خدمة إضافية
+                        </span>
+                      ) : null}
+                    </p>
                     <p className="text-xs text-slate-400">
                       {payment.treatmentType || '-'} · د. {payment.doctorName || '-'} · {payment.patientPhone || ''}
                     </p>
@@ -341,16 +446,30 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                       <span className="ms-2 text-xs font-bold text-amber-300">متبقي {money(payment.remainingAmount)}</span>
                     ) : null}
                   </div>
-                  <SecondaryButton
-                    type="button"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      openEdit(payment);
-                    }}
-                  >
-                    <Edit3 className="h-4 w-4" />
-                    تعديل الدفع
-                  </SecondaryButton>
+                  <div className="flex gap-2">
+                    <SecondaryButton
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        openEdit(payment);
+                      }}
+                    >
+                      <Edit3 className="h-4 w-4" />
+                      تعديل الدفع
+                    </SecondaryButton>
+                    {payment.source === 'extra' ? (
+                      <SecondaryButton
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deleteExtra(payment.id);
+                        }}
+                        className="hover:bg-rose-500/15 hover:text-rose-200"
+                      >
+                        حذف
+                      </SecondaryButton>
+                    ) : null}
+                  </div>
                 </div>
               ))}
             </div>
@@ -411,7 +530,26 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                   onChange={(event) => setEditForm((current) => ({ ...current, notes: event.target.value }))}
                 />
               </Field>
+              {editing.source !== 'extra' && editing.appointmentId ? (
+                <Field label="حالة الحالة">
+                  <select
+                    className={inputClass}
+                    value={editForm.caseStatus || ''}
+                    onChange={(event) => setEditForm((current) => ({ ...current, caseStatus: event.target.value }))}
+                  >
+                    <option value="">— بدون تغيير —</option>
+                    <option value="WASEL">واصل (تم الكشف)</option>
+                    <option value="MOSTAMERA">مستمرة (تأكيد)</option>
+                    <option value="MUNTAHI">منتهي (إلغاء)</option>
+                  </select>
+                </Field>
+              ) : null}
             </div>
+            {editing.source !== 'extra' && editing.appointmentId ? (
+              <p className="mt-3 text-xs leading-6 text-slate-400">
+                تغيير حالة الحالة يحدّث حالة الموعد المرتبط فعلياً (مع آثاره الجانبية). البنود الإضافية لا ترتبط بموعد.
+              </p>
+            ) : null}
             <div className="mt-6 flex flex-wrap justify-end gap-3">
               <SecondaryButton type="button" onClick={markFullyPaid}>
                 تحصيل كامل ({money(editing.amount || 0)})
@@ -422,6 +560,94 @@ export default function RevenueReport({ patientId = '', compact = false }) {
               <PrimaryButton type="button" onClick={saveEdit} disabled={savingEdit}>
                 حفظ
               </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {addOpen ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setAddOpen(false)}
+          dir="rtl"
+        >
+          <div
+            className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b1020] p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-xl font-black text-white">إضافة خدمة + مبلغ</h3>
+            <p className="mt-1 text-sm text-slate-400">بند مالي إضافي لهذا المريض (مستقل عن المواعيد).</p>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <Field label="الخدمة">
+                <select
+                  className={inputClass}
+                  value={addForm.serviceId}
+                  onChange={(event) => setAddForm((current) => ({ ...current, serviceId: event.target.value }))}
+                >
+                  <option value="">— أو اكتب وصفاً —</option>
+                  {services.map((service) => (
+                    <option key={service.id} value={service.id}>{service.nameAr || service.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="وصف (إن لم تختر خدمة)">
+                <input
+                  className={inputClass}
+                  value={addForm.description}
+                  onChange={(event) => setAddForm((current) => ({ ...current, description: event.target.value }))}
+                />
+              </Field>
+              <Field label="الطبيب (اختياري)">
+                <select
+                  className={inputClass}
+                  value={addForm.doctorId}
+                  onChange={(event) => setAddForm((current) => ({ ...current, doctorId: event.target.value }))}
+                >
+                  <option value="">بدون</option>
+                  {doctors.map((doctor) => (
+                    <option key={doctor.id} value={doctor.id}>د. {doctor.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="المبلغ">
+                <input
+                  className={inputClass}
+                  type="number"
+                  value={addForm.amount}
+                  onChange={(event) => setAddForm((current) => ({ ...current, amount: event.target.value }))}
+                />
+              </Field>
+              <Field label="المدفوع الآن">
+                <input
+                  className={inputClass}
+                  type="number"
+                  value={addForm.paidAmount}
+                  onChange={(event) => setAddForm((current) => ({ ...current, paidAmount: event.target.value }))}
+                />
+              </Field>
+              <Field label="طريقة الدفع">
+                <select
+                  className={inputClass}
+                  value={addForm.method}
+                  onChange={(event) => setAddForm((current) => ({ ...current, method: event.target.value }))}
+                >
+                  <option value="cash">كاش</option>
+                  <option value="card">بطاقة</option>
+                  <option value="transfer">تحويل</option>
+                  <option value="other">أخرى</option>
+                </select>
+              </Field>
+              <Field label="ملاحظات">
+                <input
+                  className={inputClass}
+                  value={addForm.notes}
+                  onChange={(event) => setAddForm((current) => ({ ...current, notes: event.target.value }))}
+                />
+              </Field>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <SecondaryButton type="button" onClick={() => setAddOpen(false)}>إلغاء</SecondaryButton>
+              <PrimaryButton type="button" onClick={saveExtraCharge} disabled={savingAdd}>حفظ</PrimaryButton>
             </div>
           </div>
         </div>
