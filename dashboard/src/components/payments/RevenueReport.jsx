@@ -37,9 +37,19 @@ const defaultFilters = () => ({
   cashierExpenses: '',
 });
 
+const toAmount = (value) => Number(value) || 0;
+const clampAmount = (value, max = Infinity) => Math.max(0, Math.min(toAmount(value), max));
+const paymentBaseAmount = (payment = {}) =>
+  toAmount(payment.baseAmount ?? (payment.source === 'extra' ? payment.amount : toAmount(payment.amount) + toAmount(payment.discountAmount)));
+const netPaymentAmount = (payment = {}, discountAmount = payment.discountAmount) => {
+  const baseAmount = paymentBaseAmount(payment);
+  return payment.source === 'extra' ? toAmount(payment.amount) : Math.max(0, baseAmount - toAmount(discountAmount));
+};
+
 const defaultEditForm = (payment = {}) => ({
   paidAmount: payment.paidAmount || 0,
   discountAmount: payment.discountAmount || 0,
+  remainingAmount: payment.remainingAmount ?? Math.max(0, netPaymentAmount(payment) - toAmount(payment.paidAmount)),
   teethCount: payment.teethCount || 1,
   method: payment.method || 'cash',
   notes: payment.notes || '',
@@ -47,9 +57,10 @@ const defaultEditForm = (payment = {}) => ({
 });
 
 async function savePaymentChanges(payment, form) {
+  const paidAmount = clampAmount(form.paidAmount, netPaymentAmount(payment, form.discountAmount));
   if (payment.source === 'extra') {
     await api.patch(`/payments/extra-charges/${payment.id}`, {
-      paidAmount: Number(form.paidAmount) || 0,
+      paidAmount,
       teethCount: Math.max(1, Math.floor(Number(form.teethCount) || 1)),
       method: form.method,
       notes: form.notes,
@@ -58,7 +69,7 @@ async function savePaymentChanges(payment, form) {
   }
 
   await api.put(`/payments/${payment.id}`, {
-    paidAmount: Number(form.paidAmount) || 0,
+    paidAmount,
     discountAmount: Number(form.discountAmount) || 0,
     teethCount: Math.max(1, Math.floor(Number(form.teethCount) || 1)),
     method: form.method,
@@ -80,27 +91,93 @@ async function savePaymentChanges(payment, form) {
 
 function PaymentFields({ payment, form, setForm }) {
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
+  const baseAmount = paymentBaseAmount(payment);
+  const discountAmount = payment.source === 'extra' ? 0 : toAmount(form.discountAmount);
+  const netAmount = netPaymentAmount(payment, discountAmount);
+  const paidAmount = clampAmount(form.paidAmount, netAmount);
+  const remainingAmount = Math.max(0, netAmount - paidAmount);
+
+  const updatePaidAmount = (value) => {
+    const nextPaid = clampAmount(value, netAmount);
+    setForm((current) => ({
+      ...current,
+      paidAmount: nextPaid,
+      remainingAmount: Math.max(0, netAmount - nextPaid),
+    }));
+  };
+
+  const updateDiscountAmount = (value) => {
+    const nextDiscount = clampAmount(value, baseAmount);
+    const nextNet = netPaymentAmount(payment, nextDiscount);
+    setForm((current) => {
+      const nextPaid = clampAmount(current.paidAmount, nextNet);
+      return {
+        ...current,
+        discountAmount: nextDiscount,
+        paidAmount: nextPaid,
+        remainingAmount: Math.max(0, nextNet - nextPaid),
+      };
+    });
+  };
+
+  const updateRemainingAmount = (value) => {
+    const nextRemaining = clampAmount(value, netAmount);
+    setForm((current) => ({
+      ...current,
+      remainingAmount: nextRemaining,
+      paidAmount: Math.max(0, netAmount - nextRemaining),
+    }));
+  };
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+    <div className="space-y-3">
+      <div className="grid gap-2 rounded-2xl border border-sky-500/15 bg-sky-500/5 p-3 text-xs font-bold text-slate-200 md:grid-cols-3">
+        <div>
+          <span className="block text-slate-400">الإجمالي قبل الخصم</span>
+          <span className="text-white">{money(baseAmount)}</span>
+        </div>
+        <div>
+          <span className="block text-slate-400">الصافي بعد الخصم</span>
+          <span className="text-sky-200">{money(netAmount)}</span>
+        </div>
+        <div>
+          <span className="block text-slate-400">المتبقي على المريض</span>
+          <span className={remainingAmount > 0 ? 'text-amber-300' : 'text-emerald-300'}>{money(remainingAmount)}</span>
+        </div>
+      </div>
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
       <Field label="المبلغ المدفوع">
         <input
           className={inputClass}
           type="number"
           value={form.paidAmount}
-          onChange={(event) => update('paidAmount', event.target.value)}
+          min="0"
+          max={netAmount}
+          onChange={(event) => updatePaidAmount(event.target.value)}
         />
       </Field>
       {payment.source !== 'extra' ? (
-        <Field label="الخصم">
+        <Field label="الخصم من السعر">
           <input
             className={inputClass}
             type="number"
             value={form.discountAmount}
-            onChange={(event) => update('discountAmount', event.target.value)}
+            min="0"
+            max={baseAmount}
+            onChange={(event) => updateDiscountAmount(event.target.value)}
           />
         </Field>
       ) : null}
+      <Field label="المتبقي على المريض">
+        <input
+          className={inputClass}
+          type="number"
+          value={form.remainingAmount}
+          min="0"
+          max={netAmount}
+          onChange={(event) => updateRemainingAmount(event.target.value)}
+        />
+      </Field>
       <Field label="عدد الأسنان">
         <input
           className={inputClass}
@@ -136,6 +213,7 @@ function PaymentFields({ payment, form, setForm }) {
       <Field label="ملاحظات">
         <input className={inputClass} value={form.notes} onChange={(event) => update('notes', event.target.value)} />
       </Field>
+      </div>
     </div>
   );
 }
@@ -148,7 +226,8 @@ function InlinePaymentEditor({ payment, onSaved, onDelete }) {
     setForm(defaultEditForm(payment));
   }, [payment]);
 
-  const markFullyPaid = () => setForm((current) => ({ ...current, paidAmount: payment.amount || 0 }));
+  const markFullyPaid = () =>
+    setForm((current) => ({ ...current, paidAmount: netPaymentAmount(payment, current.discountAmount), remainingAmount: 0 }));
 
   const save = async () => {
     setSaving(true);
@@ -369,7 +448,8 @@ export default function RevenueReport({ patientId = '', compact = false }) {
     }
   };
 
-  const markFullyPaid = () => setEditForm((current) => ({ ...current, paidAmount: editing?.amount || current.paidAmount }));
+  const markFullyPaid = () =>
+    setEditForm((current) => ({ ...current, paidAmount: netPaymentAmount(editing, current.discountAmount), remainingAmount: 0 }));
 
   const saveEdit = async () => {
     if (!editing) return;
@@ -611,6 +691,11 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                         {payment.treatmentType || '-'} · د. {payment.doctorName || '-'} · {payment.patientPhone || ''}
                       </p>
                       <p className="mt-1 text-xs font-bold text-sky-200">عدد الأسنان: {payment.teethCount || 1}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">
+                        الإجمالي قبل الخصم: {money(paymentBaseAmount(payment))}
+                        {payment.source !== 'extra' ? ` · الخصم من السعر: ${money(payment.discountAmount || 0)}` : ''}
+                        {' · '}الصافي: {money(payment.amount || 0)}
+                      </p>
                     </div>
                     <div className="text-sm text-slate-300">
                       {new Date(payment.paymentDate).toLocaleString('ar-EG')}
