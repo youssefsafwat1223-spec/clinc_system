@@ -80,7 +80,6 @@ export default function PatientProfilePage() {
         accountingNotes: nextPatient.accountingNotes || '',
         creditBalance: nextPatient.creditBalance ?? nextPatient.accountBalance ?? 0,
       });
-      return true;
     } catch (error) {
       toast.error(error.message || 'فشل تحميل ملف المريض');
     } finally {
@@ -111,6 +110,7 @@ export default function PatientProfilePage() {
       const res = await api.put(`/patients/${id}`, draft);
       setPatient((current) => ({ ...current, ...res.data.patient }));
       toast.success('تم حفظ بيانات المريض');
+      return true;
     } catch (error) {
       toast.error(error.message || 'فشل حفظ بيانات المريض');
       return false;
@@ -403,7 +403,7 @@ export default function PatientProfilePage() {
           <div className="flex flex-wrap gap-2">
           <PrimaryButton type="button" onClick={saveAllNotes} disabled={saving}>
             <Save className="h-4 w-4" />
-            حفظ الملاحظات
+            حفظ الكل
           </PrimaryButton>
           <SecondaryButton type="button" onClick={() => setTeethSaveSignal((current) => current + 1)}>
             حفظ خريطة الأسنان
