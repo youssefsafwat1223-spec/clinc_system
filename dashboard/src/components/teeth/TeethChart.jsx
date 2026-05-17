@@ -152,15 +152,35 @@ export default function TeethChart({ patientId, value = {}, onSaved, saveSignal 
                   type="button"
                   onClick={() => setSelectedTooth(number)}
                   style={{ left: `${left}%`, top: `${top}%` }}
-                  className={`absolute flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-[42%] border text-sm font-black shadow-sm transition md:h-14 md:w-14 ${
+                  className={`absolute h-14 w-12 -translate-x-1/2 -translate-y-1/2 text-sm font-black transition md:h-16 md:w-14 ${
                     selectedTooth === number
-                      ? 'border-sky-500 bg-sky-500 text-white'
+                      ? 'text-white'
                       : hasData
-                        ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                        : 'border-slate-400 bg-white text-slate-900 hover:border-sky-500 hover:bg-sky-50'
+                        ? 'text-emerald-700'
+                        : 'text-slate-900 hover:text-sky-600'
                   }`}
                 >
-                  {number}
+                  <svg viewBox="0 0 64 76" className="absolute inset-0 h-full w-full drop-shadow-sm" aria-hidden="true">
+                    <path
+                      d="M32 4C19.5 4 10 13.5 10 27.5c0 9.5 4.7 17.6 8 25.8 2.2 5.5 3.2 15.8 9.2 16.7 3.1.5 3.8-6.1 4.8-11.2 1 5.1 1.7 11.7 4.8 11.2 6-.9 7-11.2 9.2-16.7 3.3-8.2 8-16.3 8-25.8C54 13.5 44.5 4 32 4Z"
+                      className={`transition ${
+                        selectedTooth === number
+                          ? 'fill-sky-500 stroke-sky-700'
+                          : hasData
+                            ? 'fill-emerald-50 stroke-emerald-500'
+                            : 'fill-white stroke-slate-500'
+                      }`}
+                      strokeWidth="2.5"
+                    />
+                    <path
+                      d="M19 24c5 3 10 3 13 0 3 3 8 3 13 0M23 38c4 2 14 2 18 0"
+                      className={selectedTooth === number ? 'stroke-white/60' : 'stroke-slate-300'}
+                      fill="none"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <span className="relative z-10">{number}</span>
                 </button>
               );
             })}

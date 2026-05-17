@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ChevronDown, FileText, Plus, Printer, Search, Send, Trash2, UserRound } from 'lucide-react';
 import { toast } from 'react-toastify';
@@ -34,6 +34,39 @@ const todayLabel = () =>
     new Date()
   );
 
+const toothNumbers = Array.from({ length: 32 }, (_, index) => String(index + 1));
+
+const toothPositions = toothNumbers.map((number, index) => {
+  const angle = -155 + index * (310 / 31);
+  const radians = (angle * Math.PI) / 180;
+  return {
+    number,
+    left: 50 + 35 * Math.cos(radians),
+    top: 50 + 43 * Math.sin(radians),
+  };
+});
+
+const ToothButton = ({ number, active, marked, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    style={{ left: `${toothPositions.find((item) => item.number === number)?.left || 50}%`, top: `${toothPositions.find((item) => item.number === number)?.top || 50}%` }}
+    className={`absolute h-12 w-10 -translate-x-1/2 -translate-y-1/2 text-xs font-black transition md:h-14 md:w-12 ${
+      active ? 'text-white' : marked ? 'text-emerald-700' : 'text-slate-900 hover:text-sky-600'
+    }`}
+  >
+    <svg viewBox="0 0 64 76" className="absolute inset-0 h-full w-full drop-shadow-sm" aria-hidden="true">
+      <path
+        d="M32 4C19.5 4 10 13.5 10 27.5c0 9.5 4.7 17.6 8 25.8 2.2 5.5 3.2 15.8 9.2 16.7 3.1.5 3.8-6.1 4.8-11.2 1 5.1 1.7 11.7 4.8 11.2 6-.9 7-11.2 9.2-16.7 3.3-8.2 8-16.3 8-25.8C54 13.5 44.5 4 32 4Z"
+        className={active ? 'fill-sky-500 stroke-sky-700' : marked ? 'fill-emerald-50 stroke-emerald-500' : 'fill-white stroke-slate-500'}
+        strokeWidth="2.5"
+      />
+      <path d="M19 24c5 3 10 3 13 0 3 3 8 3 13 0M23 38c4 2 14 2 18 0" className={active ? 'stroke-white/60' : 'stroke-slate-300'} fill="none" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+    <span className="relative z-10">{number}</span>
+  </button>
+);
+
 export default function PrescriptionsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -55,6 +88,7 @@ export default function PrescriptionsPage() {
   const [saving, setSaving] = useState(false);
   const [createdPrescription, setCreatedPrescription] = useState(null);
   const [showToothChart, setShowToothChart] = useState(false);
+  const autoResolvedRef = useRef(false);
 
   useEffect(() => {
     const loadBasics = async () => {
@@ -147,6 +181,12 @@ export default function PrescriptionsPage() {
     }
   };
 
+  useEffect(() => {
+    if (!requestedAppointmentId || autoResolvedRef.current) return;
+    autoResolvedRef.current = true;
+    resolveAppointment();
+  }, [requestedAppointmentId]);
+
   const updateMedication = (index, key, value) => {
     setMedications((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item)));
   };
@@ -159,6 +199,18 @@ export default function PrescriptionsPage() {
   };
   const addToothNote = () => setToothNotes((current) => [...current, emptyToothNote()]);
   const removeToothNote = (index) => setToothNotes((current) => current.filter((_, itemIndex) => itemIndex !== index));
+  const selectToothNumber = (number) => {
+    setShowToothChart(true);
+    setToothNotes((current) => {
+      const existingIndex = current.findIndex((item) => String(item.toothNumber) === String(number));
+      if (existingIndex >= 0) return current;
+      const emptyIndex = current.findIndex((item) => !String(item.toothNumber || '').trim());
+      if (emptyIndex >= 0) {
+        return current.map((item, itemIndex) => (itemIndex === emptyIndex ? { ...item, toothNumber: String(number) } : item));
+      }
+      return [...current, { toothNumber: String(number), note: '' }];
+    });
+  };
 
   const cleanToothNotes = toothNotes
     .map((item) => ({ toothNumber: String(item.toothNumber || '').trim(), note: String(item.note || '').trim() }))
@@ -438,15 +490,28 @@ export default function PrescriptionsPage() {
             </button>
 
             {showToothChart ? (
-              <div className="mt-5 grid gap-5 lg:grid-cols-[300px_1fr] lg:items-start">
-                <div className="overflow-hidden rounded-2xl border border-white/10 bg-white">
-                  <img
+              <div className="mt-5 grid gap-5 lg:grid-cols-[340px_1fr] lg:items-start">
+                <div className="relative aspect-[0.78] min-h-[390px] overflow-hidden rounded-2xl border border-white/10 bg-white">
+                  {false ? <img
                     src="/images/teeth-chart.jpg"
                     alt="خريطة ترقيم الأسنان من 1 إلى 32"
                     loading="lazy"
                     decoding="async"
                     className="w-full object-contain"
-                  />
+                  /> : null}
+                  <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" aria-hidden="true">
+                    <ellipse cx="50" cy="50" rx="24" ry="36" fill="none" stroke="#111827" strokeWidth="1.5" />
+                    <ellipse cx="50" cy="50" rx="36" ry="45" fill="none" stroke="#d1d5db" strokeWidth="1" />
+                  </svg>
+                  {toothNumbers.map((number) => (
+                    <ToothButton
+                      key={number}
+                      number={number}
+                      marked={toothNotes.some((item) => String(item.toothNumber) === number)}
+                      active={toothNotes.some((item) => String(item.toothNumber) === number && !String(item.note || '').trim())}
+                      onClick={() => selectToothNumber(number)}
+                    />
+                  ))}
                 </div>
                 <div className="space-y-3">
                   <div className="flex justify-end">

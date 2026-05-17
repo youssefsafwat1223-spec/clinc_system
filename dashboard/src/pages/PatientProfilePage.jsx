@@ -361,35 +361,6 @@ export default function PatientProfilePage() {
               <p className="mt-1 text-sm text-slate-400">ملاحظات طبية وإدارية وحسابية / شكوى مرتبطة بملف المريض.</p>
             </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <Field label="الاسم">
-              <input className={inputClass} value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} />
-            </Field>
-            <Field label="رقم الهاتف">
-              <input className={inputClass} value={draft.phone} onChange={(event) => updateDraft('phone', event.target.value)} dir="ltr" />
-            </Field>
-            <Field label="اسم العرض">
-              <input className={inputClass} value={draft.displayName} onChange={(event) => updateDraft('displayName', event.target.value)} />
-            </Field>
-            <Field label="العمر">
-              <input className={inputClass} type="number" min="0" value={draft.age} onChange={(event) => updateDraft('age', event.target.value)} />
-            </Field>
-            <Field label="النوع">
-              <select className={inputClass} value={draft.gender} onChange={(event) => updateDraft('gender', event.target.value)}>
-                <option value="">غير محدد</option>
-                <option value="male">ذكر</option>
-                <option value="female">أنثى</option>
-              </select>
-            </Field>
-            <Field label="المنصة">
-              <select className={inputClass} value={draft.platform} onChange={(event) => updateDraft('platform', event.target.value)}>
-                {PLATFORMS.map((value) => (
-                  <option key={value} value={value}>{value}</option>
-                ))}
-              </select>
-            </Field>
-            <Field label="رصيد / دين">
-              <input className={inputClass} type="number" value={draft.creditBalance} onChange={(event) => updateDraft('creditBalance', event.target.value)} />
-            </Field>
             <Field label="ملاحظات طبية">
               <textarea className={inputClass} rows={5} value={draft.notes} onChange={(event) => updateDraft('notes', event.target.value)} />
             </Field>
