@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, FileText, MessageSquare, Phone, Save, Search, Users, X } from 'lucide-react';
+import { Calendar, Download, FileText, MessageSquare, Phone, Save, Search, Users, X } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'react-toastify';
@@ -7,6 +7,7 @@ import api from '../api/client';
 import AppLayout from '../components/Layout';
 import { useNavigate } from 'react-router-dom';
 import { DataCard, Field, LoadingSpinner, PrimaryButton, SecondaryButton, inputClass } from '../components/ui';
+import { downloadExcelWorkbook, formatExcelDate } from '../utils/excelExport';
 
 const formatMedicationLine = (medication, index) => {
   if (typeof medication === 'string') {
@@ -60,6 +61,7 @@ export default function PatientsPage() {
   const [accountBalanceDraft, setAccountBalanceDraft] = useState('0');
   const [importRows, setImportRows] = useState([]);
   const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const parseImportFile = async (file) => {
     if (!file) return;
@@ -124,6 +126,79 @@ export default function PatientsPage() {
       toast.error('فشل في تحميل المرضى');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const exportPatientsExcel = async () => {
+    try {
+      setExporting(true);
+      const res = await api.get('/patients', {
+        params: {
+          page: 1,
+          limit: 1000,
+          search: searchTerm || undefined,
+          period: periodFilter === 'ALL' ? undefined : periodFilter,
+          profileType: profileFilter === 'ALL' ? undefined : profileFilter,
+          sortBy,
+        },
+      });
+
+      const exportPatients = res.data.patients || [];
+      const summaryRows = [
+        ['البند', 'القيمة'],
+        ['إجمالي المرضى', res.data.pagination?.total || exportPatients.length],
+        ['عدد المرضى داخل الملف', exportPatients.length],
+        ['البحث', searchTerm || 'بدون'],
+        ['الفترة', periodFilter],
+        ['التصنيف', profileFilter],
+        ['الترتيب', sortBy],
+        ['تاريخ التصدير', formatExcelDate(new Date())],
+      ];
+
+      const patientRows = [
+        [
+          'الاسم',
+          'اسم العرض',
+          'الهاتف',
+          'البريد',
+          'العمر',
+          'النوع',
+          'المنصة',
+          'الرصيد / الدين',
+          'عدد المواعيد',
+          'عدد الرسائل',
+          'التصنيف',
+          'المجموعات',
+          'ملاحظات',
+          'تاريخ الإنشاء',
+        ],
+        ...exportPatients.map((patient) => [
+          patient.name || '',
+          patient.displayName || '',
+          patient.phone || '',
+          patient.email || '',
+          patient.age || '',
+          patient.gender || '',
+          patient.platform || '',
+          Number(patient.creditBalance ?? patient.accountBalance ?? 0),
+          patient._count?.appointments || 0,
+          patient._count?.messages || 0,
+          (patient._count?.appointments || 0) > 0 ? 'BOOKED' : 'CONTACT_ONLY',
+          (patient.groups || []).map((item) => item.group?.name).filter(Boolean).join('، '),
+          patient.notes || '',
+          formatExcelDate(patient.createdAt),
+        ]),
+      ];
+
+      downloadExcelWorkbook(`patients-${new Date().toISOString().slice(0, 10)}.xls`, [
+        { name: 'ملخص الفلاتر', rows: summaryRows },
+        { name: 'كل المرضى', rows: patientRows },
+      ]);
+      toast.success('تم تصدير ملف المرضى');
+    } catch (error) {
+      toast.error(error.message || 'فشل تصدير ملف المرضى');
+    } finally {
+      setExporting(false);
     }
   };
 
@@ -251,18 +326,24 @@ export default function PatientsPage() {
             <p className="text-sm text-gray-500 mt-1">إدارة ملفات المرضى والملاحظات</p>
           </div>
 
-          <div className="relative w-full sm:w-64">
-            <Search className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="ابحث بالاسم أو الرقم..."
-              value={searchTerm}
-              onChange={(event) => {
-                setPage(1);
-                setSearchTerm(event.target.value);
-              }}
-              className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-            />
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+            <SecondaryButton type="button" onClick={exportPatientsExcel} disabled={exporting}>
+              <Download className="h-4 w-4" />
+              {exporting ? 'جاري التصدير...' : 'تصدير Excel'}
+            </SecondaryButton>
+            <div className="relative w-full sm:w-64">
+              <Search className="absolute right-3 top-3 h-4 w-4 text-gray-400" />
+              <input
+                type="text"
+                placeholder="ابحث بالاسم أو الرقم..."
+                value={searchTerm}
+                onChange={(event) => {
+                  setPage(1);
+                  setSearchTerm(event.target.value);
+                }}
+                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+            </div>
           </div>
         </div>
 

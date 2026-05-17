@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Edit3, Printer, RefreshCw, Search, Send } from 'lucide-react';
+import { Download, Edit3, Printer, RefreshCw, Search, Send } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../api/client';
 import { DataCard, Field, PageLoader, PrimaryButton, SecondaryButton, StatCard, inputClass } from '../ui';
 import EmptyState from '../EmptyState';
 import { confirmDialog } from '../dialogs';
 import { money, todayInputValue } from '../../utils/appointmentUi';
+import { downloadExcelWorkbook, formatExcelDate } from '../../utils/excelExport';
 import PaymentReceipt from './PaymentReceipt';
 
 const pad = (value) => String(value).padStart(2, '0');
@@ -18,6 +19,7 @@ const dateChips = [
   { value: 'week', label: 'آخر أسبوع' },
   { value: 'month', label: 'آخر شهر' },
   { value: 'day', label: 'يوم محدد' },
+  { value: 'all', label: 'كل المدفوعات' },
 ];
 
 const caseStatusOptions = [
@@ -351,6 +353,8 @@ export default function RevenueReport({ patientId = '', compact = false }) {
       const start = new Date(today);
       start.setDate(start.getDate() - 29);
       setFilters((current) => ({ ...current, from: localDateValue(start), to: end }));
+    } else if (value === 'all') {
+      setFilters((current) => ({ ...current, from: '', to: '' }));
     }
   };
 
@@ -451,6 +455,93 @@ export default function RevenueReport({ patientId = '', compact = false }) {
   const markFullyPaid = () =>
     setEditForm((current) => ({ ...current, paidAmount: netPaymentAmount(editing, current.discountAmount), remainingAmount: 0 }));
 
+  const showAllPayments = () => {
+    applyDateChip('all');
+  };
+
+  const exportExcel = () => {
+    if (!report) return toast.warn('حمّل التقرير أولاً');
+    const summaryRows = [
+      ['البند', 'القيمة'],
+      ['إجمالي الإيرادات', summary.totalRevenue || 0],
+      ['إجمالي المدفوع', summary.totalReceived || 0],
+      ['إجمالي الديون / المتبقي', summary.totalDebt || 0],
+      ['إجمالي الربح', summary.totalProfit || 0],
+      ['مصاريف الكاشير', summary.cashierExpenses || 0],
+      ['عدد الحالات', summary.caseCount || 0],
+      ['حالات بها مدفوعات', summary.casesWithPayments || 0],
+      ['حالات بدون مدفوعات', summary.casesWithoutPayments || 0],
+      ['مرضى لديهم مدفوعات', summary.patientsWithPayments || 0],
+      ['مرضى عليهم ديون', summary.patientsWithDebts || 0],
+      ['من تاريخ', filters.from || 'كل الفترات'],
+      ['إلى تاريخ', filters.to || 'كل الفترات'],
+      ['حالة الدفع', filters.status],
+      ['طريقة الدفع', filters.method],
+      ['حالة الحالة', filters.caseStatus],
+      ['بحث', filters.search],
+    ];
+
+    const serviceRows = [
+      ['الخدمة / الحالة', 'الصافي', 'الديون / المتبقي', 'المدفوع', 'عدد الحالات', 'عدد الأسنان', 'النوع'],
+      ...(report.rows || []).map((row) => [
+        row.serviceName || '',
+        row.netAmount || 0,
+        row.debtAmount || 0,
+        row.receivedAmount || 0,
+        row.caseCount || 0,
+        row.teethCount || 0,
+        row.caseType || '',
+      ]),
+    ];
+
+    const paymentRows = [
+      [
+        'المصدر',
+        'اسم المريض',
+        'رقم الهاتف',
+        'الخدمة / الحالة',
+        'الطبيب',
+        'تاريخ الدفع',
+        'الإجمالي قبل الخصم',
+        'الخصم من السعر',
+        'الصافي بعد الخصم',
+        'المدفوع',
+        'المتبقي على المريض',
+        'عدد الأسنان',
+        'طريقة الدفع',
+        'حالة الدفع',
+        'حالة الموعد / الحالة',
+        'رقم الحجز',
+        'ملاحظات',
+      ],
+      ...(report.payments || []).map((payment) => [
+        payment.source === 'extra' ? 'خدمة إضافية' : 'دفعة موعد',
+        payment.patientName || '',
+        payment.patientPhone || '',
+        payment.treatmentType || '',
+        payment.doctorName || '',
+        formatExcelDate(payment.paymentDate),
+        paymentBaseAmount(payment),
+        payment.discountAmount || 0,
+        payment.amount || 0,
+        payment.paidAmount || 0,
+        payment.remainingAmount || 0,
+        payment.teethCount || 1,
+        payment.method || '',
+        payment.status || '',
+        payment.caseStatus || payment.appointmentStatus || '',
+        payment.bookingRef || payment.appointmentId || '',
+        payment.notes || '',
+      ]),
+    ];
+
+    downloadExcelWorkbook(`payments-report-${new Date().toISOString().slice(0, 10)}.xls`, [
+      { name: 'ملخص التقرير', rows: summaryRows },
+      { name: 'ملخص الخدمات', rows: serviceRows },
+      { name: 'كل المدفوعات', rows: paymentRows },
+    ]);
+  };
+
   const saveEdit = async () => {
     if (!editing) return;
     setSavingEdit(true);
@@ -536,11 +627,18 @@ export default function RevenueReport({ patientId = '', compact = false }) {
               ))}
             </select>
           </Field>
-          <div className="flex items-end">
+          <div className="flex flex-wrap items-end gap-2 xl:col-span-2">
             <PrimaryButton type="button" onClick={loadReport} disabled={loading} className="w-full">
               <RefreshCw className="h-4 w-4" />
               تقرير الإيرادات
             </PrimaryButton>
+            <SecondaryButton type="button" onClick={showAllPayments} className="w-full">
+              كل المدفوعات
+            </SecondaryButton>
+            <SecondaryButton type="button" onClick={exportExcel} disabled={!report} className="w-full">
+              <Download className="h-4 w-4" />
+              تصدير Excel
+            </SecondaryButton>
           </div>
         </div>
 
