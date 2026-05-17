@@ -1,5 +1,6 @@
 const prisma = require('../lib/prisma');
 const { getDiscountForAppointment, toNumber } = require('../services/discountService');
+const whatsappService = require('../services/whatsappService');
 
 const resolveStatus = (paidAmount, finalAmount, explicitStatus) => {
   if (['UNPAID', 'PARTIAL', 'PAID'].includes(explicitStatus)) return explicitStatus;
@@ -439,6 +440,111 @@ const extraStatus = (paidAmount, amount) => {
   return 'PAID';
 };
 
+const money = (value) => `${Number(value || 0).toLocaleString('ar-IQ')} د.ع`;
+
+const formatReceiptDate = (value) => {
+  if (!value) return '-';
+  return new Date(value).toLocaleString('ar-IQ', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  });
+};
+
+const buildReceiptMessage = ({ id, patient, serviceName, doctorName, amount, paidAmount, remainingAmount, method, date }) => {
+  const clinicName = 'عيادة د. إبراهيم التخصصي لطب وتجميل الأسنان';
+  return [
+    `إيصال دفع من ${clinicName}`,
+    '',
+    `رقم الإيصال: ${id}`,
+    `التاريخ: ${formatReceiptDate(date)}`,
+    `اسم المريض: ${patient?.displayName || patient?.name || '-'}`,
+    `رقم الهاتف: ${patient?.phone || '-'}`,
+    `الخدمة: ${serviceName || '-'}`,
+    doctorName ? `الطبيب: د. ${doctorName}` : null,
+    `طريقة الدفع: ${method || '-'}`,
+    '',
+    `الإجمالي: ${money(amount)}`,
+    `المدفوع: ${money(paidAmount)}`,
+    `المتبقي: ${money(remainingAmount)}`,
+    '',
+    'شكراً لتعاملكم معنا.',
+  ]
+    .filter(Boolean)
+    .join('\n');
+};
+
+const sendReceipt = async (req, res, next) => {
+  try {
+    const { id, source = 'payment' } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'Payment ID is required' });
+
+    let receipt;
+
+    if (source === 'extra') {
+      const extra = await prisma.extraCharge.findUnique({
+        where: { id },
+        include: { patient: true, service: true, doctor: true },
+      });
+      if (!extra) return res.status(404).json({ error: 'Payment not found' });
+      const amount = toNumber(extra.amount);
+      const paidAmount = toNumber(extra.paidAmount);
+      receipt = {
+        id: extra.id,
+        patient: extra.patient,
+        serviceName: extra.service?.nameAr || extra.service?.name || extra.description || 'خدمة إضافية',
+        doctorName: extra.doctor?.name || '',
+        amount,
+        paidAmount,
+        remainingAmount: Math.max(0, amount - paidAmount),
+        method: extra.method,
+        date: extra.createdAt,
+      };
+    } else {
+      const payment = await prisma.payment.findUnique({
+        where: { id },
+        include: {
+          patient: true,
+          service: true,
+          appointment: { include: { patient: true, doctor: true, service: true } },
+        },
+      });
+      if (!payment) return res.status(404).json({ error: 'Payment not found' });
+      const amount = toNumber(payment.finalAmount);
+      const paidAmount = toNumber(payment.paidAmount);
+      receipt = {
+        id: payment.id,
+        patient: payment.patient || payment.appointment?.patient,
+        serviceName:
+          payment.service?.nameAr ||
+          payment.service?.name ||
+          payment.appointment?.service?.nameAr ||
+          payment.appointment?.service?.name ||
+          'خدمة علاجية',
+        doctorName: payment.appointment?.doctor?.name || '',
+        amount,
+        paidAmount,
+        remainingAmount: Math.max(0, amount - paidAmount),
+        method: payment.method,
+        date: payment.paidAt || payment.createdAt,
+      };
+    }
+
+    if (!receipt.patient?.phone) {
+      return res.status(400).json({ error: 'لا يوجد رقم واتساب لهذا المريض' });
+    }
+
+    const message = buildReceiptMessage(receipt);
+    await whatsappService.sendTextMessage(receipt.patient.phone, message);
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const listExtraCharges = async (req, res, next) => {
   try {
     const { patientId } = req.query;
@@ -609,4 +715,5 @@ module.exports = {
   createExtraCharge,
   updateExtraCharge,
   deleteExtraCharge,
+  sendReceipt,
 };

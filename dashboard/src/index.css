@@ -453,6 +453,15 @@
   body {
     background: #ffffff !important;
     color: #111111 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+
+  #root {
+    min-height: 0 !important;
+    overflow: visible !important;
   }
 
   body * {
@@ -485,13 +494,15 @@
   body.print-prescription #prescription-print,
   body.print-patient-full-file #patient-full-file,
   body.print-payment-receipt #payment-receipt-print {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: 0;
+    position: fixed !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: 0 !important;
+    transform: none !important;
     width: 100%;
     min-height: auto;
-    margin: 0 auto;
+    margin: 0 auto !important;
+    padding-top: 0 !important;
     background: #ffffff !important;
     color: #111111 !important;
     box-shadow: none !important;

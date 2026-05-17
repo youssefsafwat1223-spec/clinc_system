@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Edit3, Printer, RefreshCw, Search } from 'lucide-react';
+import { Edit3, Printer, RefreshCw, Search, Send } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../api/client';
 import { DataCard, Field, PageLoader, PrimaryButton, SecondaryButton, StatCard, inputClass } from '../ui';
@@ -209,6 +209,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
   const [savingAdd, setSavingAdd] = useState(false);
   const [clinic, setClinic] = useState(null);
   const [receiptPayment, setReceiptPayment] = useState(null);
+  const [sendingReceiptId, setSendingReceiptId] = useState('');
 
   const params = useMemo(
     () => ({
@@ -350,6 +351,22 @@ export default function RevenueReport({ patientId = '', compact = false }) {
 
     window.addEventListener('afterprint', cleanup);
     window.setTimeout(() => window.print(), 50);
+  };
+
+  const sendReceiptToWhatsApp = async (payment) => {
+    if (!payment?.id) return;
+    setSendingReceiptId(payment.id);
+    try {
+      await api.post('/payments/send-receipt', {
+        id: payment.id,
+        source: payment.source || 'payment',
+      });
+      toast.success('تم إرسال الإيصال على واتساب');
+    } catch (error) {
+      toast.error(error.message || 'فشل إرسال الإيصال على واتساب');
+    } finally {
+      setSendingReceiptId('');
+    }
   };
 
   const markFullyPaid = () => setEditForm((current) => ({ ...current, paidAmount: editing?.amount || current.paidAmount }));
@@ -614,6 +631,17 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                       >
                         <Printer className="h-4 w-4" />
                         طباعة إيصال
+                      </SecondaryButton>
+                      <SecondaryButton
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          sendReceiptToWhatsApp(payment);
+                        }}
+                        disabled={sendingReceiptId === payment.id}
+                      >
+                        <Send className="h-4 w-4" />
+                        إرسال واتساب
                       </SecondaryButton>
                     </div>
                     {!patientId ? (
