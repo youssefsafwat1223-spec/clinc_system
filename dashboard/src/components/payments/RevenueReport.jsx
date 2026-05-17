@@ -340,6 +340,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
 
   const printReceipt = (payment) => {
     setReceiptPayment(payment);
+    document.body.classList.remove('print-prescription', 'print-patient-full-file');
     document.body.classList.add('print-payment-receipt');
 
     const cleanup = () => {
@@ -349,7 +350,6 @@ export default function RevenueReport({ patientId = '', compact = false }) {
 
     window.addEventListener('afterprint', cleanup);
     window.setTimeout(() => window.print(), 50);
-    window.setTimeout(cleanup, 1500);
   };
 
   const markFullyPaid = () => setEditForm((current) => ({ ...current, paidAmount: editing?.amount || current.paidAmount }));

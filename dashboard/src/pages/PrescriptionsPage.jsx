@@ -416,7 +416,18 @@ export function PrescriptionsWorkspace({
     }
   };
 
-  const handlePrint = () => window.print();
+  const handlePrint = () => {
+    document.body.classList.remove('print-patient-full-file', 'print-payment-receipt');
+    document.body.classList.add('print-prescription');
+
+    const cleanup = () => {
+      document.body.classList.remove('print-prescription');
+      window.removeEventListener('afterprint', cleanup);
+    };
+
+    window.addEventListener('afterprint', cleanup);
+    window.setTimeout(() => window.print(), 50);
+  };
 
   const enteredMedications = medications.filter((medication) => medication.name.trim());
   const clinicName = clinic.nameAr || clinic.name || 'عيادتي';

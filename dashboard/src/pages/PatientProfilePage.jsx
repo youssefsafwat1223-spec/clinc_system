@@ -188,6 +188,7 @@ export default function PatientProfilePage() {
   };
 
   const printFullFile = () => {
+    document.body.classList.remove('print-prescription', 'print-payment-receipt');
     document.body.classList.add('print-patient-full-file');
 
     const cleanup = () => {
@@ -197,7 +198,6 @@ export default function PatientProfilePage() {
 
     window.addEventListener('afterprint', cleanup);
     window.setTimeout(() => window.print(), 50);
-    window.setTimeout(cleanup, 1500);
   };
 
   if (loading) {

@@ -473,8 +473,8 @@
     background: #ffffff !important;
   }
 
-  body:not(.print-patient-full-file):not(.print-payment-receipt) #prescription-print,
-  body:not(.print-patient-full-file):not(.print-payment-receipt) #prescription-print *,
+  body.print-prescription #prescription-print,
+  body.print-prescription #prescription-print *,
   body.print-patient-full-file #patient-full-file,
   body.print-patient-full-file #patient-full-file *,
   body.print-payment-receipt #payment-receipt-print,
@@ -482,7 +482,7 @@
     visibility: visible;
   }
 
-  body:not(.print-patient-full-file):not(.print-payment-receipt) #prescription-print,
+  body.print-prescription #prescription-print,
   body.print-patient-full-file #patient-full-file,
   body.print-payment-receipt #payment-receipt-print {
     position: absolute;
