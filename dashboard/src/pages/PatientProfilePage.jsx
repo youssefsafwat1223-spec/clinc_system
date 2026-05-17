@@ -5,13 +5,17 @@ import { toast } from 'react-toastify';
 import api from '../api/client';
 import AppLayout from '../components/Layout';
 import ManualBookingPanel from '../components/appointments/ManualBookingPanel';
+import AppointmentCard from '../components/appointments/AppointmentCard';
 import ConversationView from '../components/messages/ConversationView';
 import RevenueReport from '../components/payments/RevenueReport';
 import PrescriptionForm from '../components/prescriptions/PrescriptionForm';
 import TeethChart from '../components/teeth/TeethChart';
 import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
 import EmptyState from '../components/EmptyState';
+import { confirmDialog, promptDialog } from '../components/dialogs';
 import { formatDateTime, money } from '../utils/appointmentUi';
+
+const PLATFORMS = ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
 
 const tabs = [
   { id: 'notes', label: 'الملاحظات', icon: UserRound },
@@ -38,6 +42,11 @@ export default function PatientProfilePage() {
   const [activeTab, setActiveTab] = useState('notes');
   const [showPrescriptionForm, setShowPrescriptionForm] = useState(false);
   const [draft, setDraft] = useState({
+    name: '',
+    phone: '',
+    age: '',
+    gender: '',
+    platform: 'WHATSAPP',
     displayName: '',
     notes: '',
     accountNotes: '',
@@ -52,6 +61,11 @@ export default function PatientProfilePage() {
       const nextPatient = res.data.patient;
       setPatient(nextPatient);
       setDraft({
+        name: nextPatient.name || '',
+        phone: nextPatient.phone || '',
+        age: nextPatient.age ?? '',
+        gender: nextPatient.gender || '',
+        platform: nextPatient.platform || 'WHATSAPP',
         displayName: nextPatient.displayName || '',
         notes: nextPatient.notes || '',
         accountNotes: nextPatient.accountNotes || '',
@@ -92,6 +106,68 @@ export default function PatientProfilePage() {
       toast.error(error.message || 'فشل حفظ بيانات المريض');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleAppointmentAction = async (appointment, action) => {
+    try {
+      if (action === 'complete') {
+        const ok = await confirmDialog({
+          title: 'تأكيد إكمال الكشف',
+          message: 'هل تم الكشف على المريض؟',
+          confirmLabel: 'تم الكشف',
+          tone: 'primary',
+        });
+        if (!ok) return;
+        await api.post(`/appointments/${appointment.id}/complete`);
+        toast.success('تم تسجيل الموعد كمكتمل');
+      }
+      if (action === 'no-show') {
+        const ok = await confirmDialog({
+          title: 'تسجيل عدم الحضور',
+          message: 'تسجيل هذا الحجز كـ "لم يأت"؟',
+          confirmLabel: 'لم يأت',
+        });
+        if (!ok) return;
+        await api.post(`/appointments/${appointment.id}/no-show`);
+        toast.success('تم تسجيل الحجز كـ لم يأت');
+      }
+      if (action === 'cancel') {
+        const reason = await promptDialog({
+          title: 'إلغاء الحجز',
+          message: 'اكتب سبب الإلغاء — سيتم إبلاغ المريض.',
+          multiline: true,
+          required: true,
+          confirmLabel: 'إلغاء الحجز',
+          tone: 'danger',
+        });
+        if (reason === null) return;
+        await api.post(`/appointments/${appointment.id}/cancel`, { reason });
+        toast.success('تم إلغاء الحجز');
+      }
+      await loadPatient();
+    } catch (error) {
+      toast.error(error.message || 'تعذر تنفيذ العملية');
+    }
+  };
+
+  const handleQueueAssign = async (appointment) => {
+    try {
+      await api.post(`/appointments/${appointment.id}/assign-queue-position`);
+      toast.success('تمت إضافة المريض إلى الدور');
+      await loadPatient();
+    } catch (error) {
+      toast.error(error.message || 'فشل إضافة الدور');
+    }
+  };
+
+  const handleQueueChange = async (appointment, position, mode) => {
+    try {
+      await api.patch(`/appointments/${appointment.id}/queue-position`, { position, mode });
+      toast.success('تم تحديث الدور');
+      await loadPatient();
+    } catch (error) {
+      toast.error(error.message || 'فشل تحديث الدور');
     }
   };
 
@@ -158,9 +234,32 @@ export default function PatientProfilePage() {
 
       {activeTab === 'notes' ? (
         <DataCard className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <Field label="الاسم">
+              <input className={inputClass} value={draft.name} onChange={(event) => updateDraft('name', event.target.value)} />
+            </Field>
+            <Field label="رقم الهاتف">
+              <input className={inputClass} value={draft.phone} onChange={(event) => updateDraft('phone', event.target.value)} dir="ltr" />
+            </Field>
             <Field label="اسم العرض">
               <input className={inputClass} value={draft.displayName} onChange={(event) => updateDraft('displayName', event.target.value)} />
+            </Field>
+            <Field label="العمر">
+              <input className={inputClass} type="number" min="0" value={draft.age} onChange={(event) => updateDraft('age', event.target.value)} />
+            </Field>
+            <Field label="النوع">
+              <select className={inputClass} value={draft.gender} onChange={(event) => updateDraft('gender', event.target.value)}>
+                <option value="">غير محدد</option>
+                <option value="male">ذكر</option>
+                <option value="female">أنثى</option>
+              </select>
+            </Field>
+            <Field label="المنصة">
+              <select className={inputClass} value={draft.platform} onChange={(event) => updateDraft('platform', event.target.value)}>
+                {PLATFORMS.map((value) => (
+                  <option key={value} value={value}>{value}</option>
+                ))}
+              </select>
             </Field>
             <Field label="رصيد / دين">
               <input className={inputClass} type="number" value={draft.creditBalance} onChange={(event) => updateDraft('creditBalance', event.target.value)} />
@@ -187,21 +286,30 @@ export default function PatientProfilePage() {
       ) : null}
 
       {activeTab === 'appointments' ? (
-        <DataCard>
-          <div className="grid gap-3">
+        (patient.appointments || []).length === 0 ? (
+          <DataCard>
+            <EmptyState title="لا توجد مواعيد" description="لم يتم حجز أي موعد لهذا المريض بعد." />
+          </DataCard>
+        ) : (
+          <div className="grid gap-4">
             {(patient.appointments || []).map((appointment) => (
-              <div key={appointment.id} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="font-black text-white">{appointment.service?.nameAr || appointment.service?.name || 'خدمة غير محددة'}</p>
-                    <p className="text-sm text-slate-400">د. {appointment.doctor?.name || '-'} · {formatDateTime(appointment.scheduledTime)}</p>
-                  </div>
-                  <StatusBadge>{appointment.status}</StatusBadge>
-                </div>
-              </div>
+              <AppointmentCard
+                key={appointment.id}
+                appointment={{ ...appointment, patient }}
+                compact
+                onComplete={(item) => handleAppointmentAction(item, 'complete')}
+                onNoShow={(item) => handleAppointmentAction(item, 'no-show')}
+                onCancel={(item) => handleAppointmentAction(item, 'cancel')}
+                onQueueAssign={handleQueueAssign}
+                onQueueChange={handleQueueChange}
+                onCreatePrescription={() => {
+                  setActiveTab('prescriptions');
+                  setShowPrescriptionForm(true);
+                }}
+              />
             ))}
           </div>
-        </DataCard>
+        )
       ) : null}
 
       {activeTab === 'prescriptions' ? (
@@ -241,26 +349,109 @@ export default function PatientProfilePage() {
       ) : null}
 
       {activeTab === 'fullFile' ? (
-        <DataCard className="space-y-5">
-          <h3 className="text-xl font-black text-white">الملف الكامل</h3>
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <h4 className="mb-2 font-black text-white">بيانات المريض</h4>
-            <p className="text-sm leading-7 text-slate-300">الاسم: {patient.name}</p>
-            <p className="text-sm leading-7 text-slate-300">الهاتف: {patient.phone || '-'}</p>
-            <p className="text-sm leading-7 text-slate-300">الملاحظات: {patient.notes || '-'}</p>
-          </section>
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <h4 className="mb-2 font-black text-white">الملخص</h4>
-            <p className="text-sm leading-7 text-slate-300">عدد المواعيد: {stats.appointments}</p>
-            <p className="text-sm leading-7 text-slate-300">عدد الروشتات: {stats.prescriptions}</p>
-            <p className="text-sm leading-7 text-slate-300">المدفوع: {money(stats.paid)}</p>
-            <p className="text-sm leading-7 text-slate-300">الدين: {money(stats.debt)}</p>
-          </section>
-          <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <h4 className="mb-2 font-black text-white">ملاحظات الأسنان</h4>
-            <pre className="whitespace-pre-wrap text-sm text-slate-300">{JSON.stringify(patient.teethNotes || {}, null, 2)}</pre>
-          </section>
-        </DataCard>
+        <div className="space-y-4">
+          <div className="flex justify-end">
+            <PrimaryButton type="button" onClick={() => window.print()}>
+              طباعة الملف
+            </PrimaryButton>
+          </div>
+          <DataCard>
+            <div id="patient-full-file" className="space-y-5">
+              <header className="border-b border-white/10 pb-4">
+                <h3 className="text-2xl font-black text-white">الملف الكامل — {patient.displayName || patient.name}</h3>
+                <p className="mt-1 text-sm text-slate-400">
+                  {patient.phone || 'بدون رقم'} · {patient.platform || 'WHATSAPP'} ·{' '}
+                  {patient.gender === 'female' ? 'أنثى' : patient.gender === 'male' ? 'ذكر' : 'النوع غير محدد'}
+                  {patient.age ? ` · العمر ${patient.age}` : ''}
+                </p>
+              </header>
+
+              <div className="grid gap-3 md:grid-cols-4">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">المواعيد</p>
+                  <p className="text-lg font-black text-white">{stats.appointments}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">الروشتات</p>
+                  <p className="text-lg font-black text-white">{stats.prescriptions}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">المدفوع</p>
+                  <p className="text-lg font-black text-emerald-300">{money(stats.paid)}</p>
+                </div>
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                  <p className="text-xs text-slate-400">الدين</p>
+                  <p className="text-lg font-black text-amber-300">{money(stats.debt)}</p>
+                </div>
+              </div>
+
+              <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h4 className="mb-2 font-black text-white">الملاحظات</h4>
+                <p className="text-sm leading-7 text-slate-300"><span className="text-slate-500">طبية:</span> {patient.notes || '—'}</p>
+                <p className="text-sm leading-7 text-slate-300"><span className="text-slate-500">إدارية:</span> {patient.accountNotes || '—'}</p>
+                <p className="text-sm leading-7 text-slate-300"><span className="text-slate-500">حسابية / شكوى:</span> {patient.accountingNotes || '—'}</p>
+              </section>
+
+              <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h4 className="mb-3 font-black text-white">المواعيد ({stats.appointments})</h4>
+                {(patient.appointments || []).length === 0 ? (
+                  <p className="text-sm text-slate-500">لا توجد مواعيد.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {(patient.appointments || []).map((appointment) => (
+                      <div key={appointment.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2 text-sm">
+                        <span className="font-bold text-white">{appointment.service?.nameAr || appointment.service?.name || 'خدمة'}</span>
+                        <span className="text-slate-400">د. {appointment.doctor?.name || '-'} · {formatDateTime(appointment.scheduledTime)}</span>
+                        <StatusBadge>{appointment.status}</StatusBadge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h4 className="mb-3 font-black text-white">الروشتات ({stats.prescriptions})</h4>
+                {(patient.prescriptions || []).length === 0 ? (
+                  <p className="text-sm text-slate-500">لا توجد روشتات.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {(patient.prescriptions || []).map((prescription) => (
+                      <div key={prescription.id} className="border-b border-white/5 pb-2">
+                        <p className="font-bold text-white">{prescription.diagnosis || 'بدون تشخيص'}</p>
+                        <p className="text-xs text-slate-400">د. {prescription.doctor?.name || '-'} · {formatDateTime(prescription.createdAt)}</p>
+                        <div className="mt-1 text-sm text-slate-300">
+                          {(prescription.medications || []).map((medication, index) => (
+                            <p key={index}>{medicationLine(medication, index)}</p>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h4 className="mb-3 font-black text-white">ملاحظات الأسنان</h4>
+                {Object.keys(patient.teethNotes || {}).length === 0 ? (
+                  <p className="text-sm text-slate-500">لا توجد ملاحظات أسنان.</p>
+                ) : (
+                  <div className="space-y-1 text-sm text-slate-300">
+                    {Object.entries(patient.teethNotes || {}).map(([tooth, value]) => {
+                      const entry = typeof value === 'string' ? { note: value } : value || {};
+                      return (
+                        <p key={tooth}>
+                          <span className="font-bold text-white">سن {tooth}:</span> {entry.note || '—'}
+                          {entry.serviceName ? ` · ${entry.serviceName}` : ''}
+                          {entry.done != null ? (entry.done ? ' · ✅ تمت' : ' · ⏳ لم تتم') : ''}
+                        </p>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            </div>
+          </DataCard>
+        </div>
       ) : null}
     </AppLayout>
   );

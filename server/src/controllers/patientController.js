@@ -290,6 +290,7 @@ const update = async (req, res, next) => {
       email,
       age,
       gender,
+      platform,
       notes,
       accountNotes,
       accountBalance,
@@ -310,6 +311,8 @@ const update = async (req, res, next) => {
       ...(email !== undefined && { email: email?.trim() || null }),
       ...(age !== undefined && { age: age === '' || age === null ? null : Number(age) || null }),
       ...(gender !== undefined && { gender: gender?.trim() || null }),
+      ...(platform !== undefined &&
+        ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'].includes(platform) && { platform }),
       ...(notes !== undefined && { notes }),
       ...(accountNotes !== undefined && { accountNotes }),
       ...(accountBalance !== undefined && { accountBalance: Number(accountBalance) || 0 }),

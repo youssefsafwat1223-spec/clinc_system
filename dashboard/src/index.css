@@ -470,11 +470,14 @@
   }
 
   #prescription-print,
-  #prescription-print * {
+  #prescription-print *,
+  #patient-full-file,
+  #patient-full-file * {
     visibility: visible;
   }
 
-  #prescription-print {
+  #prescription-print,
+  #patient-full-file {
     position: absolute;
     top: 0;
     right: 0;
@@ -488,6 +491,12 @@
     border: none !important;
     border-radius: 0 !important;
     direction: rtl;
+  }
+
+  #patient-full-file * {
+    color: #111111 !important;
+    background: transparent !important;
+    border-color: #cccccc !important;
   }
 
   .prescription-section,

@@ -161,6 +161,7 @@ const revenueReport = async (req, res, next) => {
       status,
       paymentStatus,
       method,
+      caseStatus,
       search,
       patientId,
       cashierExpenses = 0,
@@ -170,6 +171,16 @@ const revenueReport = async (req, res, next) => {
     const filters = [];
     const appointmentFilters = [];
     const resolvedStatus = paymentStatus || status;
+
+    // Case status maps to the underlying appointment status.
+    const caseStatusMap = {
+      WASEL: ['COMPLETED'],
+      MUNTAHI: ['EXPIRED', 'CANCELLED', 'REJECTED', 'NO_SHOW'],
+      MOSTAMERA: ['PENDING', 'CONFIRMED'],
+    };
+    if (caseStatus && caseStatusMap[caseStatus]) {
+      appointmentFilters.push({ status: { in: caseStatusMap[caseStatus] } });
+    }
 
     if (patientId) filters.push({ patientId });
     if (resolvedStatus && resolvedStatus !== 'ALL') filters.push({ status: resolvedStatus });
@@ -290,6 +301,8 @@ const revenueReport = async (req, res, next) => {
         treatmentType: payment.service?.nameAr || payment.service?.name || payment.appointment?.service?.nameAr || payment.appointment?.service?.name || '',
         doctorName: payment.appointment?.doctor?.name || '',
         amount: toNumber(payment.finalAmount),
+        baseAmount: toNumber(payment.amount),
+        discountAmount: toNumber(payment.discountAmount),
         paidAmount: toNumber(payment.paidAmount),
         remainingAmount: Math.max(0, toNumber(payment.finalAmount) - toNumber(payment.paidAmount)),
         paymentDate: payment.paidAt || payment.createdAt,
