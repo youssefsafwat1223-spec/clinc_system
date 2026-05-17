@@ -4,6 +4,7 @@ import { ChevronDown, FileText, Plus, Printer, Search, Send, Trash2, UserRound }
 import { toast } from 'react-toastify';
 import AppLayout from '../components/Layout';
 import api from '../api/client';
+import TeethChart from '../components/teeth/TeethChart';
 import { DataCard, Field, PageHeader, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../components/ui';
 
 const frequencyOptions = ['مرة يومياً', 'مرتين يومياً', 'ثلاث مرات يومياً', 'كل 8 ساعات', 'كل 12 ساعة', 'عند اللزوم'];
@@ -67,11 +68,16 @@ const ToothButton = ({ number, active, marked, onClick }) => (
   </button>
 );
 
-export default function PrescriptionsPage() {
+export function PrescriptionsWorkspace({
+  embedded = false,
+  initialPatientId = '',
+  initialAppointmentId = '',
+  onCreated,
+} = {}) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const requestedPatientId = searchParams.get('patientId') || '';
-  const requestedAppointmentId = searchParams.get('appointmentId') || '';
+  const requestedPatientId = initialPatientId || searchParams.get('patientId') || '';
+  const requestedAppointmentId = initialAppointmentId || searchParams.get('appointmentId') || '';
   const [appointmentId, setAppointmentId] = useState(requestedAppointmentId);
   const [appointment, setAppointment] = useState(null);
   const [patients, setPatients] = useState([]);
@@ -88,6 +94,7 @@ export default function PrescriptionsPage() {
   const [saving, setSaving] = useState(false);
   const [createdPrescription, setCreatedPrescription] = useState(null);
   const [showToothChart, setShowToothChart] = useState(false);
+  const [profileTeethNotes, setProfileTeethNotes] = useState({});
   const autoResolvedRef = useRef(false);
 
   useEffect(() => {
@@ -155,6 +162,27 @@ export default function PrescriptionsPage() {
     }
     return [selectedPatient, ...filteredPatients];
   }, [filteredPatients, selectedPatient]);
+
+  useEffect(() => {
+    if (!selectedPatient?.id) {
+      setProfileTeethNotes({});
+      return;
+    }
+
+    let alive = true;
+    api
+      .get(`/patients/${selectedPatient.id}`)
+      .then((res) => {
+        if (alive) setProfileTeethNotes(res.data.patient?.teethNotes || {});
+      })
+      .catch(() => {
+        if (alive) setProfileTeethNotes({});
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [selectedPatient?.id]);
 
   const resolveAppointment = async () => {
     if (!appointmentId.trim()) {
@@ -243,6 +271,7 @@ export default function PrescriptionsPage() {
         notes: composedNotes,
       });
       setCreatedPrescription(res.data.prescription);
+      onCreated?.(res.data.prescription);
 
       if (sendAfterSave) {
         await api.post(`/prescriptions/${res.data.prescription.id}/send`);
@@ -278,8 +307,8 @@ export default function PrescriptionsPage() {
   const patientAge = selectedPatient?.age || selectedPatient?.birthDate;
   const doctorName = selectedDoctor?.name ? `د. ${selectedDoctor.name}` : '—';
 
-  return (
-    <AppLayout>
+  const content = (
+    <>
       <PageHeader
         title="الروشتات"
         description="اكتب الروشتة من رقم الحجز أو باختيار المريض، وراجع شكلها النهائي قبل الطباعة أو الإرسال على واتساب."
@@ -489,6 +518,20 @@ export default function PrescriptionsPage() {
               />
             </button>
 
+            {selectedPatient?.id ? (
+              <div className="mt-5">
+                <TeethChart
+                  patientId={selectedPatient.id}
+                  value={profileTeethNotes}
+                  onSaved={(teeth) => setProfileTeethNotes(teeth)}
+                />
+              </div>
+            ) : (
+              <p className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-400">
+                اختر المريض أولاً لفتح خريطة الأسنان الكاملة بالخدمة والطبيب وحالة تنفيذ الخدمة.
+              </p>
+            )}
+
             {showToothChart ? (
               <div className="mt-5 grid gap-5 lg:grid-cols-[340px_1fr] lg:items-start">
                 <div className="relative aspect-[0.78] min-h-[390px] overflow-hidden rounded-2xl border border-white/10 bg-white">
@@ -574,7 +617,7 @@ export default function PrescriptionsPage() {
               <Printer className="h-4 w-4" />
               طباعة / حفظ PDF
             </SecondaryButton>
-            {selectedPatient?.id ? (
+            {!embedded && selectedPatient?.id ? (
               <SecondaryButton type="button" onClick={() => navigate(`/patients/${selectedPatient.id}`)}>
                 <UserRound className="h-4 w-4" />
                 ملف المريض
@@ -721,6 +764,12 @@ export default function PrescriptionsPage() {
           </article>
         </div>
       </div>
-    </AppLayout>
+    </>
   );
+
+  return embedded ? content : <AppLayout>{content}</AppLayout>;
+}
+
+export default function PrescriptionsPage() {
+  return <PrescriptionsWorkspace />;
 }

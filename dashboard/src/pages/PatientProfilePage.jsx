@@ -8,12 +8,12 @@ import ManualBookingPanel from '../components/appointments/ManualBookingPanel';
 import AppointmentCard from '../components/appointments/AppointmentCard';
 import ConversationView from '../components/messages/ConversationView';
 import RevenueReport from '../components/payments/RevenueReport';
-import PrescriptionForm from '../components/prescriptions/PrescriptionForm';
 import TeethChart from '../components/teeth/TeethChart';
 import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
 import EmptyState from '../components/EmptyState';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import { formatDateTime, money } from '../utils/appointmentUi';
+import { PrescriptionsWorkspace } from './PrescriptionsPage';
 
 const PLATFORMS = ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
 
@@ -47,7 +47,6 @@ export default function PatientProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('info');
-  const [showPrescriptionForm, setShowPrescriptionForm] = useState(false);
   const [teethSaveSignal, setTeethSaveSignal] = useState(0);
   const [draft, setDraft] = useState({
     name: '',
@@ -420,7 +419,6 @@ export default function PatientProfilePage() {
                 onQueueChange={handleQueueChange}
                 onCreatePrescription={() => {
                   setActiveTab('prescriptions');
-                  setShowPrescriptionForm(true);
                 }}
               />
             ))}
@@ -429,6 +427,10 @@ export default function PatientProfilePage() {
       ) : null}
 
       {activeTab === 'prescriptions' ? (
+        <PrescriptionsWorkspace embedded initialPatientId={patient.id} onCreated={loadPatient} />
+      ) : null}
+
+      {false && activeTab === 'prescriptions' ? (
         <div className="space-y-5">
           <DataCard>
             <div className="flex flex-wrap items-center justify-between gap-3">
