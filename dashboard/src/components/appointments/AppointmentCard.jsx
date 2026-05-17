@@ -30,6 +30,13 @@ export default function AppointmentCard({
   const canCheckIn = ['PENDING', 'CONFIRMED'].includes(appointment.status) && onCheckIn;
   const canEnterRoom = appointment.status === 'CHECKED_IN' && onEnterRoom;
   const canEditQueue = hasQueue && ['CHECKED_IN', 'IN_ROOM'].includes(appointment.status) && onQueueChange;
+  const hasArrivalTime = Boolean(appointment.checkedInAt);
+  const primaryTimeLabel = hasArrivalTime ? 'وقت الحضور' : 'ميعاد الحجز';
+  const primaryTimeValue = hasArrivalTime
+    ? `${formatDetailedDate(appointment.checkedInAt)} · ${formatTime(appointment.checkedInAt)}`
+    : isWalkIn
+      ? `${formatDetailedDate(appointment.scheduledTime)} · بدون موعد`
+      : `${formatDetailedDate(appointment.scheduledTime)} · ${formatTime(appointment.scheduledTime)}`;
 
   const [editingQueue, setEditingQueue] = useState(false);
   const [queueDraft, setQueueDraft] = useState(String(appointment.queuePosition ?? ''));
@@ -48,8 +55,8 @@ export default function AppointmentCard({
   };
 
   return (
-    <DataCard className={compact ? 'p-4' : undefined}>
-      <div className="grid gap-4 xl:grid-cols-[auto_1fr_auto] xl:items-center">
+    <DataCard className={compact ? 'h-full p-4' : undefined}>
+      <div className={`grid gap-4 ${compact ? 'h-full content-start' : 'xl:grid-cols-[auto_1fr_auto] xl:items-center'}`}>
         {hasQueue ? (
           <div className="flex flex-col items-center justify-center gap-1 rounded-2xl border border-sky-500/30 bg-sky-500/15 px-5 py-4 text-sky-100">
             <span className="text-[10px] font-bold tracking-wide text-sky-300/80">الدور</span>
@@ -137,7 +144,11 @@ export default function AppointmentCard({
             </div>
           ) : null}
 
-          <div className={`mt-3 grid gap-2 text-sm text-slate-300 ${isWalkIn ? 'md:grid-cols-3 xl:grid-cols-3' : 'md:grid-cols-2 xl:grid-cols-4'}`}>
+          <div
+            className={`mt-3 grid gap-2 text-sm text-slate-300 ${
+              compact ? 'grid-cols-1' : isWalkIn ? 'md:grid-cols-3 xl:grid-cols-3' : 'md:grid-cols-2 xl:grid-cols-4'
+            }`}
+          >
             <span className="inline-flex items-center gap-2">
               <User className="h-4 w-4 text-sky-300" />
               {appointment.patient?.phone || '-'}
@@ -158,6 +169,20 @@ export default function AppointmentCard({
             ) : null}
           </div>
 
+          <div className="mt-3 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-sm">
+            <span className="font-bold text-cyan-200">{primaryTimeLabel}:</span>{' '}
+            <span className="text-white">{primaryTimeValue}</span>
+          </div>
+
+          {hasArrivalTime && !compact ? (
+            <div className="mt-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+              <span className="font-bold text-slate-200">ميعاد الحجز:</span>{' '}
+              {isWalkIn
+                ? `${formatDetailedDate(appointment.scheduledTime)} · بدون موعد`
+                : `${formatDetailedDate(appointment.scheduledTime)} · ${formatTime(appointment.scheduledTime)}`}
+            </div>
+          ) : null}
+
           <div className="mt-3 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-200">
             {serviceName}
           </div>
@@ -167,7 +192,7 @@ export default function AppointmentCard({
           ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-2 xl:justify-end">
+        <div className={`flex flex-wrap gap-2 ${compact ? 'pt-1' : 'xl:justify-end'}`}>
           {onOpenPatientProfile ? (
             <SecondaryButton type="button" onClick={() => onOpenPatientProfile(appointment)}>
               <User className="h-4 w-4" />
@@ -208,7 +233,7 @@ export default function AppointmentCard({
               <PrimaryButton
                 type="button"
                 onClick={() => onCheckIn?.(appointment)}
-                className="w-full px-6 py-3 text-base xl:w-auto"
+                className={`px-6 py-3 text-base ${compact ? 'w-full' : 'w-full xl:w-auto'}`}
               >
                 <Hash className="h-5 w-5" />
                 تم الحضور
@@ -238,7 +263,7 @@ export default function AppointmentCard({
             <PrimaryButton
               type="button"
               onClick={() => onEnterRoom?.(appointment)}
-              className="w-full px-6 py-3 text-base xl:w-auto"
+              className={`px-6 py-3 text-base ${compact ? 'w-full' : 'w-full xl:w-auto'}`}
             >
               <Stethoscope className="h-5 w-5" />
               تم الدخول للطبيب
@@ -246,16 +271,14 @@ export default function AppointmentCard({
           ) : null}
 
           {appointment.status === 'IN_ROOM' ? (
-            <>
-              <PrimaryButton
-                type="button"
-                onClick={() => onComplete?.(appointment)}
-                className="w-full px-6 py-3 text-base xl:w-auto"
-              >
-                <CheckCircle className="h-5 w-5" />
-                تم الكشف
-              </PrimaryButton>
-            </>
+            <PrimaryButton
+              type="button"
+              onClick={() => onComplete?.(appointment)}
+              className={`px-6 py-3 text-base ${compact ? 'w-full' : 'w-full xl:w-auto'}`}
+            >
+              <CheckCircle className="h-5 w-5" />
+              تم الكشف
+            </PrimaryButton>
           ) : null}
         </div>
       </div>
