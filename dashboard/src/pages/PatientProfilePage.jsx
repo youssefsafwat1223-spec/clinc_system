@@ -109,6 +109,7 @@ export default function PatientProfilePage() {
     try {
       const res = await api.put(`/patients/${id}`, draft);
       setPatient((current) => ({ ...current, ...res.data.patient }));
+      return true;
       toast.success('تم حفظ بيانات المريض');
     } catch (error) {
       toast.error(error.message || 'فشل حفظ بيانات المريض');
