@@ -145,7 +145,7 @@ function DentalArch2D({ teeth, services, selectedTooth, onSelectTooth }) {
   };
 
   return (
-    <div className="relative min-h-[660px] overflow-hidden rounded-3xl border border-white/10 bg-[#fffaf0] p-3 shadow-inner">
+    <div className="relative min-h-[520px] overflow-hidden rounded-3xl border border-white/10 bg-[#fffaf0] p-3 shadow-inner md:min-h-[640px]">
       <svg className="absolute inset-0 h-full w-full" viewBox="0 0 900 760" aria-hidden="true" preserveAspectRatio="none">
         <defs>
           <linearGradient id="palateGradient" x1="0" x2="0" y1="0" y2="1">
@@ -331,7 +331,7 @@ export default function TeethChart({
 
   return (
     <DataCard>
-      <div className="grid gap-6 xl:grid-cols-[1fr_390px]">
+      <div className="grid gap-6 2xl:grid-cols-[minmax(620px,1fr)_360px]">
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-lg font-black text-white">خريطة الأسنان</h3>

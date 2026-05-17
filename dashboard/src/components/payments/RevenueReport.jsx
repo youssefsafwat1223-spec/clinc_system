@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Edit3, RefreshCw, Search } from 'lucide-react';
+import { Edit3, Printer, RefreshCw, Search } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../api/client';
 import { DataCard, Field, PageLoader, PrimaryButton, SecondaryButton, StatCard, inputClass } from '../ui';
 import EmptyState from '../EmptyState';
 import { confirmDialog } from '../dialogs';
 import { money, todayInputValue } from '../../utils/appointmentUi';
+import PaymentReceipt from './PaymentReceipt';
 
 const pad = (value) => String(value).padStart(2, '0');
 const localDateValue = (date = new Date()) =>
@@ -206,6 +207,8 @@ export default function RevenueReport({ patientId = '', compact = false }) {
     notes: '',
   });
   const [savingAdd, setSavingAdd] = useState(false);
+  const [clinic, setClinic] = useState(null);
+  const [receiptPayment, setReceiptPayment] = useState(null);
 
   const params = useMemo(
     () => ({
@@ -245,6 +248,12 @@ export default function RevenueReport({ patientId = '', compact = false }) {
       })
       .catch(() => {});
   }, [patientId]);
+
+  useEffect(() => {
+    api.get('/settings/public')
+      .then((res) => setClinic(res.data.clinic || null))
+      .catch(() => {});
+  }, []);
 
   const updateFilter = (field, value) => setFilters((current) => ({ ...current, [field]: value }));
 
@@ -327,6 +336,20 @@ export default function RevenueReport({ patientId = '', compact = false }) {
   const openEdit = (payment) => {
     setEditing(payment);
     setEditForm(defaultEditForm(payment));
+  };
+
+  const printReceipt = (payment) => {
+    setReceiptPayment(payment);
+    document.body.classList.add('print-payment-receipt');
+
+    const cleanup = () => {
+      document.body.classList.remove('print-payment-receipt');
+      window.removeEventListener('afterprint', cleanup);
+    };
+
+    window.addEventListener('afterprint', cleanup);
+    window.setTimeout(() => window.print(), 50);
+    window.setTimeout(cleanup, 1500);
   };
 
   const markFullyPaid = () => setEditForm((current) => ({ ...current, paidAmount: editing?.amount || current.paidAmount }));
@@ -581,6 +604,18 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                         <span className="ms-2 text-xs font-bold text-amber-300">متبقي {money(payment.remainingAmount)}</span>
                       ) : null}
                     </div>
+                    <div className="flex flex-wrap gap-2">
+                      <SecondaryButton
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          printReceipt(payment);
+                        }}
+                      >
+                        <Printer className="h-4 w-4" />
+                        طباعة إيصال
+                      </SecondaryButton>
+                    </div>
                     {!patientId ? (
                       <div className="flex gap-2">
                         <SecondaryButton
@@ -763,6 +798,8 @@ export default function RevenueReport({ patientId = '', compact = false }) {
           </div>
         </div>
       ) : null}
+
+      <PaymentReceipt payment={receiptPayment} clinic={clinic} />
     </div>
   );
 }

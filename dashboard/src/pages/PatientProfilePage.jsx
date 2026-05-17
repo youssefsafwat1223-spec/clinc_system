@@ -187,6 +187,19 @@ export default function PatientProfilePage() {
     }
   };
 
+  const printFullFile = () => {
+    document.body.classList.add('print-patient-full-file');
+
+    const cleanup = () => {
+      document.body.classList.remove('print-patient-full-file');
+      window.removeEventListener('afterprint', cleanup);
+    };
+
+    window.addEventListener('afterprint', cleanup);
+    window.setTimeout(() => window.print(), 50);
+    window.setTimeout(cleanup, 1500);
+  };
+
   if (loading) {
     return (
       <AppLayout>
@@ -456,6 +469,7 @@ export default function PatientProfilePage() {
           embedded
           initialPatientId={patient.id}
           initialAppointmentId={prescriptionAppointmentRef}
+          initialAppointments={patient.appointments || []}
           onCreated={loadPatient}
         />
       ) : null}
@@ -469,7 +483,7 @@ export default function PatientProfilePage() {
       {activeTab === 'fullFile' ? (
         <div className="space-y-4">
           <div className="flex justify-end">
-            <PrimaryButton type="button" onClick={() => window.print()}>
+            <PrimaryButton type="button" onClick={printFullFile}>
               طباعة الملف
             </PrimaryButton>
           </div>
@@ -562,6 +576,41 @@ export default function PatientProfilePage() {
                           {entry.serviceName ? ` · ${entry.serviceName}` : ''}
                           {entry.done != null ? (entry.done ? ' · ✅ تمت' : ' · ⏳ لم تتم') : ''}
                         </p>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+
+              <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <h4 className="mb-3 font-black text-white">المدفوعات ({(patient.payments || []).length})</h4>
+                {(patient.payments || []).length === 0 ? (
+                  <p className="text-sm text-slate-500">لا توجد مدفوعات.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {(patient.payments || []).map((payment) => {
+                      const paid = Number(payment.paidAmount || 0);
+                      const total = Number(payment.finalAmount || payment.amount || paid || 0);
+                      const remaining = Math.max(0, total - paid);
+                      const serviceName =
+                        payment.service?.nameAr ||
+                        payment.service?.name ||
+                        payment.appointment?.service?.nameAr ||
+                        payment.appointment?.service?.name ||
+                        'خدمة علاجية';
+                      const doctorName = payment.appointment?.doctor?.name || payment.doctor?.name || '-';
+
+                      return (
+                        <div key={payment.id} className="flex flex-wrap items-center justify-between gap-2 border-b border-white/5 pb-2 text-sm">
+                          <div>
+                            <p className="font-bold text-white">{serviceName}</p>
+                            <p className="text-xs text-slate-400">د. {doctorName} · {formatDateTime(payment.createdAt || payment.paymentDate)}</p>
+                          </div>
+                          <div className="text-sm text-slate-300">
+                            <span className="font-bold text-emerald-300">مدفوع {money(paid)}</span>
+                            {remaining > 0 ? <span className="ms-2 font-bold text-amber-300">متبقي {money(remaining)}</span> : null}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>

@@ -438,7 +438,11 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Print: isolate the prescription paper, force clean white A4 output */
+.payment-receipt-paper {
+  display: none;
+}
+
+/* Print: isolate the requested document, force clean white A4 output */
 @media print {
   @page {
     size: A4;
@@ -469,15 +473,18 @@
     background: #ffffff !important;
   }
 
-  #prescription-print,
-  #prescription-print *,
-  #patient-full-file,
-  #patient-full-file * {
+  body:not(.print-patient-full-file):not(.print-payment-receipt) #prescription-print,
+  body:not(.print-patient-full-file):not(.print-payment-receipt) #prescription-print *,
+  body.print-patient-full-file #patient-full-file,
+  body.print-patient-full-file #patient-full-file *,
+  body.print-payment-receipt #payment-receipt-print,
+  body.print-payment-receipt #payment-receipt-print * {
     visibility: visible;
   }
 
-  #prescription-print,
-  #patient-full-file {
+  body:not(.print-patient-full-file):not(.print-payment-receipt) #prescription-print,
+  body.print-patient-full-file #patient-full-file,
+  body.print-payment-receipt #payment-receipt-print {
     position: absolute;
     top: 0;
     right: 0;
@@ -493,14 +500,152 @@
     direction: rtl;
   }
 
-  #patient-full-file * {
+  body.print-patient-full-file #patient-full-file {
+    padding: 0 !important;
+    font-size: 12px !important;
+    line-height: 1.6 !important;
+  }
+
+  body.print-patient-full-file #patient-full-file header,
+  body.print-patient-full-file #patient-full-file section,
+  body.print-patient-full-file #patient-full-file > div {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  body.print-patient-full-file #patient-full-file * {
     color: #111111 !important;
     background: transparent !important;
     border-color: #cccccc !important;
   }
 
+  body.print-payment-receipt #payment-receipt-print {
+    display: block !important;
+    max-width: 190mm;
+    min-height: auto;
+    padding: 0;
+    font-family: inherit;
+  }
+
+  .payment-receipt-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    border-bottom: 2px solid #111111;
+    padding-bottom: 14px;
+  }
+
+  .payment-receipt-logo {
+    display: grid;
+    height: 64px;
+    width: 64px;
+    place-items: center;
+    overflow: hidden;
+    border: 1px solid #111111;
+    border-radius: 16px;
+    font-size: 28px;
+    font-weight: 900;
+  }
+
+  .payment-receipt-logo img {
+    height: 100%;
+    width: 100%;
+    object-fit: contain;
+  }
+
+  .payment-receipt-header h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 900;
+  }
+
+  .payment-receipt-header p {
+    margin: 3px 0 0;
+    font-size: 12px;
+  }
+
+  .payment-receipt-meta,
+  .payment-receipt-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 16px;
+  }
+
+  .payment-receipt-meta > div,
+  .payment-receipt-grid > div,
+  .payment-receipt-notes {
+    border: 1px solid #d1d5db;
+    border-radius: 12px;
+    padding: 10px;
+  }
+
+  .payment-receipt-meta span,
+  .payment-receipt-grid span,
+  .payment-receipt-notes span {
+    display: block;
+    margin-bottom: 4px;
+    color: #4b5563 !important;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .payment-receipt-meta strong,
+  .payment-receipt-grid strong {
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  .payment-receipt-table {
+    width: 100%;
+    margin-top: 18px;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  .payment-receipt-table th,
+  .payment-receipt-table td {
+    border: 1px solid #d1d5db;
+    padding: 10px;
+    text-align: right;
+  }
+
+  .payment-receipt-table th {
+    background: #f3f4f6 !important;
+    font-weight: 900;
+  }
+
+  .payment-receipt-notes {
+    margin-top: 14px;
+  }
+
+  .payment-receipt-notes p {
+    margin: 0;
+  }
+
+  .payment-receipt-footer {
+    margin-top: 28px;
+    display: flex;
+    align-items: end;
+    justify-content: space-between;
+    gap: 20px;
+    border-top: 1px solid #d1d5db;
+    padding-top: 16px;
+    font-size: 11px;
+  }
+
+  .payment-receipt-footer > div {
+    min-width: 160px;
+    border-top: 1px solid #111111;
+    padding-top: 8px;
+    text-align: center;
+    font-weight: 900;
+  }
+
   .prescription-section,
-  .prescription-medication-row {
+  .prescription-medication-row,
+  .payment-receipt-grid > div,
+  .payment-receipt-table tr {
     break-inside: avoid;
     page-break-inside: avoid;
   }

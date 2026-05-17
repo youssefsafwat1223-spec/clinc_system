@@ -72,6 +72,7 @@ export function PrescriptionsWorkspace({
   embedded = false,
   initialPatientId = '',
   initialAppointmentId = '',
+  initialAppointments = [],
   onCreated,
 } = {}) {
   const navigate = useNavigate();
@@ -80,8 +81,10 @@ export function PrescriptionsWorkspace({
   const requestedAppointmentId = initialAppointmentId || searchParams.get('appointmentId') || '';
   const [appointmentId, setAppointmentId] = useState(requestedAppointmentId);
   const [appointment, setAppointment] = useState(null);
+  const [patientAppointments, setPatientAppointments] = useState(initialAppointments || []);
   const [patients, setPatients] = useState([]);
   const [doctors, setDoctors] = useState([]);
+  const [services, setServices] = useState([]);
   const [clinic, setClinic] = useState({ nameAr: 'عيادتي', name: 'Clinic', phone: '', address: '', logoUrl: null });
   const [search, setSearch] = useState('');
   const [selectedPatientId, setSelectedPatientId] = useState('');
@@ -98,14 +101,20 @@ export function PrescriptionsWorkspace({
   const autoResolvedRef = useRef(false);
 
   useEffect(() => {
+    setPatientAppointments(initialAppointments || []);
+  }, [initialAppointments]);
+
+  useEffect(() => {
     const loadBasics = async () => {
       try {
-        const [doctorsRes, patientsRes, settingsRes] = await Promise.all([
+        const [doctorsRes, patientsRes, servicesRes, settingsRes] = await Promise.all([
           api.get('/doctors'),
           api.get('/patients', { params: { limit: 50 } }),
+          api.get('/services').catch(() => null),
           api.get('/settings/public').catch(() => null),
         ]);
         setDoctors(doctorsRes.data.doctors || []);
+        setServices(servicesRes?.data?.services || []);
         const list = patientsRes.data.patients || [];
         if (settingsRes?.data?.clinic) {
           setClinic((current) => ({ ...current, ...settingsRes.data.clinic }));
@@ -124,6 +133,7 @@ export function PrescriptionsWorkspace({
           if (target) {
             setPatients(list.some((patient) => patient.id === target.id) ? list : [target, ...list]);
             setSelectedPatientId(target.id);
+            setPatientAppointments(target.appointments || initialAppointments || []);
             if (target.name) setSearch(target.name);
           } else {
             setPatients(list);
@@ -166,6 +176,7 @@ export function PrescriptionsWorkspace({
   useEffect(() => {
     if (!selectedPatient?.id) {
       setProfileTeethNotes({});
+      setPatientAppointments([]);
       return;
     }
 
@@ -173,10 +184,14 @@ export function PrescriptionsWorkspace({
     api
       .get(`/patients/${selectedPatient.id}`)
       .then((res) => {
-        if (alive) setProfileTeethNotes(res.data.patient?.teethNotes || {});
+        if (!alive) return;
+        setProfileTeethNotes(res.data.patient?.teethNotes || {});
+        setPatientAppointments(res.data.patient?.appointments || []);
       })
       .catch(() => {
-        if (alive) setProfileTeethNotes({});
+        if (!alive) return;
+        setProfileTeethNotes({});
+        setPatientAppointments([]);
       });
 
     return () => {
@@ -196,9 +211,14 @@ export function PrescriptionsWorkspace({
       setAppointment(resolved);
       setSelectedPatientId(resolved.patientId);
       setDoctorId(resolved.doctorId);
+      if (resolved.bookingRef || resolved.id) setAppointmentId(resolved.bookingRef || resolved.id);
       if (resolved.patient) {
+        if (resolved.patient.name) setSearch(resolved.patient.name);
         setPatients((current) =>
           current.some((patient) => patient.id === resolved.patient.id) ? current : [resolved.patient, ...current]
+        );
+        setPatientAppointments((current) =>
+          current.some((item) => item.id === resolved.id) ? current : [resolved, ...current]
         );
       }
       toast.success('تم تحميل بيانات الحجز');
@@ -237,6 +257,103 @@ export function PrescriptionsWorkspace({
         return current.map((item, itemIndex) => (itemIndex === emptyIndex ? { ...item, toothNumber: String(number) } : item));
       }
       return [...current, { toothNumber: String(number), note: '' }];
+    });
+  };
+
+  const appointmentLabel = (item) => {
+    if (!item) return '';
+    const service = item.service?.nameAr || item.service?.name || 'خدمة';
+    const doctor = item.doctor?.name ? `د. ${item.doctor.name}` : '';
+    const date = item.scheduledTime ? formatDate(item.scheduledTime) : '';
+    return [item.bookingRef || item.id, service, doctor, date, item.status].filter(Boolean).join(' · ');
+  };
+
+  const selectPatientAppointment = async (nextAppointmentId) => {
+    if (!nextAppointmentId) {
+      setAppointment(null);
+      setAppointmentId('');
+      return;
+    }
+    const selected = patientAppointments.find(
+      (item) => String(item.id) === String(nextAppointmentId) || String(item.bookingRef) === String(nextAppointmentId)
+    );
+    const ref = selected?.bookingRef || selected?.id || nextAppointmentId;
+    setAppointmentId(ref);
+    setLoading(true);
+    try {
+      const res = await api.get('/prescriptions/resolve', { params: { appointmentId: ref } });
+      const resolved = res.data.appointment;
+      setAppointment(resolved);
+      setSelectedPatientId(resolved.patientId);
+      setDoctorId(resolved.doctorId);
+      if (resolved.patient?.name) setSearch(resolved.patient.name);
+      setPatientAppointments((current) =>
+        current.some((item) => item.id === resolved.id) ? current : [resolved, ...current]
+      );
+      toast.success('تم ملء بيانات الحجز في الروشتة');
+    } catch (error) {
+      toast.error(error.message || 'لم يتم تحميل الحجز');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const buildImportedToothNote = (toothNumber, rawEntry) => {
+    const entry = typeof rawEntry === 'string' ? { note: rawEntry } : rawEntry || {};
+    const parts = [];
+    if (entry.note) parts.push(entry.note);
+
+    const serviceName =
+      entry.serviceName ||
+      services.find((service) => service.id === entry.serviceId)?.nameAr ||
+      services.find((service) => service.id === entry.serviceId)?.name;
+    if (serviceName) parts.push(`الخدمة: ${serviceName}`);
+
+    const doctorName =
+      entry.doctorName ||
+      doctors.find((doctor) => doctor.id === entry.doctorId)?.name;
+    if (doctorName) parts.push(`الطبيب: د. ${doctorName}`);
+
+    if (entry.done !== undefined && entry.done !== null) {
+      parts.push(entry.done ? 'الحالة: تمت الخدمة' : 'الحالة: لم تتم الخدمة');
+    }
+
+    return {
+      toothNumber: String(toothNumber),
+      note: parts.join(' - '),
+    };
+  };
+
+  const importToothNotesFromProfile = () => {
+    const importedRows = Object.entries(profileTeethNotes || {})
+      .map(([toothNumber, entry]) => buildImportedToothNote(toothNumber, entry))
+      .filter((item) => item.toothNumber && item.note);
+
+    if (importedRows.length === 0) {
+      toast.info('لا توجد ملاحظات أسنان محفوظة في ملف المريض لاستيرادها');
+      return;
+    }
+
+    setToothNotes((current) => {
+      const existingNumbers = new Set(
+        current
+          .map((item) => String(item.toothNumber || '').trim())
+          .filter(Boolean)
+      );
+      const missingRows = importedRows.filter((item) => !existingNumbers.has(String(item.toothNumber)));
+
+      if (missingRows.length === 0) {
+        toast.info('كل ملاحظات الأسنان الموجودة في ملف المريض مضافة بالفعل في الروشتة');
+        return current;
+      }
+
+      const hasOnlyEmptyRow =
+        current.length === 1 &&
+        !String(current[0]?.toothNumber || '').trim() &&
+        !String(current[0]?.note || '').trim();
+
+      toast.success(`تم استيراد ${missingRows.length} ملاحظة أسنان إلى الروشتة`);
+      return hasOnlyEmptyRow ? missingRows : [...current, ...missingRows];
     });
   };
 
@@ -336,6 +453,34 @@ export function PrescriptionsWorkspace({
                 <Search className="h-4 w-4" />
                 تحميل الحجز
               </PrimaryButton>
+            </div>
+
+            <div className="mt-5">
+              <Field label="حجوزات هذا المريض">
+                <select
+                  className={inputClass}
+                  value={appointment?.id || ''}
+                  disabled={!selectedPatient?.id || loading}
+                  onChange={(event) => selectPatientAppointment(event.target.value)}
+                >
+                  <option value="">
+                    {selectedPatient?.id ? 'اختر حجزاً لملء بيانات الروشتة تلقائياً' : 'اختر المريض أولاً'}
+                  </option>
+                  {patientAppointments.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {appointmentLabel(item)}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {appointment ? (
+                <div className="mt-3 rounded-2xl border border-sky-500/20 bg-sky-500/10 p-3 text-sm leading-7 text-sky-100">
+                  تم اختيار الحجز <strong dir="ltr">{appointment.bookingRef || appointment.id}</strong>
+                  {' '}· {appointment.service?.nameAr || appointment.service?.name || 'خدمة'}
+                  {' '}· د. {appointment.doctor?.name || '-'}
+                  {' '}· {appointment.scheduledTime ? formatDate(appointment.scheduledTime) : ''}
+                </div>
+              ) : null}
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -518,7 +663,7 @@ export function PrescriptionsWorkspace({
               />
             </button>
 
-            {selectedPatient?.id ? (
+            {showToothChart && selectedPatient?.id ? (
               <div className="mt-5">
                 <TeethChart
                   patientId={selectedPatient.id}
@@ -526,13 +671,13 @@ export function PrescriptionsWorkspace({
                   onSaved={(teeth) => setProfileTeethNotes(teeth)}
                 />
               </div>
-            ) : (
+            ) : showToothChart ? (
               <p className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-slate-400">
                 اختر المريض أولاً لفتح خريطة الأسنان الكاملة بالخدمة والطبيب وحالة تنفيذ الخدمة.
               </p>
-            )}
+            ) : null}
 
-            {showToothChart ? (
+            {false && showToothChart ? (
               <div className="mt-5 grid gap-5 lg:grid-cols-[340px_1fr] lg:items-start">
                 <div className="relative aspect-[0.78] min-h-[390px] overflow-hidden rounded-2xl border border-white/10 bg-white">
                   {false ? <img
@@ -602,6 +747,67 @@ export function PrescriptionsWorkspace({
                 </div>
               </div>
             ) : null}
+          </DataCard>
+
+          <DataCard>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-black text-white">ملاحظات أسنان داخل الروشتة</h2>
+                <p className="mt-1 text-sm leading-6 text-slate-400">
+                  هذه ملاحظات خاصة بهذه الروشتة فقط وتظهر في الطباعة. خريطة الأسنان تحفظ في ملف المريض الدائم.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <SecondaryButton type="button" onClick={addToothNote}>
+                  <Plus className="h-4 w-4" />
+                  إضافة سن
+                </SecondaryButton>
+                <SecondaryButton type="button" onClick={importToothNotesFromProfile} disabled={!selectedPatient?.id}>
+                  استيراد من الملاحظات العامة
+                </SecondaryButton>
+              </div>
+            </div>
+            <p className="mb-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-6 text-amber-100">
+              الاستيراد ينسخ ملاحظات خريطة الأسنان المحفوظة في ملف المريض إلى هذه الروشتة فقط. لا يوجد ربط مباشر؛ أي تعديل لاحق في ملف المريض لن يغير هذه الروشتة تلقائياً.
+            </p>
+            <div className="space-y-3">
+              {toothNotes.map((item, index) => (
+                <div key={index} className="grid gap-3 md:grid-cols-[130px_1fr_auto]">
+                  <Field label="رقم السن">
+                    <select
+                      className={inputClass}
+                      value={item.toothNumber}
+                      onChange={(event) => updateToothNote(index, 'toothNumber', event.target.value)}
+                    >
+                      <option value="">اختر</option>
+                      {Array.from({ length: 32 }, (_, toothIndex) => toothIndex + 1).map((number) => (
+                        <option key={number} value={number}>
+                          سن {number}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="الملاحظة">
+                    <input
+                      className={inputClass}
+                      value={item.note}
+                      onChange={(event) => updateToothNote(index, 'note', event.target.value)}
+                      placeholder="مثال: تسوس، حشو، خلع، ألم عند الضغط..."
+                    />
+                  </Field>
+                  {toothNotes.length > 1 ? (
+                    <button
+                      type="button"
+                      onClick={() => removeToothNote(index)}
+                      className="self-end rounded-xl border border-rose-500/20 bg-rose-500/10 p-2.5 text-rose-300 transition hover:bg-rose-500/20"
+                      aria-label="حذف السن"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
           </DataCard>
 
           <div className="sticky bottom-4 z-10 flex flex-wrap gap-3 rounded-2xl border border-white/10 bg-[#0b1020]/90 p-4 backdrop-blur-xl">
