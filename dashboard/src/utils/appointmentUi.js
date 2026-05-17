@@ -1,7 +1,9 @@
 export const appointmentStatusLabels = {
   ALL: 'كل الحالات',
-  PENDING: 'قيد الانتظار',
-  CONFIRMED: 'مؤكد',
+  PENDING: 'محجوز',
+  CONFIRMED: 'محجوز',
+  CHECKED_IN: 'تم الحضور',
+  IN_ROOM: 'داخل عند الطبيب',
   COMPLETED: 'تم الكشف',
   NO_SHOW: 'لم يأت',
   CANCELLED: 'ملغي',
@@ -13,6 +15,8 @@ export const appointmentStatusLabels = {
 export const appointmentStatusTone = {
   PENDING: 'amber',
   CONFIRMED: 'green',
+  CHECKED_IN: 'blue',
+  IN_ROOM: 'violet',
   COMPLETED: 'blue',
   NO_SHOW: 'red',
   CANCELLED: 'red',

@@ -367,6 +367,40 @@ const confirm = async (req, res, next) => {
   }
 };
 
+const checkIn = async (req, res, next) => {
+  try {
+    const { appointment: existingAppointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!existingAppointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    const appointment = await appointmentService.assignQueuePosition({ appointmentId: req.params.id });
+    res.json({ appointment });
+  } catch (error) {
+    if (error.message && /الحضور|الموعد غير موجود|حالته الحالية/.test(error.message)) {
+      return res.status(400).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
+const enterRoom = async (req, res, next) => {
+  try {
+    const { appointment: existingAppointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!existingAppointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    const appointment = await appointmentService.enterRoom({ appointmentId: req.params.id });
+    res.json({ appointment });
+  } catch (error) {
+    if (error.message && /الطبيب|الموعد غير موجود|تسجيل الحضور/.test(error.message)) {
+      return res.status(400).json({ error: error.message });
+    }
+    next(error);
+  }
+};
+
 const reject = async (req, res, next) => {
   try {
     const { appointment } = await getAccessibleAppointment(req, req.params.id);
@@ -449,8 +483,8 @@ const complete = async (req, res, next) => {
       return res.status(404).json({ error: 'الموعد غير موجود' });
     }
 
-    if (existingAppointment.status !== 'CONFIRMED') {
-      return res.status(400).json({ error: 'لا يمكن تحديد "تم الكشف" إلا للمواعيد المؤكدة' });
+    if (!['CHECKED_IN', 'IN_ROOM', 'CONFIRMED'].includes(existingAppointment.status)) {
+      return res.status(400).json({ error: 'لا يمكن تحديد "تم الكشف" إلا للحجوزات النشطة' });
     }
 
       const appointment = await prisma.appointment.update({
@@ -467,13 +501,6 @@ const complete = async (req, res, next) => {
           lastPaymentDate: new Date(),
         },
       });
-    }
-
-    // Patient entered the doctor room → move to front of the queue.
-    try {
-      await appointmentService.moveQueueToFront(req.params.id);
-    } catch (queueError) {
-      console.error('Queue move-to-front failed:', queueError.message);
     }
 
     res.json({ appointment });
@@ -527,7 +554,7 @@ const cancel = async (req, res, next) => {
       return res.status(404).json({ error: 'الموعد غير موجود' });
     }
 
-    if (!['PENDING', 'CONFIRMED'].includes(existingAppointment.status)) {
+    if (!['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_ROOM'].includes(existingAppointment.status)) {
       return res.status(400).json({ error: 'لا يمكن إلغاء هذا الموعد في حالته الحالية' });
     }
 
@@ -591,7 +618,7 @@ const block = async (req, res, next) => {
 const getStats = async (req, res, next) => {
   try {
     const scopedDoctor = await getScopedDoctor(req);
-    const statuses = ['PENDING', 'CONFIRMED', 'CANCELLED', 'REJECTED', 'EXPIRED', 'BLOCKED', 'COMPLETED', 'NO_SHOW'];
+    const statuses = ['PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_ROOM', 'CANCELLED', 'REJECTED', 'EXPIRED', 'BLOCKED', 'COMPLETED', 'NO_SHOW'];
     const counts = { ALL: 0, RESCHEDULED: 0 };
     const where = scopedDoctor ? { doctorId: scopedDoctor.id } : {};
 
@@ -652,6 +679,8 @@ module.exports = {
   getOne,
   create,
   confirm,
+  checkIn,
+  enterRoom,
   reject,
   update,
   block,

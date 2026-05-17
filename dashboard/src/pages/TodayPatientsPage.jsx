@@ -74,11 +74,21 @@ export default function TodayPatientsPage() {
 
   const handleQueueAssign = async (appointment) => {
     try {
-      await api.post(`/appointments/${appointment.id}/assign-queue-position`);
-      toast.success('تمت إضافة الموعد إلى الدور');
+      await api.post(`/appointments/${appointment.id}/check-in`);
+      toast.success('تم تسجيل حضور المريض وإعطاؤه رقم الدور');
       await loadAppointments();
     } catch (error) {
       toast.error(error.message || 'فشل إضافة الدور');
+    }
+  };
+
+  const handleEnterRoom = async (appointment) => {
+    try {
+      await api.post(`/appointments/${appointment.id}/enter-room`);
+      toast.success('تم إدخال المريض للطبيب');
+      await loadAppointments();
+    } catch (error) {
+      toast.error(error.message || 'فشل تحديث حالة المريض');
     }
   };
 
@@ -125,7 +135,21 @@ export default function TodayPatientsPage() {
           return matchesDoctor && matchesDate;
         })
         .sort((a, b) => {
-          // Queued patients first, ordered 1..N by queue position.
+          const statusRank = {
+            IN_ROOM: 0,
+            CHECKED_IN: 1,
+            CONFIRMED: 2,
+            PENDING: 3,
+            COMPLETED: 4,
+            NO_SHOW: 5,
+            CANCELLED: 6,
+            REJECTED: 7,
+            BLOCKED: 8,
+            EXPIRED: 9,
+          };
+          const rankDiff = (statusRank[a.status] ?? 99) - (statusRank[b.status] ?? 99);
+          if (rankDiff !== 0) return rankDiff;
+
           const aQ = a.queuePosition;
           const bQ = b.queuePosition;
           if (aQ != null && bQ != null) return aQ - bQ;
@@ -140,8 +164,9 @@ export default function TodayPatientsPage() {
   const stats = useMemo(
     () => ({
       total: filteredAppointments.length,
-      pending: filteredAppointments.filter((item) => item.status === 'PENDING').length,
-      confirmed: filteredAppointments.filter((item) => item.status === 'CONFIRMED').length,
+      booked: filteredAppointments.filter((item) => ['PENDING', 'CONFIRMED'].includes(item.status)).length,
+      checkedIn: filteredAppointments.filter((item) => item.status === 'CHECKED_IN').length,
+      inRoom: filteredAppointments.filter((item) => item.status === 'IN_ROOM').length,
       completed: filteredAppointments.filter((item) => item.status === 'COMPLETED').length,
     }),
     [filteredAppointments]
@@ -160,10 +185,11 @@ export default function TodayPatientsPage() {
         }
       />
 
-      <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard title="إجمالي النتائج" value={stats.total} icon={Users} tone="blue" />
-        <StatCard title="قيد الانتظار" value={stats.pending} icon={CalendarDays} tone="amber" />
-        <StatCard title="مؤكد" value={stats.confirmed} icon={CalendarDays} tone="green" />
+        <StatCard title="محجوز" value={stats.booked} icon={CalendarDays} tone="amber" />
+        <StatCard title="تم الحضور" value={stats.checkedIn} icon={CalendarDays} tone="blue" />
+        <StatCard title="داخل عند الطبيب" value={stats.inRoom} icon={CalendarDays} tone="green" />
         <StatCard title="تم الكشف" value={stats.completed} icon={CalendarDays} tone="slate" />
       </div>
 
@@ -192,7 +218,7 @@ export default function TodayPatientsPage() {
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <Field label="الحالة">
             <select className={inputClass} value={status} onChange={(event) => setStatus(event.target.value)}>
-              {['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED', 'REJECTED', 'BLOCKED'].map((item) => (
+              {['ALL', 'PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_ROOM', 'COMPLETED', 'NO_SHOW', 'CANCELLED', 'REJECTED', 'BLOCKED'].map((item) => (
                 <option key={item} value={item}>
                   {appointmentStatusLabels[item]}
                 </option>
@@ -266,9 +292,10 @@ export default function TodayPatientsPage() {
               onCreatePrescription={(item) => item.patientId && navigate(`/prescriptions?patientId=${encodeURIComponent(item.patientId)}&appointmentId=${encodeURIComponent(item.id)}`)}
               onConfirm={(item) => updateAppointmentStatus(item, 'confirm', 'تم تأكيد الموعد')}
               onComplete={(item) => updateAppointmentStatus(item, 'complete', 'تم تسجيل الكشف')}
+              onCheckIn={handleQueueAssign}
+              onEnterRoom={handleEnterRoom}
               onNoShow={(item) => updateAppointmentStatus(item, 'no-show', 'تم تسجيل عدم الحضور')}
               onCancel={(item) => updateAppointmentStatus(item, 'cancel', 'تم إلغاء الموعد')}
-              onQueueAssign={handleQueueAssign}
               onQueueChange={handleQueueChange}
             />
           ))}

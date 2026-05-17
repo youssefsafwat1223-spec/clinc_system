@@ -1,7 +1,10 @@
 const prisma = require('../lib/prisma');
 const { generateTimeSlots, formatDateAr, formatTimeAr } = require('../utils/helpers');
 
-const BLOCKING_STATUSES = ['CONFIRMED', 'PENDING', 'BLOCKED'];
+const BLOCKING_STATUSES = ['CONFIRMED', 'PENDING', 'CHECKED_IN', 'IN_ROOM', 'BLOCKED'];
+const ACTIVE_QUEUE_STATUSES = ['CHECKED_IN', 'IN_ROOM'];
+const CHECKIN_ELIGIBLE_STATUSES = ['PENDING', 'CONFIRMED'];
+const TERMINAL_STATUSES = ['COMPLETED', 'NO_SHOW', 'CANCELLED', 'REJECTED', 'EXPIRED'];
 const PENDING_APPOINTMENT_EXPIRY_HOURS = Number(process.env.PENDING_APPOINTMENT_EXPIRY_HOURS || 24);
 const WALK_IN_DAILY_LIMIT = Number(process.env.WALK_IN_DAILY_LIMIT || 30);
 
@@ -55,8 +58,7 @@ const getDoctorWalkInCount = async ({ doctorId, dateValue, excludeAppointmentId 
   });
 };
 
-// Queue is scoped per doctor per day. Walk-ins are assigned automatically;
-// scheduled appointments can be explicitly inserted later.
+// Queue is scoped per doctor per day and populated only when the patient arrives.
 const getNextQueuePosition = async ({ doctorId, dateValue }) => {
   const { dayStart, dayEnd } = getDayBounds(dateValue);
   const result = await prisma.appointment.aggregate({
@@ -64,6 +66,7 @@ const getNextQueuePosition = async ({ doctorId, dateValue }) => {
     where: {
       doctorId,
       scheduledTime: { gte: dayStart, lte: dayEnd },
+      status: { in: ACTIVE_QUEUE_STATUSES },
       queuePosition: { not: null },
     },
   });
@@ -96,12 +99,16 @@ const setQueuePosition = async ({ appointmentId, position, mode = 'swap' }) => {
   if (appointment.queuePosition == null) {
     throw new Error('أضف الموعد إلى الدور أولاً');
   }
+  if (!ACTIVE_QUEUE_STATUSES.includes(appointment.status)) {
+    throw new Error('يمكن تعديل الدور للحالات الموجودة في الانتظار فقط');
+  }
 
   const { dayStart, dayEnd } = getDayBounds(appointment.scheduledTime);
   const peers = await prisma.appointment.findMany({
     where: {
       doctorId: appointment.doctorId,
       scheduledTime: { gte: dayStart, lte: dayEnd },
+      status: { in: ACTIVE_QUEUE_STATUSES },
       queuePosition: { not: null },
     },
     orderBy: [{ queuePosition: 'asc' }, { createdAt: 'asc' }],
@@ -154,30 +161,32 @@ const assignQueuePosition = async ({ appointmentId }) => {
     throw new Error('الموعد غير موجود');
   }
 
-  if (appointment.queuePosition != null) {
+  if (appointment.status === 'CHECKED_IN' || appointment.status === 'IN_ROOM') {
     return prisma.appointment.findUnique({
       where: { id: appointmentId },
       include: { patient: true, doctor: true, service: true },
     });
   }
 
-  const { dayStart, dayEnd } = getDayBounds(appointment.scheduledTime);
-  const queued = await prisma.appointment.findMany({
-    where: {
+  if (!CHECKIN_ELIGIBLE_STATUSES.includes(appointment.status)) {
+    throw new Error('لا يمكن تسجيل الحضور لهذا الموعد في حالته الحالية');
+  }
+
+  const queuePosition =
+    appointment.queuePosition ??
+    (await getNextQueuePosition({
       doctorId: appointment.doctorId,
-      scheduledTime: { gte: dayStart, lte: dayEnd },
-      queuePosition: { not: null },
+      dateValue: appointment.scheduledTime,
+    }));
+
+  await prisma.appointment.update({
+    where: { id: appointmentId },
+    data: {
+      status: 'CHECKED_IN',
+      queuePosition,
+      checkedInAt: appointment.checkedInAt || new Date(),
     },
-    orderBy: [{ scheduledTime: 'asc' }, { queuePosition: 'asc' }, { createdAt: 'asc' }],
   });
-
-  const ordered = [...queued, appointment].sort((a, b) => {
-    const timeDiff = new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime();
-    if (timeDiff !== 0) return timeDiff;
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-  });
-
-  await renumberQueue(ordered);
 
   return prisma.appointment.findUnique({
     where: { id: appointmentId },
@@ -185,41 +194,23 @@ const assignQueuePosition = async ({ appointmentId }) => {
   });
 };
 
-// Move the selected appointment to queue position 1. Patients who were
-// BEFORE it shift down by one (+1). Patients AFTER it keep their numbers.
-// The selected patient is NOT removed from the queue.
-const moveQueueToFront = async (appointmentId) => {
+const enterRoom = async ({ appointmentId }) => {
   const appointment = await prisma.appointment.findUnique({ where: { id: appointmentId } });
-  if (!appointment || appointment.queuePosition == null) return;
+  if (!appointment) {
+    throw new Error('الموعد غير موجود');
+  }
+  if (appointment.status !== 'CHECKED_IN') {
+    throw new Error('يمكن إدخال المريض للطبيب بعد تسجيل الحضور فقط');
+  }
 
-  const oldPosition = appointment.queuePosition;
-  if (oldPosition === 1) return;
-
-  const { dayStart, dayEnd } = getDayBounds(appointment.scheduledTime);
-  const peers = await prisma.appointment.findMany({
-    where: {
-      doctorId: appointment.doctorId,
-      scheduledTime: { gte: dayStart, lte: dayEnd },
-      queuePosition: { not: null },
-      id: { not: appointmentId },
+  return prisma.appointment.update({
+    where: { id: appointmentId },
+    data: {
+      status: 'IN_ROOM',
+      enteredRoomAt: new Date(),
     },
+    include: { patient: true, doctor: true, service: true },
   });
-
-  const updates = [
-    prisma.appointment.update({ where: { id: appointmentId }, data: { queuePosition: 1 } }),
-  ];
-  peers.forEach((peer) => {
-    if (peer.queuePosition < oldPosition) {
-      updates.push(
-        prisma.appointment.update({
-          where: { id: peer.id },
-          data: { queuePosition: peer.queuePosition + 1 },
-        })
-      );
-    }
-  });
-
-  await prisma.$transaction(updates);
 };
 
 const getAppointmentConflict = async ({ doctorId, scheduledTime, duration, excludeAppointmentId = null }) => {
@@ -410,11 +401,6 @@ const createAppointment = async ({
     });
   } else {
     const bookingRef = await generateBookingRef();
-    const queuePosition =
-      resolvedAppointmentType === 'WALK_IN'
-        ? await getNextQueuePosition({ doctorId, dateValue: resolvedScheduledTime })
-        : null;
-
     appointment = await prisma.appointment.create({
       data: {
         bookingRef,
@@ -423,7 +409,7 @@ const createAppointment = async ({
         serviceId,
         appointmentType: resolvedAppointmentType,
         scheduledTime: resolvedScheduledTime,
-        queuePosition,
+        queuePosition: null,
         status: 'PENDING',
         lockedUntil,
       },
@@ -582,5 +568,5 @@ module.exports = {
   expirePendingAppointments,
   setQueuePosition,
   assignQueuePosition,
-  moveQueueToFront,
+  enterRoom,
 };

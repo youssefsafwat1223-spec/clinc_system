@@ -26,7 +26,7 @@ const daysAr = {
   saturday: 'السبت',
 };
 
-const statusOrder = ['ALL', 'PENDING', 'CONFIRMED', 'COMPLETED', 'NO_SHOW', 'CANCELLED', 'REJECTED', 'BLOCKED'];
+const statusOrder = ['ALL', 'PENDING', 'CONFIRMED', 'CHECKED_IN', 'IN_ROOM', 'COMPLETED', 'NO_SHOW', 'CANCELLED', 'REJECTED', 'BLOCKED'];
 
 const dayKey = (value) => new Date(value).toISOString().slice(0, 10);
 const monthOptions = buildRecentMonthOptions();
@@ -109,6 +109,16 @@ export default function AppointmentsPage() {
         if (!ok) return;
         await api.post(`/appointments/${appointment.id}/complete`);
         toast.success('تم تسجيل الموعد كمكتمل');
+      }
+
+      if (action === 'check-in') {
+        await api.post(`/appointments/${appointment.id}/check-in`);
+        toast.success('تم تسجيل حضور المريض');
+      }
+
+      if (action === 'enter-room') {
+        await api.post(`/appointments/${appointment.id}/enter-room`);
+        toast.success('تم إدخال المريض للطبيب');
       }
 
       if (action === 'no-show') {
@@ -395,10 +405,11 @@ export default function AppointmentsPage() {
         </DataCard>
       ) : null}
 
-      <div className="my-6 grid gap-4 md:grid-cols-4">
+      <div className="my-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard title="إجمالي المواعيد" value={filteredAppointments.length} icon={CalendarDays} tone="blue" />
-        <StatCard title="قيد الانتظار" value={stats.PENDING || 0} icon={Clock} tone="amber" />
-        <StatCard title="مؤكد" value={stats.CONFIRMED || 0} icon={CheckCircle} tone="green" />
+        <StatCard title="محجوز" value={(stats.PENDING || 0) + (stats.CONFIRMED || 0)} icon={Clock} tone="amber" />
+        <StatCard title="تم الحضور" value={stats.CHECKED_IN || 0} icon={CheckCircle} tone="blue" />
+        <StatCard title="داخل عند الطبيب" value={stats.IN_ROOM || 0} icon={CheckCircle} tone="green" />
         <StatCard title="مواعيد اليوم" value={todayAppointmentsCount} hint={`${upcomingCount} موعد قادم`} icon={UserRound} tone="slate" />
       </div>
 
@@ -431,6 +442,8 @@ export default function AppointmentsPage() {
                     key={appointment.id}
                     appointment={appointment}
                     onConfirm={(item) => handleAction(item, 'confirm')}
+                    onCheckIn={(item) => handleAction(item, 'check-in')}
+                    onEnterRoom={(item) => handleAction(item, 'enter-room')}
                     onReject={(item) => handleAction(item, 'reject')}
                     onComplete={(item) => handleAction(item, 'complete')}
                     onNoShow={(item) => handleAction(item, 'no-show')}

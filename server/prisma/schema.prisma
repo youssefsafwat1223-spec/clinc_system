@@ -11,6 +11,8 @@ datasource db {
 enum AppointmentStatus {
   PENDING
   CONFIRMED
+  CHECKED_IN
+  IN_ROOM
   CANCELLED
   REJECTED
   EXPIRED
@@ -263,6 +265,8 @@ model Appointment {
     status        AppointmentStatus @default(PENDING)
     lockedUntil   DateTime?         @map("locked_until")
     notes         String?
+    checkedInAt   DateTime?         @map("checked_in_at")
+    enteredRoomAt DateTime?         @map("entered_room_at")
     completedAt   DateTime?         @map("completed_at")
     reviewSent    Boolean           @default(false) @map("review_sent")
     notifications Notification[]

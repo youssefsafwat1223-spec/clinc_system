@@ -169,11 +169,21 @@ export default function PatientProfilePage() {
 
   const handleQueueAssign = async (appointment) => {
     try {
-      await api.post(`/appointments/${appointment.id}/assign-queue-position`);
-      toast.success('تمت إضافة المريض إلى الدور');
+      await api.post(`/appointments/${appointment.id}/check-in`);
+      toast.success('تم تسجيل حضور المريض');
       await loadPatient();
     } catch (error) {
-      toast.error(error.message || 'فشل إضافة الدور');
+      toast.error(error.message || 'فشل تسجيل الحضور');
+    }
+  };
+
+  const handleEnterRoom = async (appointment) => {
+    try {
+      await api.post(`/appointments/${appointment.id}/enter-room`);
+      toast.success('تم إدخال المريض للطبيب');
+      await loadPatient();
+    } catch (error) {
+      toast.error(error.message || 'فشل تحديث حالة المريض');
     }
   };
 
@@ -544,10 +554,11 @@ export default function PatientProfilePage() {
                 key={appointment.id}
                 appointment={{ ...appointment, patient }}
                 compact
+                onCheckIn={handleQueueAssign}
+                onEnterRoom={handleEnterRoom}
                 onComplete={(item) => handleAppointmentAction(item, 'complete')}
                 onNoShow={(item) => handleAppointmentAction(item, 'no-show')}
                 onCancel={(item) => handleAppointmentAction(item, 'cancel')}
-                onQueueAssign={handleQueueAssign}
                 onQueueChange={handleQueueChange}
                 onCreatePrescription={() => {
                   setPrescriptionAppointmentRef(appointment.bookingRef || appointment.id || '');

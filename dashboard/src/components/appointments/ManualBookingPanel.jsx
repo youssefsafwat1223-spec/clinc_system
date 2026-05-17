@@ -36,7 +36,7 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
     patientId: '',
     doctorId: '',
     serviceId: '',
-    appointmentType: 'SCHEDULED',
+    appointmentType: 'WALK_IN',
     targetType: 'SELF',
     familyName: '',
     date: todayDateValue(),
@@ -333,7 +333,7 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
         ...current,
         patientId: '',
         serviceId: '',
-        appointmentType: 'SCHEDULED',
+        appointmentType: 'WALK_IN',
         targetType: 'SELF',
         familyName: '',
         time: '',
@@ -541,8 +541,8 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
             onChange={(event) => handleFormChange('appointmentType', event.target.value)}
             className="input-field"
           >
-            <option value="SCHEDULED">حجز بموعد</option>
             <option value="WALK_IN">حجز بدون موعد</option>
+            <option value="SCHEDULED">حجز بموعد</option>
           </select>
         </div>
 

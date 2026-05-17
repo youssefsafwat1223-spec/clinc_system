@@ -11,13 +11,14 @@ import {
 export default function AppointmentCard({
   appointment,
   onConfirm,
+  onCheckIn,
+  onEnterRoom,
   onReject,
   onComplete,
   onNoShow,
   onCancel,
   onOpenPatientProfile,
   onCreatePrescription,
-  onQueueAssign,
   onQueueChange,
   compact = false,
 }) {
@@ -26,7 +27,9 @@ export default function AppointmentCard({
   const doctorName = appointment.doctor?.name || 'طبيب غير محدد';
   const isWalkIn = appointment.appointmentType === 'WALK_IN';
   const hasQueue = appointment.queuePosition != null;
-  const canAssignQueue = !isWalkIn && !hasQueue && onQueueAssign;
+  const canCheckIn = ['PENDING', 'CONFIRMED'].includes(appointment.status) && onCheckIn;
+  const canEnterRoom = appointment.status === 'CHECKED_IN' && onEnterRoom;
+  const canEditQueue = hasQueue && ['CHECKED_IN', 'IN_ROOM'].includes(appointment.status) && onQueueChange;
 
   const [editingQueue, setEditingQueue] = useState(false);
   const [queueDraft, setQueueDraft] = useState(String(appointment.queuePosition ?? ''));
@@ -74,7 +77,7 @@ export default function AppointmentCard({
 
           <h3 className="truncate text-2xl font-black text-white">{patientName}</h3>
 
-          {hasQueue && onQueueChange ? (
+          {canEditQueue ? (
             <div className="mt-3">
               {editingQueue ? (
                 <div className="flex flex-wrap items-end gap-2 rounded-xl border border-white/10 bg-white/5 p-3">
@@ -179,31 +182,70 @@ export default function AppointmentCard({
             </SecondaryButton>
           ) : null}
 
-          {canAssignQueue ? (
-            <SecondaryButton type="button" onClick={() => onQueueAssign?.(appointment)}>
-              <Hash className="h-4 w-4" />
-              إضافة دور
-            </SecondaryButton>
-          ) : null}
-
           {appointment.status === 'PENDING' ? (
             <>
-              <PrimaryButton type="button" onClick={() => onConfirm?.(appointment)}>
-                <CheckCircle className="h-4 w-4" />
-                قبول
+              {onConfirm ? (
+                <PrimaryButton type="button" onClick={() => onConfirm?.(appointment)}>
+                  <CheckCircle className="h-4 w-4" />
+                  قبول
+                </PrimaryButton>
+              ) : null}
+              {onReject ? (
+                <SecondaryButton
+                  type="button"
+                  onClick={() => onReject?.(appointment)}
+                  className="hover:bg-rose-500/10 hover:text-rose-200"
+                >
+                  <XCircle className="h-4 w-4" />
+                  رفض
+                </SecondaryButton>
+              ) : null}
+            </>
+          ) : null}
+
+          {canCheckIn ? (
+            <>
+              <PrimaryButton
+                type="button"
+                onClick={() => onCheckIn?.(appointment)}
+                className="w-full px-6 py-3 text-base xl:w-auto"
+              >
+                <Hash className="h-5 w-5" />
+                تم الحضور
               </PrimaryButton>
+              {appointment.status === 'CONFIRMED' ? (
+                <SecondaryButton
+                  type="button"
+                  onClick={() => onNoShow?.(appointment)}
+                  className="hover:bg-amber-500/10 hover:text-amber-200"
+                >
+                  <XCircle className="h-4 w-4" />
+                  لم يأت
+                </SecondaryButton>
+              ) : null}
               <SecondaryButton
                 type="button"
-                onClick={() => onReject?.(appointment)}
+                onClick={() => onCancel?.(appointment)}
                 className="hover:bg-rose-500/10 hover:text-rose-200"
               >
                 <XCircle className="h-4 w-4" />
-                رفض
+                إلغاء
               </SecondaryButton>
             </>
           ) : null}
 
-          {appointment.status === 'CONFIRMED' ? (
+          {canEnterRoom ? (
+            <PrimaryButton
+              type="button"
+              onClick={() => onEnterRoom?.(appointment)}
+              className="w-full px-6 py-3 text-base xl:w-auto"
+            >
+              <Stethoscope className="h-5 w-5" />
+              تم الدخول للطبيب
+            </PrimaryButton>
+          ) : null}
+
+          {appointment.status === 'IN_ROOM' ? (
             <>
               <PrimaryButton
                 type="button"
@@ -213,22 +255,6 @@ export default function AppointmentCard({
                 <CheckCircle className="h-5 w-5" />
                 تم الكشف
               </PrimaryButton>
-              <SecondaryButton
-                type="button"
-                onClick={() => onNoShow?.(appointment)}
-                className="hover:bg-amber-500/10 hover:text-amber-200"
-              >
-                <XCircle className="h-4 w-4" />
-                لم يأت
-              </SecondaryButton>
-              <SecondaryButton
-                type="button"
-                onClick={() => onCancel?.(appointment)}
-                className="hover:bg-rose-500/10 hover:text-rose-200"
-              >
-                <XCircle className="h-4 w-4" />
-                إلغاء
-              </SecondaryButton>
             </>
           ) : null}
         </div>
