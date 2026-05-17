@@ -80,6 +80,7 @@ export default function PatientProfilePage() {
         accountingNotes: nextPatient.accountingNotes || '',
         creditBalance: nextPatient.creditBalance ?? nextPatient.accountBalance ?? 0,
       });
+      return true;
     } catch (error) {
       toast.error(error.message || 'فشل تحميل ملف المريض');
     } finally {
