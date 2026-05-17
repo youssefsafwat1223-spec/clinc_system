@@ -183,6 +183,7 @@ model ExtraCharge {
   description  String?
   amount       Float    @default(0)
   paidAmount   Float    @default(0) @map("paid_amount")
+  teethCount   Int      @default(1) @map("teeth_count")
   status       String   @default("UNPAID")
   method       String?
   notes        String?
@@ -445,6 +446,7 @@ model Payment {
   discountAmount Float         @default(0) @map("discount_amount")
   finalAmount    Float         @default(0) @map("final_amount")
   paidAmount     Float         @default(0) @map("paid_amount")
+  teethCount     Int           @default(1) @map("teeth_count")
   status         PaymentStatus @default(UNPAID)
   method         String?
   notes          String?

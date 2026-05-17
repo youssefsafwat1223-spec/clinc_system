@@ -10,6 +10,8 @@ const resolveStatus = (paidAmount, finalAmount, explicitStatus) => {
 
 const buildPaymentData = async (appointment, body = {}) => {
   const amount = body.amount !== undefined ? toNumber(body.amount) : toNumber(appointment.service?.price);
+  const teethCount =
+    body.teethCount !== undefined ? Math.max(1, Math.floor(toNumber(body.teethCount) || 1)) : undefined;
   const discountAmount =
     body.discountAmount !== undefined
       ? toNumber(body.discountAmount)
@@ -26,6 +28,7 @@ const buildPaymentData = async (appointment, body = {}) => {
     discountAmount: Math.min(amount, Math.max(0, discountAmount)),
     finalAmount,
     paidAmount,
+    ...(teethCount !== undefined && { teethCount }),
     status,
     method: body.method || null,
     notes: body.notes || null,
@@ -237,6 +240,7 @@ const revenueReport = async (req, res, next) => {
         const finalAmount = toNumber(payment.finalAmount);
         const paidAmount = toNumber(payment.paidAmount);
         const remaining = Math.max(0, finalAmount - paidAmount);
+        const teethCount = Math.max(1, Number(payment.teethCount || 1));
         const service = payment.service || payment.appointment?.service;
         const serviceId = service?.id || 'unknown';
         const serviceName = service?.nameAr || service?.name || 'خدمة غير محددة';
@@ -250,6 +254,7 @@ const revenueReport = async (req, res, next) => {
             debtAmount: 0,
             receivedAmount: 0,
             caseCount: 0,
+            teethCount: 0,
           });
         }
 
@@ -258,6 +263,7 @@ const revenueReport = async (req, res, next) => {
         row.debtAmount += remaining;
         row.receivedAmount += paidAmount;
         row.caseCount += 1;
+        row.teethCount += teethCount;
 
         acc.totalRevenue += finalAmount;
         acc.totalReceived += paidAmount;
@@ -327,6 +333,7 @@ const revenueReport = async (req, res, next) => {
       const finalAmount = toNumber(extra.amount);
       const paidAmount = toNumber(extra.paidAmount);
       const remaining = Math.max(0, finalAmount - paidAmount);
+      const teethCount = Math.max(1, Number(extra.teethCount || 1));
       const serviceName = extra.service?.nameAr || extra.service?.name || extra.description || 'خدمة إضافية';
       const serviceKey = extra.service?.id || 'extra-misc';
 
@@ -339,6 +346,7 @@ const revenueReport = async (req, res, next) => {
           debtAmount: 0,
           receivedAmount: 0,
           caseCount: 0,
+          teethCount: 0,
         });
       }
       const row = rowsMap.get(serviceKey);
@@ -346,6 +354,7 @@ const revenueReport = async (req, res, next) => {
       row.debtAmount += remaining;
       row.receivedAmount += paidAmount;
       row.caseCount += 1;
+      row.teethCount += teethCount;
 
       summary.totalRevenue += finalAmount;
       summary.totalReceived += paidAmount;
@@ -370,6 +379,7 @@ const revenueReport = async (req, res, next) => {
         amount: finalAmount,
         baseAmount: finalAmount,
         discountAmount: 0,
+        teethCount,
         paidAmount,
         remainingAmount: remaining,
         paymentDate: extra.createdAt,
@@ -409,6 +419,7 @@ const revenueReport = async (req, res, next) => {
         amount: toNumber(payment.finalAmount),
         baseAmount: toNumber(payment.amount),
         discountAmount: toNumber(payment.discountAmount),
+        teethCount: Math.max(1, Number(payment.teethCount || 1)),
         paidAmount: toNumber(payment.paidAmount),
         remainingAmount: Math.max(0, toNumber(payment.finalAmount) - toNumber(payment.paidAmount)),
         paymentDate: payment.paidAt || payment.createdAt,
@@ -445,7 +456,7 @@ const listExtraCharges = async (req, res, next) => {
 
 const createExtraCharge = async (req, res, next) => {
   try {
-    const { patientId, serviceId, doctorId, description, amount, paidAmount = 0, method, notes } = req.body;
+    const { patientId, serviceId, doctorId, description, amount, paidAmount = 0, teethCount = 1, method, notes } = req.body;
     if (!patientId) return res.status(400).json({ error: 'المريض مطلوب' });
     if (!serviceId && !String(description || '').trim()) {
       return res.status(400).json({ error: 'اختر خدمة أو اكتب وصفاً' });
@@ -453,6 +464,7 @@ const createExtraCharge = async (req, res, next) => {
     const amountNum = toNumber(amount);
     if (!(amountNum > 0)) return res.status(400).json({ error: 'المبلغ غير صالح' });
     const paidNum = Math.max(0, toNumber(paidAmount));
+    const teethCountNum = Math.max(1, Math.floor(toNumber(teethCount) || 1));
 
     const extraCharge = await prisma.extraCharge.create({
       data: {
@@ -462,6 +474,7 @@ const createExtraCharge = async (req, res, next) => {
         description: description ? String(description).trim() : null,
         amount: amountNum,
         paidAmount: paidNum,
+        teethCount: teethCountNum,
         status: extraStatus(paidNum, amountNum),
         method: method || null,
         notes: notes || null,
@@ -483,12 +496,17 @@ const updateExtraCharge = async (req, res, next) => {
     const amountNum = req.body.amount !== undefined ? toNumber(req.body.amount) : existing.amount;
     const paidNum =
       req.body.paidAmount !== undefined ? Math.max(0, toNumber(req.body.paidAmount)) : existing.paidAmount;
+    const teethCountNum =
+      req.body.teethCount !== undefined
+        ? Math.max(1, Math.floor(toNumber(req.body.teethCount) || 1))
+        : existing.teethCount;
 
     const extraCharge = await prisma.extraCharge.update({
       where: { id: req.params.id },
       data: {
         amount: amountNum,
         paidAmount: paidNum,
+        teethCount: teethCountNum,
         status: extraStatus(paidNum, amountNum),
         method: req.body.method ?? existing.method,
         notes: req.body.notes ?? existing.notes,
@@ -563,6 +581,7 @@ const update = async (req, res, next) => {
       amount: req.body.amount ?? existing.amount,
       discountAmount: req.body.discountAmount ?? existing.discountAmount,
       paidAmount: req.body.paidAmount ?? existing.paidAmount,
+      teethCount: req.body.teethCount ?? existing.teethCount,
       status: req.body.status,
       method: req.body.method ?? existing.method,
       notes: req.body.notes ?? existing.notes,

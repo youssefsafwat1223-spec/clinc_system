@@ -39,6 +39,7 @@ const defaultFilters = () => ({
 const defaultEditForm = (payment = {}) => ({
   paidAmount: payment.paidAmount || 0,
   discountAmount: payment.discountAmount || 0,
+  teethCount: payment.teethCount || 1,
   method: payment.method || 'cash',
   notes: payment.notes || '',
   caseStatus: payment.caseStatus || '',
@@ -48,6 +49,7 @@ async function savePaymentChanges(payment, form) {
   if (payment.source === 'extra') {
     await api.patch(`/payments/extra-charges/${payment.id}`, {
       paidAmount: Number(form.paidAmount) || 0,
+      teethCount: Math.max(1, Math.floor(Number(form.teethCount) || 1)),
       method: form.method,
       notes: form.notes,
     });
@@ -57,6 +59,7 @@ async function savePaymentChanges(payment, form) {
   await api.put(`/payments/${payment.id}`, {
     paidAmount: Number(form.paidAmount) || 0,
     discountAmount: Number(form.discountAmount) || 0,
+    teethCount: Math.max(1, Math.floor(Number(form.teethCount) || 1)),
     method: form.method,
     notes: form.notes,
   });
@@ -78,7 +81,7 @@ function PaymentFields({ payment, form, setForm }) {
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
       <Field label="المبلغ المدفوع">
         <input
           className={inputClass}
@@ -97,6 +100,16 @@ function PaymentFields({ payment, form, setForm }) {
           />
         </Field>
       ) : null}
+      <Field label="عدد الأسنان">
+        <input
+          className={inputClass}
+          type="number"
+          min="1"
+          step="1"
+          value={form.teethCount}
+          onChange={(event) => update('teethCount', event.target.value)}
+        />
+      </Field>
       <Field label="طريقة الدفع">
         <select className={inputClass} value={form.method} onChange={(event) => update('method', event.target.value)}>
           <option value="cash">كاش</option>
@@ -188,6 +201,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
     doctorId: '',
     amount: '',
     paidAmount: '',
+    teethCount: '1',
     method: 'cash',
     notes: '',
   });
@@ -269,12 +283,22 @@ export default function RevenueReport({ patientId = '', compact = false }) {
         doctorId: addForm.doctorId || undefined,
         amount: Number(addForm.amount),
         paidAmount: Number(addForm.paidAmount) || 0,
+        teethCount: Math.max(1, Math.floor(Number(addForm.teethCount) || 1)),
         method: addForm.method,
         notes: addForm.notes,
       });
       toast.success('تمت إضافة الخدمة');
       setAddOpen(false);
-      setAddForm({ serviceId: '', description: '', doctorId: '', amount: '', paidAmount: '', method: 'cash', notes: '' });
+      setAddForm({
+        serviceId: '',
+        description: '',
+        doctorId: '',
+        amount: '',
+        paidAmount: '',
+        teethCount: '1',
+        method: 'cash',
+        notes: '',
+      });
       loadReport();
     } catch (error) {
       toast.error(error.message || 'فشل إضافة الخدمة');
@@ -479,6 +503,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                     <th className="px-3 py-2 text-right">الديون</th>
                     <th className="px-3 py-2 text-right">المدفوع</th>
                     <th className="px-3 py-2 text-right">عدد الحالات</th>
+                    <th className="px-3 py-2 text-right">عدد الأسنان</th>
                     <th className="px-3 py-2 text-right">النوع</th>
                   </tr>
                 </thead>
@@ -490,12 +515,13 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                       <td className="px-3 py-2">{money(row.debtAmount)}</td>
                       <td className="px-3 py-2">{money(row.receivedAmount)}</td>
                       <td className="px-3 py-2">{row.caseCount}</td>
+                      <td className="px-3 py-2">{row.teethCount || row.caseCount || 0}</td>
                       <td className="px-3 py-2">{row.caseType}</td>
                     </tr>
                   ))}
                   {(report.rows || []).length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-3 py-6 text-center text-slate-500">
+                      <td colSpan={7} className="px-3 py-6 text-center text-slate-500">
                         لا توجد بيانات في هذه الفترة.
                       </td>
                     </tr>
@@ -544,6 +570,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                       <p className="text-xs text-slate-400">
                         {payment.treatmentType || '-'} · د. {payment.doctorName || '-'} · {payment.patientPhone || ''}
                       </p>
+                      <p className="mt-1 text-xs font-bold text-sky-200">عدد الأسنان: {payment.teethCount || 1}</p>
                     </div>
                     <div className="text-sm text-slate-300">
                       {new Date(payment.paymentDate).toLocaleString('ar-EG')}
@@ -693,6 +720,16 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                   type="number"
                   value={addForm.paidAmount}
                   onChange={(event) => setAddForm((current) => ({ ...current, paidAmount: event.target.value }))}
+                />
+              </Field>
+              <Field label="عدد الأسنان">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={addForm.teethCount}
+                  onChange={(event) => setAddForm((current) => ({ ...current, teethCount: event.target.value }))}
                 />
               </Field>
               <Field label="طريقة الدفع">
