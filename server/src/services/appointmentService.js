@@ -19,6 +19,19 @@ const rangesOverlap = (a, b) => a.start < b.end && a.end > b.start;
 const hasWorkingHours = (workingHours) =>
   Boolean(workingHours && typeof workingHours === 'object' && Object.values(workingHours).some(Boolean));
 
+const DAY_KEYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+
+// A day is open if its working-hours entry has at least one valid period.
+// Mirrors normalizeWorkingPeriods() used by generateTimeSlots.
+const isDayOpen = (workingHours, date) => {
+  const hours = workingHours?.[DAY_KEYS[new Date(date).getDay()]];
+  if (!hours) return false;
+  if (Array.isArray(hours)) return hours.some((period) => period && period.start && period.end);
+  if (hours.start && hours.end) return true;
+  if (Array.isArray(hours.periods)) return hours.periods.some((period) => period && period.start && period.end);
+  return false;
+};
+
 const getClinicWorkingHours = async () => {
   const settings = await prisma.clinicSettings.findFirst({
     select: { workingHours: true },
@@ -325,6 +338,13 @@ const createAppointment = async ({
       : new Date(scheduledTime);
 
   if (resolvedAppointmentType === 'WALK_IN') {
+    // Block walk-ins on a clinic/doctor day-off, same as scheduled bookings.
+    const walkInDoctor = await prisma.doctor.findUnique({ where: { id: doctorId } });
+    const walkInWorkingHours = await resolveWorkingHours(walkInDoctor?.workingHours);
+    if (!isDayOpen(walkInWorkingHours, resolvedScheduledTime)) {
+      return { conflict: true, dayOff: true, alternatives: [] };
+    }
+
     const walkInCount = await getDoctorWalkInCount({
       doctorId,
       dateValue: resolvedScheduledTime,

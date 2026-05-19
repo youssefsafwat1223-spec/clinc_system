@@ -103,6 +103,12 @@ const treatmentStatusLabels = {
   DONE: 'مكتمل',
 };
 
+const treatmentStatusBadge = {
+  PLANNED: 'border-slate-500/30 bg-slate-500/10 text-slate-200',
+  IN_PROGRESS: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
+  DONE: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+};
+
 const toothType = (number) => {
   const n = Number(number);
   const molars = [1, 2, 3, 14, 15, 16, 17, 18, 19, 30, 31, 32];
@@ -680,7 +686,7 @@ export default function TeethChart({
                   {selectedServiceName || 'بدون خدمة'}{selectedDoctorName ? ` · د. ${selectedDoctorName}` : ''}
                 </p>
               </div>
-              <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-black text-sky-200">
+              <span className={`rounded-full border px-3 py-1 text-xs font-black ${treatmentStatusBadge[entry.status] || treatmentStatusBadge.PLANNED}`}>
                 {treatmentStatusLabels[entry.status] || 'مخطط'}
               </span>
             </div>
@@ -790,26 +796,39 @@ export default function TeethChart({
           ) : null}
 
           {!readonly ? (
-            <div className="grid gap-2">
-              <PrimaryButton type="button" onClick={() => handleStartTreatment()} disabled={saving || !entry.serviceId}>بدء العلاج</PrimaryButton>
-              <SecondaryButton type="button" onClick={handlePlanOnly} disabled={saving}>عدم البدء الآن</SecondaryButton>
-              <SecondaryButton type="button" onClick={handlePayFullAmount} disabled={saving || !entry.serviceId}>دفع كامل</SecondaryButton>
-              {onAddToPrescription ? (
-                <SecondaryButton type="button" onClick={() => onAddToPrescription(selectedTooth, entry)}>إضافة للروشتة</SecondaryButton>
-              ) : null}
-              {!showServiceForm ? (
-                <SecondaryButton type="button" onClick={() => setShowServiceForm(true)}>
-                  <PlusCircle className="h-4 w-4" />
-                  إضافة خدمة أخرى
-                </SecondaryButton>
-              ) : null}
-              <PrimaryButton type="button" onClick={saveCurrentTooth} disabled={saving}>
-                <Save className="h-4 w-4" />
-                حفظ السن المحدد
+            <div className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <PrimaryButton
+                type="button"
+                onClick={() => handleStartTreatment()}
+                disabled={saving || !entry.serviceId}
+                className="w-full py-3 text-base"
+              >
+                بدء العلاج
               </PrimaryButton>
-              {showSaveButton ? (
-                <SecondaryButton type="button" onClick={saveTeeth} disabled={saving}>حفظ خريطة الأسنان</SecondaryButton>
-              ) : null}
+
+              <div className="grid grid-cols-2 gap-2">
+                <SecondaryButton type="button" onClick={handlePlanOnly} disabled={saving} className="w-full">عدم البدء الآن</SecondaryButton>
+                <SecondaryButton type="button" onClick={handlePayFullAmount} disabled={saving || !entry.serviceId} className="w-full">دفع كامل</SecondaryButton>
+                {onAddToPrescription ? (
+                  <SecondaryButton type="button" onClick={() => onAddToPrescription(selectedTooth, entry)} className="w-full">إضافة للروشتة</SecondaryButton>
+                ) : null}
+                {!showServiceForm ? (
+                  <SecondaryButton type="button" onClick={() => setShowServiceForm(true)} className="w-full">
+                    <PlusCircle className="h-4 w-4" />
+                    إضافة خدمة أخرى
+                  </SecondaryButton>
+                ) : null}
+              </div>
+
+              <div className="space-y-2 border-t border-white/10 pt-3">
+                <PrimaryButton type="button" onClick={saveCurrentTooth} disabled={saving} className="w-full">
+                  <Save className="h-4 w-4" />
+                  حفظ السن المحدد
+                </PrimaryButton>
+                {showSaveButton ? (
+                  <SecondaryButton type="button" onClick={saveTeeth} disabled={saving} className="w-full">حفظ خريطة الأسنان</SecondaryButton>
+                ) : null}
+              </div>
             </div>
           ) : null}
 
