@@ -1,4 +1,4 @@
-﻿const prisma = require('../lib/prisma');
+const prisma = require('../lib/prisma');
 const whatsappService = require('./whatsappService');
 const messengerService = require('./messengerService');
 const instagramService = require('./instagramService');
@@ -25,8 +25,8 @@ const WALK_IN_REMINDER_LEAD_HOURS = Number(process.env.WALK_IN_REMINDER_LEAD_HOU
 const DAY_NAMES = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
 const DEFAULT_REMINDER_OPENING_TIME = process.env.DEFAULT_REMINDER_OPENING_TIME || '3:00 PM';
 
-const getServiceName = (appointment) => appointment.service?.nameAr || appointment.service?.name || 'ط§ظ„ط®ط¯ظ…ط©';
-const getDoctorName = (appointment) => appointment.doctor?.name || 'ط؛ظٹط± ظ…ط­ط¯ط¯';
+const getServiceName = (appointment) => appointment.service?.nameAr || appointment.service?.name || 'الخدمة';
+const getDoctorName = (appointment) => appointment.doctor?.name || 'غير محدد';
 
 const resolveChannel = (patient) => {
   if (!patient) return null;
@@ -145,25 +145,25 @@ const getReminderOpeningTime = (appointment, clinicWorkingHours = {}) => {
 const formatReminderOpeningTime = (openingTime) =>
   typeof openingTime === 'string' ? openingTime : formatTimeAr(openingTime);
 
-const buildGeneralOpeningReminderText = (appointment, openingTime, title = 'طھط°ظƒظٹط± ط¨ظ…ظˆط¹ط¯ظƒ') =>
+const buildGeneralOpeningReminderText = (appointment, openingTime, title = 'تذكير بموعدك') =>
   [
     title,
     '',
-    `ظ…ط±ط­ط¨ط§ظ‹ ${appointment.patient?.displayName || appointment.patient?.name || 'ط¹ط²ظٹط²ظ†ط§ ط§ظ„ظ…ط±ظٹط¶'}طŒ`,
-    `ظ…ظˆط¹ط¯ظƒ ظٹظˆظ… ${formatDayNameAr(appointment.scheduledTime)} ط§ظ„ظ…ظˆط§ظپظ‚ ${formatDateAr(appointment.scheduledTime)}.`,
-    `طھظپطھط­ ط§ظ„ط¹ظٹط§ط¯ط© ط§ظ„ط³ط§ط¹ط© ${formatReminderOpeningTime(openingTime)}طŒ ظˆط§ظ„ط§ط³طھظ‚ط¨ط§ظ„ ط¨ط§ظ„طھط±طھظٹط¨ ط­ط³ط¨ ط§ظ„ط­ط¶ظˆط±.`,
-    'ظٹط±ط¬ظ‰ ط§ظ„ط¹ظ„ظ… ط£ظ† ظ‡ط°ط§ ظˆظ‚طھ ظپطھط­ ط§ظ„ط¹ظٹط§ط¯ط© ظˆظ„ظٹط³ ظ…ظˆط¹ط¯ظ‹ط§ ظ…ط­ط¯ط¯ظ‹ط§ ط®ط§طµظ‹ط§ ط¨ظƒ.',
+    `مرحباً ${appointment.patient?.displayName || appointment.patient?.name || 'عزيزنا المريض'}،`,
+    `موعدك يوم ${formatDayNameAr(appointment.scheduledTime)} الموافق ${formatDateAr(appointment.scheduledTime)}.`,
+    `تفتح العيادة الساعة ${formatReminderOpeningTime(openingTime)}، والاستقبال بالترتيب حسب الحضور.`,
+    'يرجى العلم أن هذا وقت فتح العيادة وليس موعدًا محددًا خاصًا بك.',
     '',
-    `ط§ظ„ط·ط¨ظٹط¨: ${getDoctorName(appointment)}`,
-    `ط§ظ„ط®ط¯ظ…ط©: ${getServiceName(appointment)}`,
+    `الطبيب: ${getDoctorName(appointment)}`,
+    `الخدمة: ${getServiceName(appointment)}`,
     '',
-    'ظ„ط£ظٹ ط§ط³طھظپط³ط§ط± ط£ظˆ طھط¹ط¯ظٹظ„ طھظˆط§طµظ„ ظ…ط¹ظ†ط§.',
+    'لأي استفسار أو تعديل تواصل معنا.',
   ].join('\n');
 
 const sendAppointmentReminderTemplate = async ({ appointment, patient, reminderText, openingTime }) => {
   const canUseV3 = process.env.APPOINTMENT_REMINDER_V3_ENABLED === 'true';
   const v3Params = [
-    patient?.displayName || patient?.name || 'ط¹ط²ظٹط²ظ†ط§ ط§ظ„ظ…ط±ظٹط¶',
+    patient?.displayName || patient?.name || 'عزيزنا المريض',
     formatDayNameAr(appointment.scheduledTime),
     formatDateAr(appointment.scheduledTime),
     formatReminderOpeningTime(openingTime),
@@ -194,29 +194,29 @@ const sendAppointmentReminderTemplate = async ({ appointment, patient, reminderT
 
 const buildReminderText = (appointment) =>
   [
-    'طھط°ظƒظٹط± ط¨ظ…ظˆط¹ط¯ظƒ',
+    'تذكير بموعدك',
     '',
-    `ظ…ط±ط­ط¨ط§ظ‹ ${appointment.patient?.name || 'ط¹ط²ظٹط²ظ†ط§ ط§ظ„ظ…ط±ظٹط¶'}طŒ`,
-    `ظ†ط°ظƒط±ظƒ ط¨ظ…ظˆط¹ط¯ظƒ ظٹظˆظ… ${formatDateAr(appointment.scheduledTime)} ط§ظ„ط³ط§ط¹ط© ${formatTimeAr(appointment.scheduledTime)}.`,
+    `مرحباً ${appointment.patient?.name || 'عزيزنا المريض'}،`,
+    `نذكرك بموعدك يوم ${formatDateAr(appointment.scheduledTime)} الساعة ${formatTimeAr(appointment.scheduledTime)}.`,
     '',
-    `ط§ظ„ط·ط¨ظٹط¨: ${getDoctorName(appointment)}`,
-    `ط§ظ„ط®ط¯ظ…ط©: ${getServiceName(appointment)}`,
+    `الطبيب: ${getDoctorName(appointment)}`,
+    `الخدمة: ${getServiceName(appointment)}`,
     '',
-    'ظ†طھط·ظ„ط¹ ظ„ط±ط¤ظٹطھظƒ.',
+    'نتطلع لرؤيتك.',
   ].join('\n');
 
 const buildWalkInReminderText = (appointment, openingTime) =>
   [
-    'طھط°ظƒظٹط± ط¨ط­ط¬ط²ظƒ ط§ظ„ظٹظˆظ…',
+    'تذكير بحجزك اليوم',
     '',
-    `ظ…ط±ط­ط¨ط§ظ‹ ${appointment.patient?.name || 'ط¹ط²ظٹط²ظ†ط§ ط§ظ„ظ…ط±ظٹط¶'}طŒ`,
-    `ظ†ط°ظƒط±ظƒ ط¨ط­ط¬ط²ظƒ ط§ظ„ظٹظˆظ… ${formatDateAr(appointment.scheduledTime)}.`,
-    `ظٹط¨ط¯ط£ ط§ط³طھظ‚ط¨ط§ظ„ ط§ظ„ظ…ط±ط§ط¬ط¹ظٹظ† ظ…ظ† ط§ظ„ط³ط§ط¹ط© ${formatTimeAr(openingTime)}.`,
+    `مرحباً ${appointment.patient?.name || 'عزيزنا المريض'}،`,
+    `نذكرك بحجزك اليوم ${formatDateAr(appointment.scheduledTime)}.`,
+    `يبدأ استقبال المراجعين من الساعة ${formatTimeAr(openingTime)}.`,
     '',
-    `ط§ظ„ط·ط¨ظٹط¨: ${getDoctorName(appointment)}`,
-    `ط§ظ„ط®ط¯ظ…ط©: ${getServiceName(appointment)}`,
+    `الطبيب: ${getDoctorName(appointment)}`,
+    `الخدمة: ${getServiceName(appointment)}`,
     '',
-    'ظ…ظ„ط§ط­ط¸ط©: ط§ظ„ط¯ط®ظˆظ„ ط­ط³ط¨ ط£ط³ط¨ظ‚ظٹط© ط§ظ„ط­ط¶ظˆط±طŒ ظˆط§ظ„ط´ط®طµ ط§ظ„ط°ظٹ ظٹطµظ„ ط£ظˆظ„ط§ظ‹ ظٹط¯ط®ظ„ ط£ظˆظ„ط§ظ‹.',
+    'ملاحظة: الدخول حسب أسبقية الحضور، والشخص الذي يصل أولاً يدخل أولاً.',
   ].join('\n');
 
 const sendReminders = async (hoursBeforeAppointment = 24) => {
@@ -346,7 +346,7 @@ const sendWalkInRemindersBeforeOpening = async () => {
           textContent: reminderText,
           templateName: WHATSAPP_TEMPLATES.appointmentReminder,
           bodyParams: [
-            appointment.patient?.name || 'ط¹ط²ظٹط²ظ†ط§ ط§ظ„ظ…ط±ظٹط¶',
+            appointment.patient?.name || 'عزيزنا المريض',
             formatDateAr(appointment.scheduledTime),
             formatTimeAr(openingTime),
             getDoctorName(appointment),
@@ -379,19 +379,19 @@ const sendWalkInRemindersBeforeOpening = async () => {
 };
 
 const buildBookingConfirmationText = (appointment) => {
-  const lines = ['طھظ… طھط£ظƒظٹط¯ ط­ط¬ط²ظƒ ط¨ظ†ط¬ط§ط­.', ''];
+  const lines = ['تم تأكيد حجزك بنجاح.', ''];
 
   if (appointment.bookingRef) {
-    lines.push(`ط±ظ‚ظ… ط§ظ„ط­ط¬ط²: *${appointment.bookingRef}*`, '');
+    lines.push(`رقم الحجز: *${appointment.bookingRef}*`, '');
   }
 
   lines.push(
-    `ط§ظ„ط®ط¯ظ…ط©: ${getServiceName(appointment)}`,
-    `ط§ظ„ط·ط¨ظٹط¨: ${getDoctorName(appointment)}`,
-    `ط§ظ„طھط§ط±ظٹط®: ${formatDateAr(appointment.scheduledTime)}`,
-    `ط§ظ„ظˆظ‚طھ: ${formatTimeAr(appointment.scheduledTime)}`,
+    `الخدمة: ${getServiceName(appointment)}`,
+    `الطبيب: ${getDoctorName(appointment)}`,
+    `التاريخ: ${formatDateAr(appointment.scheduledTime)}`,
+    `الوقت: ${formatTimeAr(appointment.scheduledTime)}`,
     '',
-    'ط³ظ†ط±ط³ظ„ ظ„ظƒ طھط°ظƒظٹط±ط§ظ‹ ظ‚ط¨ظ„ ط§ظ„ظ…ظˆط¹ط¯. ط´ظƒط±ط§ظ‹ ظ„ظƒ.'
+    'سنرسل لك تذكيراً قبل الموعد. شكراً لك.'
   );
 
   return lines.join('\n');
@@ -399,14 +399,14 @@ const buildBookingConfirmationText = (appointment) => {
 
 const buildWalkInConfirmationText = (appointment) =>
   [
-    'طھظ… طھط£ظƒظٹط¯ ط­ط¬ط²ظƒ ط¨ظ†ط¬ط§ط­.',
+    'تم تأكيد حجزك بنجاح.',
     '',
-    appointment.bookingRef ? `ط±ظ‚ظ… ط§ظ„ط­ط¬ط²: *${appointment.bookingRef}*` : null,
-    `ط§ظ„ط®ط¯ظ…ط©: ${getServiceName(appointment)}`,
-    `ط§ظ„ط·ط¨ظٹط¨: ${getDoctorName(appointment)}`,
-    `ط§ظ„طھط§ط±ظٹط®: ${formatDateAr(appointment.scheduledTime)}`,
+    appointment.bookingRef ? `رقم الحجز: *${appointment.bookingRef}*` : null,
+    `الخدمة: ${getServiceName(appointment)}`,
+    `الطبيب: ${getDoctorName(appointment)}`,
+    `التاريخ: ${formatDateAr(appointment.scheduledTime)}`,
     '',
-    'ظ…ظ„ط§ط­ط¸ط©: ط§ظ„ط¯ط®ظˆظ„ ط­ط³ط¨ ط£ط³ط¨ظ‚ظٹط© ط§ظ„ط­ط¶ظˆط±طŒ ظˆط§ظ„ط´ط®طµ ط§ظ„ط°ظٹ ظٹطµظ„ ط£ظˆظ„ط§ظ‹ ظٹط¯ط®ظ„ ط£ظˆظ„ط§ظ‹.',
+    'ملاحظة: الدخول حسب أسبقية الحضور، والشخص الذي يصل أولاً يدخل أولاً.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -431,7 +431,7 @@ const sendBookingConfirmed = async (appointment) => {
         getDoctorName(appointment),
         formatDateAr(appointment.scheduledTime),
         appointment.appointmentType === 'WALK_IN'
-          ? 'ط§ظ„ط¯ط®ظˆظ„ ط­ط³ط¨ ط£ط³ط¨ظ‚ظٹط© ط§ظ„ط­ط¶ظˆط±'
+          ? 'الدخول حسب أسبقية الحضور'
           : formatTimeAr(appointment.scheduledTime),
       ],
     });
@@ -455,19 +455,19 @@ const sendBookingConfirmed = async (appointment) => {
 
 const buildBookingRejectedText = (appointment, alternatives = []) => {
   const baseLines = [
-    'طھط¹ط°ط± طھط«ط¨ظٹطھ ط§ظ„ظ…ظˆط¹ط¯ ط§ظ„ظ…ط·ظ„ظˆط¨.',
+    'تعذر تثبيت الموعد المطلوب.',
     '',
-    `ط§ظ„ط®ط¯ظ…ط©: ${getServiceName(appointment)}`,
-    `ط§ظ„ط³ط¨ط¨: ${appointment.notes || 'طھط¹ط¯ظٹظ„ ط¥ط¯ط§ط±ظٹ'}`,
+    `الخدمة: ${getServiceName(appointment)}`,
+    `السبب: ${appointment.notes || 'تعديل إداري'}`,
   ];
 
   if (alternatives.length > 0) {
-    baseLines.push('', 'ط§ظ„ظ…ظˆط§ط¹ظٹط¯ ط§ظ„ط¨ط¯ظٹظ„ط© ط§ظ„ظ…ظ‚طھط±ط­ط©:');
+    baseLines.push('', 'المواعيد البديلة المقترحة:');
     alternatives.slice(0, 5).forEach((alternative) => {
       baseLines.push(`- ${alternative.label}`);
     });
   } else {
-    baseLines.push('', 'ظٹط±ط¬ظ‰ ط§ظ„طھظˆط§طµظ„ ظ…ط¹ظ†ط§ ظ„طھط­ط¯ظٹط¯ ظ…ظˆط¹ط¯ ط¨ط¯ظٹظ„.');
+    baseLines.push('', 'يرجى التواصل معنا لتحديد موعد بديل.');
   }
 
   return baseLines.join('\n');
@@ -493,12 +493,12 @@ const sendBookingRejected = async (appointment, alternatives = []) => {
       normalizedAlternatives.length >= 3
         ? [
             getServiceName(appointment),
-            appointment.notes || 'طھط¹ط¯ظٹظ„ ط¥ط¯ط§ط±ظٹ',
+            appointment.notes || 'تعديل إداري',
             normalizedAlternatives[0],
             normalizedAlternatives[1],
             normalizedAlternatives[2],
           ]
-        : [getServiceName(appointment), appointment.notes || 'طھط¹ط¯ظٹظ„ ط¥ط¯ط§ط±ظٹ'];
+        : [getServiceName(appointment), appointment.notes || 'تعديل إداري'];
 
     await sendWhatsAppTextOrTemplate({
       patient: appointment.patient,
@@ -527,17 +527,17 @@ const sendBookingRejected = async (appointment, alternatives = []) => {
 
 const buildBookingCancelledText = (appointment, reason) =>
   [
-    'طھظ… ط¥ظ„ط؛ط§ط، ط­ط¬ط²ظƒ.',
+    'تم إلغاء حجزك.',
     '',
-    appointment.bookingRef ? `ط±ظ‚ظ… ط§ظ„ط­ط¬ط²: *${appointment.bookingRef}*` : null,
-    `ط§ظ„ط®ط¯ظ…ط©: ${getServiceName(appointment)}`,
-    `ط§ظ„ط·ط¨ظٹط¨: ${getDoctorName(appointment)}`,
-    `ط§ظ„طھط§ط±ظٹط®: ${formatDateAr(appointment.scheduledTime)}`,
-    appointment.appointmentType === 'SCHEDULED' ? `ط§ظ„ظˆظ‚طھ: ${formatTimeAr(appointment.scheduledTime)}` : null,
+    appointment.bookingRef ? `رقم الحجز: *${appointment.bookingRef}*` : null,
+    `الخدمة: ${getServiceName(appointment)}`,
+    `الطبيب: ${getDoctorName(appointment)}`,
+    `التاريخ: ${formatDateAr(appointment.scheduledTime)}`,
+    appointment.appointmentType === 'SCHEDULED' ? `الوقت: ${formatTimeAr(appointment.scheduledTime)}` : null,
     '',
-    reason ? `ط§ظ„ط³ط¨ط¨: ${reason}` : 'طھظ… ط§ظ„ط¥ظ„ط؛ط§ط، ط¨ظ†ط§ط،ظ‹ ط¹ظ„ظ‰ ط·ظ„ط¨ ط¥ط¯ط§ط±ظٹ.',
+    reason ? `السبب: ${reason}` : 'تم الإلغاء بناءً على طلب إداري.',
     '',
-    'ظٹط³ط¹ط¯ظ†ط§ ط®ط¯ظ…طھظƒ ظپظٹ ط£ظٹ ظˆظ‚طھ ظ„ط­ط¬ط² ظ…ظˆط¹ط¯ ط¬ط¯ظٹط¯.',
+    'يسعدنا خدمتك في أي وقت لحجز موعد جديد.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -547,13 +547,13 @@ const sendBookingCancelled = async (appointment, reason) => {
   if (!channel) return;
 
   const content = buildBookingCancelledText(appointment, reason);
-  const cancellationReason = reason || 'ط¥ظ„ط؛ط§ط، ط§ظ„ط­ط¬ط²';
+  const cancellationReason = reason || 'إلغاء الحجز';
 
   if (channel === 'WHATSAPP') {
     const appointmentSummary =
       appointment.appointmentType === 'WALK_IN'
-        ? `${getServiceName(appointment)} ظ…ط¹ ط¯. ${getDoctorName(appointment)} ظٹظˆظ… ${formatDateAr(appointment.scheduledTime)}`
-        : `${getServiceName(appointment)} ظ…ط¹ ط¯. ${getDoctorName(appointment)} ظٹظˆظ… ${formatDateAr(appointment.scheduledTime)} ط§ظ„ط³ط§ط¹ط© ${formatTimeAr(appointment.scheduledTime)}`;
+        ? `${getServiceName(appointment)} مع د. ${getDoctorName(appointment)} يوم ${formatDateAr(appointment.scheduledTime)}`
+        : `${getServiceName(appointment)} مع د. ${getDoctorName(appointment)} يوم ${formatDateAr(appointment.scheduledTime)} الساعة ${formatTimeAr(appointment.scheduledTime)}`;
     await sendWhatsAppTextOrTemplate({
       patient: appointment.patient,
       textContent: content,
@@ -581,16 +581,16 @@ const sendBookingCancelled = async (appointment, reason) => {
 
 const buildDoctorRescheduledText = (appointment, fromDoctor, toDoctor) =>
   [
-    'طھظ… طھط­ط¯ظٹط« ط·ط¨ظٹط¨ ظ…ظˆط¹ط¯ظƒ.',
+    'تم تحديث طبيب موعدك.',
     '',
-    appointment.bookingRef ? `ط±ظ‚ظ… ط§ظ„ط­ط¬ط²: *${appointment.bookingRef}*` : null,
-    `ط§ظ„ط®ط¯ظ…ط©: ${getServiceName(appointment)}`,
-    `ط§ظ„ط·ط¨ظٹط¨ ط§ظ„ط¬ط¯ظٹط¯: ط¯. ${toDoctor.name}`,
-    `ط¨ط¯ظ„ط§ظ‹ ظ…ظ†: ط¯. ${fromDoctor.name}`,
-    `ط§ظ„طھط§ط±ظٹط®: ${formatDateAr(appointment.scheduledTime)}`,
-    appointment.appointmentType === 'SCHEDULED' ? `ط§ظ„ظˆظ‚طھ: ${formatTimeAr(appointment.scheduledTime)}` : null,
+    appointment.bookingRef ? `رقم الحجز: *${appointment.bookingRef}*` : null,
+    `الخدمة: ${getServiceName(appointment)}`,
+    `الطبيب الجديد: د. ${toDoctor.name}`,
+    `بدلاً من: د. ${fromDoctor.name}`,
+    `التاريخ: ${formatDateAr(appointment.scheduledTime)}`,
+    appointment.appointmentType === 'SCHEDULED' ? `الوقت: ${formatTimeAr(appointment.scheduledTime)}` : null,
     '',
-    'ظˆظ‚طھ ط§ظ„ظ…ظˆط¹ط¯ ظˆط§ظ„ط®ط¯ظ…ط© ظƒظ…ط§ ظ‡ظ…ط§ ط¨ط¯ظˆظ† طھط؛ظٹظٹط±.',
+    'وقت الموعد والخدمة كما هما بدون تغيير.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -607,14 +607,14 @@ const sendDoctorRescheduled = async (appointment, fromDoctor, toDoctor) => {
       textContent: content,
       templateName: WHATSAPP_TEMPLATES.doctorRescheduled,
       bodyParams: [
-        appointment.patient?.name || 'ط¹ط²ظٹط²ظ†ط§ ط§ظ„ظ…ط±ظٹط¶',
+        appointment.patient?.name || 'عزيزنا المريض',
         appointment.bookingRef || '-',
         getServiceName(appointment),
         toDoctor.name,
         fromDoctor.name,
         formatDateAr(appointment.scheduledTime),
         appointment.appointmentType === 'WALK_IN'
-          ? 'ط§ظ„ط¯ط®ظˆظ„ ط­ط³ط¨ ط£ط³ط¨ظ‚ظٹط© ط§ظ„ط­ط¶ظˆط±'
+          ? 'الدخول حسب أسبقية الحضور'
           : formatTimeAr(appointment.scheduledTime),
       ],
     });
