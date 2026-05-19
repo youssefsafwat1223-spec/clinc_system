@@ -73,6 +73,10 @@ export function PrescriptionsWorkspace({
   initialPatientId = '',
   initialAppointmentId = '',
   initialAppointments = [],
+  initialToothNotes = [],
+  initialNotesText = '',
+  initialDiagnosisText = '',
+  prefillSignal = 0,
   onCreated,
 } = {}) {
   const navigate = useNavigate();
@@ -99,10 +103,29 @@ export function PrescriptionsWorkspace({
   const [showToothChart, setShowToothChart] = useState(false);
   const [profileTeethNotes, setProfileTeethNotes] = useState({});
   const autoResolvedRef = useRef(false);
+  const previousPrefillSignal = useRef(prefillSignal);
 
   useEffect(() => {
     setPatientAppointments(initialAppointments || []);
   }, [initialAppointments]);
+
+  useEffect(() => {
+    if (prefillSignal === previousPrefillSignal.current) return;
+    previousPrefillSignal.current = prefillSignal;
+    if (Array.isArray(initialToothNotes) && initialToothNotes.length > 0) {
+      setToothNotes(initialToothNotes);
+      if (initialNotesText) {
+        setNotes((current) => {
+          if (!current?.trim()) return initialNotesText;
+          return current.includes(initialNotesText) ? current : `${current}\n\n${initialNotesText}`;
+        });
+      }
+      if (initialDiagnosisText) {
+        setDiagnosis((current) => current || initialDiagnosisText);
+      }
+      setShowToothChart(true);
+    }
+  }, [prefillSignal, initialToothNotes, initialNotesText, initialDiagnosisText]);
 
   useEffect(() => {
     const loadBasics = async () => {

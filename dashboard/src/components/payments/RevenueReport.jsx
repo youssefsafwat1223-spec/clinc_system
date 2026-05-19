@@ -29,12 +29,20 @@ const caseStatusOptions = [
   { value: 'MOSTAMERA', label: 'مستمرة' },
 ];
 
+const itemTypeOptions = [
+  { value: 'ALL', label: 'كل البنود' },
+  { value: 'TOOTH', label: 'علاجات الأسنان فقط' },
+  { value: 'APPOINTMENT', label: 'دفعات المواعيد فقط' },
+  { value: 'EXTRA', label: 'الخدمات الإضافية فقط' },
+];
+
 const defaultFilters = () => ({
   from: todayInputValue(),
   to: todayInputValue(),
   status: 'ALL',
   method: 'ALL',
   caseStatus: 'ALL',
+  itemType: 'ALL',
   search: '',
   cashierExpenses: '',
 });
@@ -46,6 +54,24 @@ const paymentBaseAmount = (payment = {}) =>
 const netPaymentAmount = (payment = {}, discountAmount = payment.discountAmount) => {
   const baseAmount = paymentBaseAmount(payment);
   return payment.source === 'extra' ? toAmount(payment.amount) : Math.max(0, baseAmount - toAmount(discountAmount));
+};
+const paymentSourceLabel = (payment = {}) => {
+  if (payment.toothNumber) return `علاج سن ${payment.toothNumber}`;
+  return payment.source === 'extra' ? 'خدمة إضافية' : 'دفعة موعد';
+};
+const paymentTitleLine = (payment = {}) => {
+  const parts = [payment.treatmentType || '-'];
+  if (payment.toothNumber) parts.push(`السن ${payment.toothNumber}`);
+  parts.push(`د. ${payment.doctorName || '-'}`);
+  if (payment.patientPhone) parts.push(payment.patientPhone);
+  return parts.join(' · ');
+};
+
+const matchesItemType = (payment = {}, itemType = 'ALL') => {
+  if (itemType === 'TOOTH') return Boolean(payment.toothNumber);
+  if (itemType === 'APPOINTMENT') return payment.source !== 'extra';
+  if (itemType === 'EXTRA') return payment.source === 'extra' && !payment.toothNumber;
+  return true;
 };
 
 const defaultEditForm = (payment = {}) => ({
@@ -264,7 +290,7 @@ function InlinePaymentEditor({ payment, onSaved, onDelete }) {
   );
 }
 
-export default function RevenueReport({ patientId = '', compact = false }) {
+export default function RevenueReport({ patientId = '', patientName = '', patientPhone = '', compact = false }) {
   const navigate = useNavigate();
   const [filters, setFilters] = useState(defaultFilters);
   const [dateRange, setDateRange] = useState('today');
@@ -283,6 +309,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
     doctorId: '',
     amount: '',
     paidAmount: '',
+    toothNumber: '',
     teethCount: '1',
     method: 'cash',
     notes: '',
@@ -296,12 +323,18 @@ export default function RevenueReport({ patientId = '', compact = false }) {
     () => ({
       ...filters,
       patientId: patientId || undefined,
+      itemType: undefined,
       status: filters.status === 'ALL' ? undefined : filters.status,
       method: filters.method === 'ALL' ? undefined : filters.method,
       caseStatus: filters.caseStatus === 'ALL' ? undefined : filters.caseStatus,
       cashierExpenses: includeExpenses ? filters.cashierExpenses || 0 : 0,
     }),
     [filters, patientId, includeExpenses]
+  );
+
+  const visiblePayments = useMemo(
+    () => (report?.payments || []).filter((payment) => matchesItemType(payment, filters.itemType)),
+    [report?.payments, filters.itemType]
   );
 
   const loadReport = async () => {
@@ -376,6 +409,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
         doctorId: addForm.doctorId || undefined,
         amount: Number(addForm.amount),
         paidAmount: Number(addForm.paidAmount) || 0,
+        toothNumber: addForm.toothNumber ? Number(addForm.toothNumber) : undefined,
         teethCount: Math.max(1, Math.floor(Number(addForm.teethCount) || 1)),
         method: addForm.method,
         notes: addForm.notes,
@@ -388,6 +422,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
         doctorId: '',
         amount: '',
         paidAmount: '',
+        toothNumber: '',
         teethCount: '1',
         method: 'cash',
         notes: '',
@@ -478,6 +513,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
       ['حالة الدفع', filters.status],
       ['طريقة الدفع', filters.method],
       ['حالة الحالة', filters.caseStatus],
+      ['نوع البند', itemTypeOptions.find((option) => option.value === filters.itemType)?.label || 'كل البنود'],
       ['بحث', filters.search],
     ];
 
@@ -499,7 +535,9 @@ export default function RevenueReport({ patientId = '', compact = false }) {
         'المصدر',
         'اسم المريض',
         'رقم الهاتف',
+        'رقم السن',
         'الخدمة / الحالة',
+        'نوع البند',
         'الطبيب',
         'تاريخ الدفع',
         'الإجمالي قبل الخصم',
@@ -514,11 +552,13 @@ export default function RevenueReport({ patientId = '', compact = false }) {
         'رقم الحجز',
         'ملاحظات',
       ],
-      ...(report.payments || []).map((payment) => [
+      ...visiblePayments.map((payment) => [
         payment.source === 'extra' ? 'خدمة إضافية' : 'دفعة موعد',
         payment.patientName || '',
         payment.patientPhone || '',
+        payment.toothNumber || '',
         payment.treatmentType || '',
+        paymentSourceLabel(payment),
         payment.doctorName || '',
         formatExcelDate(payment.paymentDate),
         paymentBaseAmount(payment),
@@ -561,6 +601,21 @@ export default function RevenueReport({ patientId = '', compact = false }) {
 
   return (
     <div className="space-y-5">
+      {patientId && (patientName || patientPhone) ? (
+        <DataCard className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs font-bold text-slate-400">المريض</p>
+            <h3 className="text-xl font-black text-white">{patientName || 'مريض غير محدد'}</h3>
+          </div>
+          <div className="text-right">
+            <p className="text-xs font-bold text-slate-400">رقم الهاتف</p>
+            <p className="text-sm font-bold text-sky-200" dir="ltr">
+              {patientPhone || '—'}
+            </p>
+          </div>
+        </DataCard>
+      ) : null}
+
       <DataCard className="space-y-4">
         <div className="flex flex-wrap gap-2">
           {dateChips.map((chip) => (
@@ -621,6 +676,15 @@ export default function RevenueReport({ patientId = '', compact = false }) {
           <Field label="حالة الحالة">
             <select className={inputClass} value={filters.caseStatus} onChange={(event) => updateFilter('caseStatus', event.target.value)}>
               {caseStatusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="نوع البند">
+            <select className={inputClass} value={filters.itemType} onChange={(event) => updateFilter('itemType', event.target.value)}>
+              {itemTypeOptions.map((option) => (
                 <option key={option.value} value={option.value}>
                   {option.label}
                 </option>
@@ -758,11 +822,16 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                 </PrimaryButton>
               ) : null}
             </div>
+            {filters.itemType !== 'ALL' ? (
+              <p className="mb-3 text-xs font-bold text-sky-200">
+                يتم الآن عرض: {itemTypeOptions.find((option) => option.value === filters.itemType)?.label}
+              </p>
+            ) : null}
             <div className="grid gap-3">
-              {(report.payments || []).length === 0 ? (
+              {visiblePayments.length === 0 ? (
                 <EmptyState title="لا توجد مدفوعات" description="لا توجد مدفوعات مطابقة للفلاتر." />
               ) : null}
-              {(report.payments || []).map((payment) => (
+              {visiblePayments.map((payment) => (
                 <div
                   key={payment.id}
                   role={patientId ? undefined : 'button'}
@@ -779,15 +848,24 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                     <div>
                       <p className="font-bold text-white">
                         {payment.patientName || 'مريض غير محدد'}
-                        {payment.source === 'extra' ? (
-                          <span className="ms-2 rounded-full border border-violet-500/30 bg-violet-500/15 px-2 py-0.5 text-[10px] font-bold text-violet-200">
-                            خدمة إضافية
-                          </span>
-                        ) : null}
+                        <span
+                          className={`ms-2 rounded-full border px-2 py-0.5 text-[10px] font-bold ${
+                            payment.toothNumber
+                              ? 'border-sky-500/30 bg-sky-500/15 text-sky-200'
+                              : payment.source === 'extra'
+                                ? 'border-violet-500/30 bg-violet-500/15 text-violet-200'
+                                : 'border-emerald-500/30 bg-emerald-500/15 text-emerald-200'
+                          }`}
+                        >
+                          {paymentSourceLabel(payment)}
+                        </span>
                       </p>
                       <p className="text-xs text-slate-400">
-                        {payment.treatmentType || '-'} · د. {payment.doctorName || '-'} · {payment.patientPhone || ''}
+                        {paymentTitleLine(payment)}
                       </p>
+                      {payment.toothNumber ? (
+                        <p className="mt-1 text-xs font-bold text-sky-200">رقم السن: {payment.toothNumber}</p>
+                      ) : null}
                       <p className="mt-1 text-xs font-bold text-sky-200">عدد الأسنان: {payment.teethCount || 1}</p>
                       <p className="mt-1 text-xs leading-5 text-slate-400">
                         الإجمالي قبل الخصم: {money(paymentBaseAmount(payment))}
@@ -876,7 +954,7 @@ export default function RevenueReport({ patientId = '', compact = false }) {
           >
             <h3 className="text-xl font-black text-white">تعديل الدفع</h3>
             <p className="mt-1 text-sm text-slate-400">
-              {editing.patientName} · {editing.treatmentType || '-'} · الإجمالي {money(editing.amount || 0)}
+              {editing.patientName} · {paymentTitleLine(editing)} · الإجمالي {money(editing.amount || 0)}
             </p>
             <div className="mt-4 rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs leading-6 text-amber-100">
               الخصم يقلل الإجمالي، والمبلغ المدفوع يحدد الحالة: غير مدفوع / جزئي / مدفوع بالكامل.
@@ -966,6 +1044,16 @@ export default function RevenueReport({ patientId = '', compact = false }) {
                   type="number"
                   value={addForm.paidAmount}
                   onChange={(event) => setAddForm((current) => ({ ...current, paidAmount: event.target.value }))}
+                />
+              </Field>
+              <Field label="رقم السن (اختياري)">
+                <input
+                  className={inputClass}
+                  type="number"
+                  min="1"
+                  max="32"
+                  value={addForm.toothNumber}
+                  onChange={(event) => setAddForm((current) => ({ ...current, toothNumber: event.target.value }))}
                 />
               </Field>
               <Field label="عدد الأسنان">

@@ -11,6 +11,13 @@ const formatDateAr = (date) => {
   }).format(value);
 };
 
+const formatDayNameAr = (date) => {
+  const value = new Date(date);
+  return new Intl.DateTimeFormat('ar-EG', {
+    weekday: 'long',
+  }).format(value);
+};
+
 const formatDateKey = (date) => {
   const d = new Date(date);
   const year = d.getFullYear();
@@ -116,6 +123,7 @@ const paginate = (page = 1, limit = 20) => {
 
 module.exports = {
   formatDateAr,
+  formatDayNameAr,
   formatTimeAr,
   formatDateKey,
   normalizeWorkingPeriods,

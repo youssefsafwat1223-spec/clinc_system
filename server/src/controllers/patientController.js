@@ -187,6 +187,10 @@ const getOne = async (req, res, next) => {
         },
         orderBy: { createdAt: 'desc' },
       },
+      extraCharges: {
+        include: { service: true, doctor: true },
+        orderBy: { createdAt: 'desc' },
+      },
       groups: { include: { group: true } },
     });
 
@@ -357,20 +361,85 @@ const saveTeethNotes = async (req, res, next) => {
       if (!/^\d{1,2}$/.test(String(key))) continue;
       if (value && typeof value === 'object' && !Array.isArray(value)) {
         const note = String(value.note || '').trim();
+        const treatmentNote = String(value.treatmentNote || '').trim();
         const serviceId = String(value.serviceId || '').trim();
         const doctorId = String(value.doctorId || '').trim();
+        const status = ['PLANNED', 'IN_PROGRESS', 'DONE'].includes(value.status) ? value.status : 'PLANNED';
+        const discountType = value.discountType === 'PERCENT' ? 'PERCENT' : 'AMOUNT';
+        const toNullableNumber = (input) => {
+          if (input === '' || input === null || input === undefined) return null;
+          const number = Number(input);
+          return Number.isFinite(number) ? number : null;
+        };
+        const toNullableString = (input) => {
+          const text = String(input || '').trim();
+          return text || null;
+        };
         const done = Boolean(value.done);
-        if (note || serviceId || doctorId || done) {
+        if (
+          note ||
+          treatmentNote ||
+          serviceId ||
+          doctorId ||
+          done ||
+          status !== 'PLANNED' ||
+          value.extraChargeId ||
+          value.linkedPaymentId ||
+          value.priceBefore != null ||
+          value.priceAfter != null ||
+          value.requiredAmount != null ||
+          value.paidAmount != null ||
+          value.remaining != null
+        ) {
           teeth[String(key)] = {
             note,
+            treatmentNote,
             serviceId: serviceId || null,
             doctorId: doctorId || null,
+            status,
+            priceBefore: toNullableNumber(value.priceBefore),
+            discountType,
+            discountValue: toNullableNumber(value.discountValue),
+            priceAfter: toNullableNumber(value.priceAfter),
+            requiredAmount: toNullableNumber(value.requiredAmount),
+            paidAmount: toNullableNumber(value.paidAmount),
+            remaining: toNullableNumber(value.remaining),
+            paymentNote: toNullableString(value.paymentNote),
+            extraChargeId: toNullableString(value.extraChargeId),
+            linkedPaymentId: toNullableString(value.linkedPaymentId),
+            createdAt: value.createdAt || null,
+            createdById: toNullableString(value.createdById),
+            updatedAt: value.updatedAt || null,
+            updatedById: toNullableString(value.updatedById),
             done,
           };
         }
       } else {
         const note = value === null || value === undefined ? '' : String(value).trim();
-        if (note) teeth[String(key)] = { note, serviceId: null, doctorId: null, done: false };
+        if (note) {
+          teeth[String(key)] = {
+            note,
+            treatmentNote: '',
+            serviceId: null,
+            doctorId: null,
+            status: 'PLANNED',
+            priceBefore: null,
+            discountType: 'AMOUNT',
+            discountValue: null,
+            priceAfter: null,
+            requiredAmount: null,
+            paidAmount: null,
+            remaining: null,
+            paymentNote: null,
+            extraChargeId: null,
+            linkedPaymentId: null,
+            createdAt: null,
+            createdById: null,
+            updatedAt: null,
+            updatedById: null,
+            done: false,
+          };
+        }
       }
     }
 

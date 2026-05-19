@@ -381,6 +381,7 @@ const revenueReport = async (req, res, next) => {
         baseAmount: finalAmount,
         discountAmount: 0,
         teethCount,
+        toothNumber: extra.toothNumber || null,
         paidAmount,
         remainingAmount: remaining,
         paymentDate: extra.createdAt,
@@ -562,7 +563,18 @@ const listExtraCharges = async (req, res, next) => {
 
 const createExtraCharge = async (req, res, next) => {
   try {
-    const { patientId, serviceId, doctorId, description, amount, paidAmount = 0, teethCount = 1, method, notes } = req.body;
+    const {
+      patientId,
+      serviceId,
+      doctorId,
+      description,
+      amount,
+      paidAmount = 0,
+      teethCount = 1,
+      toothNumber,
+      method,
+      notes,
+    } = req.body;
     if (!patientId) return res.status(400).json({ error: 'المريض مطلوب' });
     if (!serviceId && !String(description || '').trim()) {
       return res.status(400).json({ error: 'اختر خدمة أو اكتب وصفاً' });
@@ -571,6 +583,10 @@ const createExtraCharge = async (req, res, next) => {
     if (!(amountNum > 0)) return res.status(400).json({ error: 'المبلغ غير صالح' });
     const paidNum = Math.max(0, toNumber(paidAmount));
     const teethCountNum = Math.max(1, Math.floor(toNumber(teethCount) || 1));
+    const toothNumberNum =
+      toothNumber === null || toothNumber === undefined || toothNumber === ''
+        ? null
+        : Math.max(1, Math.min(32, Math.floor(toNumber(toothNumber) || 0))) || null;
 
     const extraCharge = await prisma.extraCharge.create({
       data: {
@@ -581,6 +597,7 @@ const createExtraCharge = async (req, res, next) => {
         amount: amountNum,
         paidAmount: paidNum,
         teethCount: teethCountNum,
+        toothNumber: toothNumberNum,
         status: extraStatus(paidNum, amountNum),
         method: method || null,
         notes: notes || null,
@@ -606,6 +623,12 @@ const updateExtraCharge = async (req, res, next) => {
       req.body.teethCount !== undefined
         ? Math.max(1, Math.floor(toNumber(req.body.teethCount) || 1))
         : existing.teethCount;
+    const toothNumberNum =
+      req.body.toothNumber === undefined
+        ? existing.toothNumber
+        : req.body.toothNumber === null || req.body.toothNumber === ''
+          ? null
+          : Math.max(1, Math.min(32, Math.floor(toNumber(req.body.toothNumber) || 0))) || null;
 
     const extraCharge = await prisma.extraCharge.update({
       where: { id: req.params.id },
@@ -613,6 +636,7 @@ const updateExtraCharge = async (req, res, next) => {
         amount: amountNum,
         paidAmount: paidNum,
         teethCount: teethCountNum,
+        toothNumber: toothNumberNum,
         status: extraStatus(paidNum, amountNum),
         method: req.body.method ?? existing.method,
         notes: req.body.notes ?? existing.notes,

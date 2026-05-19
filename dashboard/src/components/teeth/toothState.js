@@ -3,7 +3,7 @@
 
 export function toothState(entry) {
   if (!entry) return 'empty';
-  if (entry.done) return 'done';
+  if (entry.done || entry.status === 'DONE') return 'done';
   if (entry.serviceId) return 'service';
   if (entry.note && String(entry.note).trim()) return 'note';
   return 'empty';

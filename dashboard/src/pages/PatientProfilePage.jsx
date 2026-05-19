@@ -50,6 +50,12 @@ export default function PatientProfilePage() {
   const [showTeeth, setShowTeeth] = useState(true);
   const [prescriptionAppointmentRef, setPrescriptionAppointmentRef] = useState('');
   const [teethSaveSignal, setTeethSaveSignal] = useState(0);
+  const [prescriptionPrefill, setPrescriptionPrefill] = useState({
+    toothNotes: [],
+    notesText: '',
+    diagnosisText: '',
+    signal: 0,
+  });
   const [draft, setDraft] = useState({
     name: '',
     phone: '',
@@ -102,6 +108,44 @@ export default function PatientProfilePage() {
       debt: payments.reduce((sum, payment) => sum + Math.max(0, Number(payment.finalAmount || 0) - Number(payment.paidAmount || 0)), 0),
     };
   }, [patient]);
+
+  const buildToothPrescriptionPrefill = () => {
+    const teethEntries = Object.entries(patient?.teethNotes || {});
+    const toothNotes = teethEntries
+      .map(([toothNumber, rawEntry]) => {
+        const entry = typeof rawEntry === 'string' ? { note: rawEntry } : rawEntry || {};
+        const serviceName =
+          patient?.extraCharges?.find((item) => item.id === entry.extraChargeId)?.service?.nameAr ||
+          patient?.extraCharges?.find((item) => item.id === entry.extraChargeId)?.service?.name ||
+          patient?.payments?.find((item) => item.id === entry.linkedPaymentId)?.service?.nameAr ||
+          patient?.payments?.find((item) => item.id === entry.linkedPaymentId)?.service?.name ||
+          patient?.appointments?.find((item) => item.serviceId === entry.serviceId)?.service?.nameAr ||
+          patient?.appointments?.find((item) => item.serviceId === entry.serviceId)?.service?.name;
+        const doctorName =
+          patient?.extraCharges?.find((item) => item.id === entry.extraChargeId)?.doctor?.name ||
+          patient?.appointments?.find((item) => item.doctorId === entry.doctorId)?.doctor?.name;
+        const parts = [
+          entry.note,
+          entry.treatmentNote,
+          serviceName ? `الخدمة: ${serviceName}` : null,
+          doctorName ? `الطبيب: د. ${doctorName}` : null,
+          entry.status ? `الحالة: ${entry.status}` : null,
+          entry.remaining != null ? `المتبقي: ${money(entry.remaining)}` : null,
+        ].filter(Boolean);
+        return parts.length ? { toothNumber: String(toothNumber), note: parts.join(' - ') } : null;
+      })
+      .filter(Boolean);
+
+    const notesText = toothNotes.length
+      ? ['خطة علاج الأسنان المستخرجة من ملف المريض:', ...toothNotes.map((item) => `سن ${item.toothNumber}: ${item.note}`)].join('\n')
+      : '';
+
+    return {
+      toothNotes: toothNotes.length ? toothNotes : [{ toothNumber: '', note: '' }],
+      notesText,
+      diagnosisText: toothNotes.length ? 'خطة علاج أسنان' : '',
+    };
+  };
 
   const updateDraft = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
 
@@ -516,7 +560,10 @@ export default function PatientProfilePage() {
           {showTeeth ? (
             <TeethChart
               patientId={patient.id}
+              patient={patient}
               value={patient.teethNotes || {}}
+              payments={patient.payments || []}
+              extraCharges={patient.extraCharges || []}
               saveSignal={teethSaveSignal}
               showSaveButton={false}
               onSaved={(teethNotes) => setPatient((current) => ({ ...current, teethNotes }))}
@@ -571,17 +618,54 @@ export default function PatientProfilePage() {
       ) : null}
 
       {activeTab === 'prescriptions' ? (
-        <PrescriptionsWorkspace
-          embedded
-          initialPatientId={patient.id}
-          initialAppointmentId={prescriptionAppointmentRef}
-          initialAppointments={patient.appointments || []}
-          onCreated={loadPatient}
-        />
+        <div className="space-y-4">
+          <DataCard className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-lg font-black text-white">الروشتات وخطة الأسنان</h3>
+              <p className="mt-1 text-sm text-slate-400">
+                يمكنك تعبئة الروشتة من كل الأسنان المحفوظة في ملف المريض أو من موعد محدد.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <SecondaryButton
+                type="button"
+                onClick={() => {
+                  const prefill = buildToothPrescriptionPrefill();
+                  setPrescriptionPrefill({
+                    ...prefill,
+                    signal: Date.now(),
+                  });
+                  toast.success('تم استخراج كل الأسنان إلى الروشتة');
+                }}
+              >
+                استخراج الكل
+              </SecondaryButton>
+            </div>
+          </DataCard>
+
+          <PrescriptionsWorkspace
+            embedded
+            initialPatientId={patient.id}
+            initialAppointmentId={prescriptionAppointmentRef}
+            initialAppointments={patient.appointments || []}
+            initialToothNotes={prescriptionPrefill.toothNotes}
+            initialNotesText={prescriptionPrefill.notesText}
+            initialDiagnosisText={prescriptionPrefill.diagnosisText}
+            prefillSignal={prescriptionPrefill.signal}
+            onCreated={loadPatient}
+          />
+        </div>
       ) : null}
 
 
-      {activeTab === 'payments' ? <RevenueReport patientId={patient.id} compact /> : null}
+      {activeTab === 'payments' ? (
+        <RevenueReport
+          patientId={patient.id}
+          patientName={patient.displayName || patient.name || ''}
+          patientPhone={patient.phone || ''}
+          compact
+        />
+      ) : null}
 
       {activeTab === 'messages' ? <ConversationView patientId={patient.id} platform={patient.platform} /> : null}
 

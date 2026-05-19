@@ -11,12 +11,79 @@ const normalizeEntry = (value) => {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return {
       note: value.note || '',
+      treatmentNote: value.treatmentNote || '',
       serviceId: value.serviceId || '',
       doctorId: value.doctorId || '',
-      done: Boolean(value.done),
+      status: ['PLANNED', 'IN_PROGRESS', 'DONE'].includes(value.status) ? value.status : value.done ? 'DONE' : 'PLANNED',
+      priceBefore: value.priceBefore ?? null,
+      discountType: value.discountType === 'PERCENT' ? 'PERCENT' : 'AMOUNT',
+      discountValue: value.discountValue ?? null,
+      priceAfter: value.priceAfter ?? null,
+      requiredAmount: value.requiredAmount ?? null,
+      paidAmount: value.paidAmount ?? null,
+      remaining: value.remaining ?? null,
+      paymentNote: value.paymentNote || '',
+      extraChargeId: value.extraChargeId || '',
+      linkedPaymentId: value.linkedPaymentId || '',
+      createdAt: value.createdAt || null,
+      createdById: value.createdById || '',
+      updatedAt: value.updatedAt || null,
+      updatedById: value.updatedById || '',
+      done: Boolean(value.done || value.status === 'DONE'),
     };
   }
-  return { note: String(value || ''), serviceId: '', doctorId: '', done: false };
+  return {
+    note: String(value || ''),
+    treatmentNote: '',
+    serviceId: '',
+    doctorId: '',
+    status: 'PLANNED',
+    priceBefore: null,
+    discountType: 'AMOUNT',
+    discountValue: null,
+    priceAfter: null,
+    requiredAmount: null,
+    paidAmount: null,
+    remaining: null,
+    paymentNote: '',
+    extraChargeId: '',
+    linkedPaymentId: '',
+    createdAt: null,
+    createdById: '',
+    updatedAt: null,
+    updatedById: '',
+    done: false,
+  };
+};
+
+const toNumberOrNull = (value) => {
+  if (value === '' || value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+
+const moneyFieldValue = (value) => (value === null || value === undefined ? '' : String(value));
+
+const recalcEntry = (entry) => {
+  const priceBefore = Math.max(0, toNumberOrNull(entry.priceBefore) ?? 0);
+  const discountValue = Math.max(0, toNumberOrNull(entry.discountValue) ?? 0);
+  const paidAmount = Math.max(0, toNumberOrNull(entry.paidAmount) ?? 0);
+  const priceAfter =
+    entry.discountType === 'PERCENT'
+      ? Math.max(0, priceBefore - (priceBefore * discountValue) / 100)
+      : Math.max(0, priceBefore - discountValue);
+  const requiredAmount = toNumberOrNull(entry.requiredAmount) ?? priceAfter;
+  const remaining = Math.max(0, requiredAmount - paidAmount);
+  return {
+    ...entry,
+    priceBefore,
+    discountValue,
+    priceAfter,
+    requiredAmount,
+    paidAmount,
+    remaining,
+    done: entry.done || entry.status === 'DONE',
+  };
 };
 
 const defaultServiceForm = {
@@ -185,14 +252,18 @@ function DentalArch2D({ teeth, services, selectedTooth, onSelectTooth }) {
 
 export default function TeethChart({
   patientId,
+  patient,
   value = {},
   teethNotes,
   services: providedServices,
   doctors: providedDoctors,
   currentDoctorId = '',
+  payments = [],
+  extraCharges = [],
   onSaved,
   onSaveTooth,
   onAddService,
+  onAddToPrescription,
   readonly = false,
   saveSignal = 0,
   showSaveButton = true,
@@ -239,16 +310,57 @@ export default function TeethChart({
     loadSupport();
   }, [providedServices, providedDoctors]);
 
-  const entry = useMemo(() => teeth[selectedTooth] || normalizeEntry({ doctorId: currentDoctorId }), [selectedTooth, teeth, currentDoctorId]);
+  const entry = useMemo(
+    () => recalcEntry(teeth[selectedTooth] || normalizeEntry({ doctorId: currentDoctorId })),
+    [selectedTooth, teeth, currentDoctorId]
+  );
+
+  const selectedService = useMemo(
+    () => services.find((service) => service.id === entry.serviceId) || null,
+    [services, entry.serviceId]
+  );
+
+  const matchingPayment = useMemo(() => {
+    if (!entry.serviceId) return null;
+    return payments.find((payment) => {
+      const sameService = payment.serviceId === entry.serviceId || payment.service?.id === entry.serviceId;
+      const finalAmount = Number(payment.finalAmount || payment.amount || 0);
+      return sameService && finalAmount > 0 && !['PAID', 'COMPLETED'].includes(payment.status);
+    }) || null;
+  }, [payments, entry.serviceId]);
 
   const updateEntry = (field, nextValue) => {
     if (readonly) return;
     setTeeth((current) => ({
       ...current,
       [selectedTooth]: {
-        ...normalizeEntry(current[selectedTooth] || { doctorId: currentDoctorId }),
-        [field]: nextValue,
+        ...recalcEntry({
+          ...normalizeEntry(current[selectedTooth] || { doctorId: currentDoctorId }),
+          [field]: nextValue,
+          done:
+            field === 'status'
+              ? nextValue === 'DONE'
+              : field === 'done'
+                ? Boolean(nextValue)
+                : normalizeEntry(current[selectedTooth] || { doctorId: currentDoctorId }).done,
+        }),
       },
+    }));
+  };
+
+  const applyServiceDefaults = (serviceId) => {
+    const selected = services.find((service) => service.id === serviceId);
+    const basePrice = toNumberOrNull(selected?.price ?? selected?.priceFrom ?? selected?.priceTo);
+    setTeeth((current) => ({
+      ...current,
+      [selectedTooth]: recalcEntry({
+        ...normalizeEntry(current[selectedTooth] || { doctorId: currentDoctorId }),
+        serviceId,
+        priceBefore: basePrice,
+        priceAfter: basePrice,
+        requiredAmount: basePrice,
+        ...(current[selectedTooth]?.doctorId ? {} : { doctorId: currentDoctorId }),
+      }),
     }));
   };
 
@@ -262,11 +374,34 @@ export default function TeethChart({
     return res.data.teeth || res.data.patient?.teethNotes || {};
   };
 
+  const updateSelectedToothEntry = (producer) => {
+    let computed = null;
+    setTeeth((current) => {
+      const base = normalizeEntry(current[selectedTooth] || { doctorId: currentDoctorId });
+      computed = recalcEntry(
+        producer({
+          ...base,
+          updatedAt: new Date().toISOString(),
+        })
+      );
+      return {
+        ...current,
+        [selectedTooth]: computed,
+      };
+    });
+    return computed;
+  };
+
   const saveCurrentTooth = async () => {
     if (readonly) return;
+    const nextEntry = recalcEntry({
+      ...normalizeEntry(teeth[selectedTooth] || { doctorId: currentDoctorId }),
+      updatedAt: new Date().toISOString(),
+      createdAt: teeth[selectedTooth]?.createdAt || new Date().toISOString(),
+    });
     const nextTeeth = {
       ...teeth,
-      [selectedTooth]: normalizeEntry(teeth[selectedTooth] || { doctorId: currentDoctorId }),
+      [selectedTooth]: nextEntry,
     };
     setSaving(true);
     try {
@@ -276,6 +411,127 @@ export default function TeethChart({
       toast.success('تم حفظ السن');
     } catch (error) {
       toast.error(error.message || 'فشل حفظ السن');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const syncExtraCharge = async (entryToPersist, { createIfMissing = false } = {}) => {
+    const payload = {
+      patientId,
+      serviceId: entryToPersist.serviceId || null,
+      doctorId: entryToPersist.doctorId || currentDoctorId || null,
+      description: entryToPersist.treatmentNote || entryToPersist.note || `علاج سن ${selectedTooth}`,
+      amount: entryToPersist.requiredAmount ?? entryToPersist.priceAfter ?? entryToPersist.priceBefore ?? 0,
+      paidAmount: entryToPersist.paidAmount ?? 0,
+      teethCount: 1,
+      toothNumber: Number(selectedTooth),
+      method: null,
+      notes: entryToPersist.paymentNote || entryToPersist.note || null,
+    };
+
+    if (entryToPersist.linkedPaymentId) {
+      return entryToPersist;
+    }
+
+    if (entryToPersist.extraChargeId) {
+      const res = await api.patch(`/payments/extra-charges/${entryToPersist.extraChargeId}`, payload);
+      return {
+        ...entryToPersist,
+        extraChargeId: res.data.extraCharge?.id || entryToPersist.extraChargeId,
+      };
+    }
+
+    if (!createIfMissing) return entryToPersist;
+
+    const res = await api.post('/payments/extra-charges', payload);
+    return {
+      ...entryToPersist,
+      extraChargeId: res.data.extraCharge?.id || '',
+      status: 'IN_PROGRESS',
+      createdAt: entryToPersist.createdAt || new Date().toISOString(),
+    };
+  };
+
+  const handleStartTreatment = async ({ forceSeparate = false } = {}) => {
+    if (!entry.serviceId) {
+      toast.warn('اختر الخدمة أولاً');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      let nextEntry = recalcEntry({
+        ...entry,
+        status: 'IN_PROGRESS',
+        done: false,
+        linkedPaymentId: forceSeparate ? '' : entry.linkedPaymentId,
+        createdAt: entry.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      nextEntry = await syncExtraCharge(nextEntry, { createIfMissing: !nextEntry.linkedPaymentId });
+      const nextTeeth = {
+        ...teeth,
+        [selectedTooth]: nextEntry,
+      };
+      const saved = await persistTeeth(nextTeeth);
+      setTeeth(saved);
+      onSaved?.(saved);
+      toast.success('تم بدء العلاج وربطه بالمدفوعات');
+    } catch (error) {
+      toast.error(error.message || 'فشل بدء العلاج');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePlanOnly = async () => {
+    if (readonly) return;
+    setSaving(true);
+    try {
+      const nextEntry = recalcEntry({
+        ...entry,
+        status: 'PLANNED',
+        done: false,
+        updatedAt: new Date().toISOString(),
+      });
+      const nextTeeth = {
+        ...teeth,
+        [selectedTooth]: nextEntry,
+      };
+      const saved = await persistTeeth(nextTeeth);
+      setTeeth(saved);
+      onSaved?.(saved);
+      toast.success('تم حفظ الخطة بدون إنشاء بند مالي');
+    } catch (error) {
+      toast.error(error.message || 'فشل حفظ خطة السن');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handlePayFullAmount = async () => {
+    setSaving(true);
+    try {
+      let nextEntry = recalcEntry({
+        ...entry,
+        paidAmount: entry.requiredAmount ?? entry.priceAfter ?? entry.priceBefore ?? 0,
+        remaining: 0,
+        status: 'DONE',
+        done: true,
+        updatedAt: new Date().toISOString(),
+      });
+      nextEntry = await syncExtraCharge(nextEntry);
+      const nextTeeth = {
+        ...teeth,
+        [selectedTooth]: nextEntry,
+      };
+      const saved = await persistTeeth(nextTeeth);
+      setTeeth(saved);
+      onSaved?.(saved);
+      toast.success('تم تسجيل الدفع الكامل لهذا السن');
+    } catch (error) {
+      toast.error(error.message || 'فشل تسجيل الدفع الكامل');
     } finally {
       setSaving(false);
     }
