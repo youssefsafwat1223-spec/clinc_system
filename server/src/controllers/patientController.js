@@ -457,11 +457,37 @@ const saveTeethNotes = async (req, res, next) => {
 
 const remove = async (req, res, next) => {
   try {
-    const existingPatient = await prisma.patient.findUnique({ where: { id: req.params.id } });
+    const patientId = req.params.id;
+    const existingPatient = await prisma.patient.findUnique({ where: { id: patientId } });
     if (!existingPatient) return res.status(404).json({ error: 'المريض غير موجود' });
 
-    await prisma.patient.delete({ where: { id: req.params.id } });
-    res.json({ message: 'تم حذف المريض بنجاح' });
+    // Appointments / messages / prescriptions / consultations / reviews have
+    // no DB-level cascade, so delete every related row in FK-safe order
+    // inside a transaction (all-or-nothing).
+    const appointments = await prisma.appointment.findMany({
+      where: { patientId },
+      select: { id: true },
+    });
+    const appointmentIds = appointments.map((appointment) => appointment.id);
+
+    await prisma.$transaction(async (tx) => {
+      if (appointmentIds.length) {
+        await tx.notification.deleteMany({ where: { appointmentId: { in: appointmentIds } } });
+      }
+      await tx.review.deleteMany({ where: { patientId } });
+      await tx.prescription.deleteMany({ where: { patientId } });
+      await tx.consultation.deleteMany({ where: { patientId } });
+      await tx.message.deleteMany({ where: { patientId } });
+      await tx.payment.deleteMany({ where: { patientId } });
+      await tx.extraCharge.deleteMany({ where: { patientId } });
+      await tx.offerLog.deleteMany({ where: { patientId } });
+      await tx.patientGroupMember.deleteMany({ where: { patientId } });
+      await tx.callbackRequest.updateMany({ where: { patientId }, data: { patientId: null } });
+      await tx.appointment.deleteMany({ where: { patientId } });
+      await tx.patient.delete({ where: { id: patientId } });
+    });
+
+    res.json({ message: 'تم حذف المريض وكل البيانات المرتبطة به بنجاح' });
   } catch (error) {
     next(error);
   }

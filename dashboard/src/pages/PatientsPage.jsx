@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Calendar, Download, FileText, MessageSquare, Phone, Save, Search, Users, X } from 'lucide-react';
+import { Calendar, Download, FileText, MessageSquare, Phone, Save, Search, Trash2, Users, X } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { ar } from 'date-fns/locale';
 import { toast } from 'react-toastify';
 import api from '../api/client';
+import { confirmDialog } from '../components/dialogs';
 import AppLayout from '../components/Layout';
 import { useNavigate } from 'react-router-dom';
 import { DataCard, Field, LoadingSpinner, PrimaryButton, SecondaryButton, inputClass } from '../components/ui';
@@ -231,6 +232,23 @@ export default function PatientsPage() {
     navigate(`/patients/${patient.id}`);
   };
 
+  const handleDeletePatient = async (patient) => {
+    const ok = await confirmDialog({
+      title: 'حذف المريض',
+      message: `سيتم حذف "${patient.displayName || patient.name || 'المريض'}" وكل البيانات المرتبطة به (المواعيد، الرسائل، الروشتات، المدفوعات…) نهائياً. لا يمكن التراجع.`,
+      confirmLabel: 'حذف نهائي',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/patients/${patient.id}`);
+      toast.success('تم حذف المريض وكل بياناته');
+      fetchPatients(page, searchTerm);
+    } catch (error) {
+      toast.error(error.message || 'فشل حذف المريض');
+    }
+  };
+
   const closePatientModal = () => {
     setSelectedPatient(null);
     setPatientDetails(null);
@@ -448,11 +466,20 @@ export default function PatientsPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {patients.map((patient) => (
-              <button
-                key={patient.id}
-                onClick={() => openPatientModal(patient)}
-                className="bg-white rounded-lg border border-gray-200 hover:border-green-500 hover:shadow-md transition p-4 text-right"
-              >
+              <div key={patient.id} className="relative">
+                <button
+                  type="button"
+                  onClick={() => handleDeletePatient(patient)}
+                  aria-label="حذف المريض"
+                  className="absolute left-2 top-2 z-10 rounded-lg bg-red-100 p-2 text-red-600 transition hover:bg-red-200"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => openPatientModal(patient)}
+                  className="w-full bg-white rounded-lg border border-gray-200 hover:border-green-500 hover:shadow-md transition p-4 text-right"
+                >
                 <div className="flex items-start gap-3 mb-3">
                   <div className="flex-shrink-0 h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
                     <Users className="h-5 w-5 text-white" />
@@ -490,7 +517,8 @@ export default function PatientsPage() {
                     {patient.accountBalance ? `${Number(patient.accountBalance).toLocaleString()}` : 'بدون رصيد'}
                   </span>
                 </div>
-              </button>
+                </button>
+              </div>
             ))}
           </div>
         )}
