@@ -92,7 +92,7 @@ const calculateRuleDiscount = (amount, rule) => {
 };
 
 const getDiscountForService = async ({ patientId, service }) => {
-  const amount = toNumber(service?.price);
+  const amount = toNumber(service?.price ?? service?.priceFrom ?? service?.priceTo);
   if (amount <= 0) {
     return {
       amount,

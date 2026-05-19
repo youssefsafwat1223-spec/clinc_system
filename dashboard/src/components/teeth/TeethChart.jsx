@@ -71,6 +71,8 @@ const toNumberOrNull = (value) => {
 
 const moneyFieldValue = (value) => (value === null || value === undefined ? '' : String(value));
 
+const serviceBasePrice = (service) => toNumberOrNull(service?.price ?? service?.priceFrom ?? service?.priceTo) ?? 0;
+
 const recalcEntry = (entry) => {
   const priceBefore = Math.max(0, toNumberOrNull(entry.priceBefore) ?? 0);
   const discountValue = Math.max(0, toNumberOrNull(entry.discountValue) ?? 0);
@@ -336,6 +338,7 @@ export default function TeethChart({
     setEditorOpen(true);
   };
   const previousSaveSignal = useRef(saveSignal);
+  const discountCacheRef = useRef(new Map());
 
   useEffect(() => {
     const normalized = {};
@@ -427,6 +430,57 @@ export default function TeethChart({
     setGroupForm((current) => ({ ...current, [field]: value }));
   };
 
+  const fallbackServicePricing = (serviceId) => {
+    const service = services.find((item) => item.id === serviceId);
+    const price = serviceBasePrice(service);
+    return {
+      priceBefore: price,
+      discountType: 'AMOUNT',
+      discountValue: 0,
+      priceAfter: price,
+      requiredAmount: price,
+    };
+  };
+
+  const getServicePricing = async (serviceId) => {
+    if (!serviceId) {
+      return {
+        priceBefore: null,
+        discountType: 'AMOUNT',
+        discountValue: null,
+        priceAfter: null,
+        requiredAmount: null,
+      };
+    }
+
+    const fallback = fallbackServicePricing(serviceId);
+    const cacheKey = `${patientId || 'global'}:${serviceId}`;
+    if (discountCacheRef.current.has(cacheKey)) return discountCacheRef.current.get(cacheKey);
+
+    try {
+      const res = await api.get(`/services/${serviceId}/discount`, {
+        params: patientId ? { patientId } : {},
+      });
+      const discount = res.data.discount || {};
+      const rule = discount.rule || null;
+      const nextPricing = {
+        priceBefore: toNumberOrNull(discount.amount) ?? fallback.priceBefore,
+        discountType: rule?.type === 'PERCENT' ? 'PERCENT' : 'AMOUNT',
+        discountValue:
+          rule?.type === 'PERCENT'
+            ? toNumberOrNull(rule.value) ?? 0
+            : toNumberOrNull(discount.discountAmount) ?? 0,
+        priceAfter: toNumberOrNull(discount.finalAmount) ?? fallback.priceAfter,
+        requiredAmount: toNumberOrNull(discount.finalAmount) ?? fallback.requiredAmount,
+      };
+      discountCacheRef.current.set(cacheKey, nextPricing);
+      return nextPricing;
+    } catch {
+      discountCacheRef.current.set(cacheKey, fallback);
+      return fallback;
+    }
+  };
+
   const toggleGroupTooth = (toothNumber) => {
     setGroupForm((current) => {
       const tooth = String(toothNumber);
@@ -486,19 +540,25 @@ export default function TeethChart({
     toast.success('تم ربط السن بنفس الدفعة الحالية');
   };
 
-  const applyServiceDefaults = (serviceId) => {
-    const selected = services.find((service) => service.id === serviceId);
-    const basePrice = toNumberOrNull(selected?.price ?? selected?.priceFrom ?? selected?.priceTo);
+  const applyServiceDefaults = async (serviceId) => {
+    const pricing = await getServicePricing(serviceId);
     setTeeth((current) => ({
       ...current,
       [selectedTooth]: recalcEntry({
         ...normalizeEntry(current[selectedTooth] || { doctorId: currentDoctorId }),
         serviceId,
-        priceBefore: basePrice,
-        priceAfter: basePrice,
-        requiredAmount: basePrice,
+        ...pricing,
         ...(current[selectedTooth]?.doctorId ? {} : { doctorId: currentDoctorId }),
       }),
+    }));
+  };
+
+  const applyGroupServiceDefaults = async (serviceId) => {
+    const pricing = await getServicePricing(serviceId);
+    setGroupForm((current) => ({
+      ...current,
+      serviceId,
+      price: pricing.priceAfter ?? pricing.priceBefore ?? '',
     }));
   };
 
@@ -616,7 +676,7 @@ export default function TeethChart({
       return;
     }
 
-    const servicePrice = toNumberOrNull(groupSelectedService?.price ?? groupSelectedService?.priceFrom ?? groupSelectedService?.priceTo) || 0;
+    const servicePrice = serviceBasePrice(groupSelectedService);
     const amount = groupForm.price === '' ? servicePrice : groupTotalAmount;
     const paidAmount = Math.min(amount, groupPaidAmount);
     const shouldLinkBookedPayment = groupMatchingPayment && !forceExtra;
@@ -928,7 +988,7 @@ export default function TeethChart({
               <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-4">
                 <div className="grid gap-3 md:grid-cols-2">
                   <Field label="الخدمة">
-                    <select className={inputClass} value={groupForm.serviceId} onChange={(event) => updateGroupForm('serviceId', event.target.value)}>
+                    <select className={inputClass} value={groupForm.serviceId} onChange={(event) => applyGroupServiceDefaults(event.target.value)}>
                       <option value="">اختر الخدمة</option>
                       {effectiveBookedServices.length ? (
                         <optgroup label="خدمات حجزها المريض">
@@ -959,13 +1019,13 @@ export default function TeethChart({
                     </select>
                   </Field>
                   <Field label={groupForm.priceMode === 'PER_TOOTH' ? 'السعر لكل سن' : 'السعر الإجمالي'}>
-                    <input className={inputClass} type="number" value={groupForm.price} placeholder={String(groupSelectedService?.price ?? groupSelectedService?.priceFrom ?? '')} onChange={(event) => updateGroupForm('price', event.target.value)} />
+                    <input className={inputClass} type="number" value={groupForm.price} placeholder={String(serviceBasePrice(groupSelectedService) || '')} onChange={(event) => updateGroupForm('price', event.target.value)} />
                   </Field>
                   <Field label="المدفوع">
                     <input className={inputClass} type="number" value={groupForm.paidAmount} onChange={(event) => updateGroupForm('paidAmount', event.target.value)} />
                   </Field>
                   <Field label="الإجمالي المتوقع">
-                    <input className={inputClass} value={money(groupForm.price === '' ? groupSelectedService?.price ?? groupSelectedService?.priceFrom ?? 0 : groupTotalAmount)} disabled />
+                    <input className={inputClass} value={money(groupForm.price === '' ? serviceBasePrice(groupSelectedService) : groupTotalAmount)} disabled />
                   </Field>
                 </div>
                 <Field label="ملاحظة عامة">

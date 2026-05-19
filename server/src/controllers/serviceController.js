@@ -1,4 +1,5 @@
 const prisma = require('../lib/prisma');
+const { getDiscountForService } = require('../services/discountService');
 
 const isMissingServicePriceRangeColumnError = (error) => {
   const message = String(error?.message || '').toLowerCase();
@@ -40,6 +41,47 @@ const getAll = async (req, res, next) => {
     }
 
     res.json({ services });
+  } catch (error) {
+    next(error);
+  }
+};
+
+const getDiscount = async (req, res, next) => {
+  try {
+    let service;
+
+    try {
+      service = await prisma.service.findUnique({ where: { id: req.params.id } });
+    } catch (error) {
+      if (!isMissingServicePriceRangeColumnError(error)) throw error;
+
+      service = await prisma.service.findUnique({
+        where: { id: req.params.id },
+        select: {
+          id: true,
+          name: true,
+          nameAr: true,
+          description: true,
+          price: true,
+          duration: true,
+          active: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
+      if (service) service = { ...service, priceFrom: null, priceTo: null };
+    }
+
+    if (!service) {
+      return res.status(404).json({ message: 'الخدمة غير موجودة' });
+    }
+
+    const discount = await getDiscountForService({
+      patientId: req.query.patientId || null,
+      service,
+    });
+
+    res.json({ discount });
   } catch (error) {
     next(error);
   }
@@ -166,4 +208,4 @@ const remove = async (req, res, next) => {
   }
 };
 
-module.exports = { getAll, getPublic, create, update, remove };
+module.exports = { getAll, getPublic, getDiscount, create, update, remove };
