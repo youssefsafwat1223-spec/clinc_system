@@ -17,6 +17,7 @@ export default function AppointmentCard({
   onComplete,
   onNoShow,
   onCancel,
+  onReschedule,
   onOpenPatientProfile,
   onCreatePrescription,
   onQueueChange,
@@ -256,6 +257,12 @@ export default function AppointmentCard({
                 <XCircle className="h-4 w-4" />
                 إلغاء
               </SecondaryButton>
+              {onReschedule ? (
+                <SecondaryButton type="button" onClick={() => onReschedule?.(appointment)}>
+                  <CalendarDays className="h-4 w-4" />
+                  تأجيل
+                </SecondaryButton>
+              ) : null}
             </>
           ) : null}
 

@@ -32,6 +32,9 @@ export default function TodayPatientsPage() {
   const [selectedWeek, setSelectedWeek] = useState('1');
   const [status, setStatus] = useState('ALL');
   const [doctorFilter, setDoctorFilter] = useState('ALL');
+  const [rescheduleTarget, setRescheduleTarget] = useState(null);
+  const [rescheduleDate, setRescheduleDate] = useState(todayInputValue());
+  const [savingReschedule, setSavingReschedule] = useState(false);
 
   // Local (not UTC) YYYY-MM-DD so "today" matches the user's calendar day.
   const localDateValue = (date = new Date()) => {
@@ -99,6 +102,26 @@ export default function TodayPatientsPage() {
       await loadAppointments();
     } catch (error) {
       toast.error(error.message || 'فشل تحديث الموعد');
+    }
+  };
+
+  const openReschedule = (appointment) => {
+    setRescheduleTarget(appointment);
+    setRescheduleDate((appointment?.scheduledTime || '').slice(0, 10) || todayInputValue());
+  };
+
+  const saveReschedule = async () => {
+    if (!rescheduleTarget || !rescheduleDate) return;
+    setSavingReschedule(true);
+    try {
+      await api.post(`/appointments/${rescheduleTarget.id}/reschedule-day`, { date: rescheduleDate });
+      toast.success('تم تأجيل الموعد وإرسال رسالة التأكيد');
+      setRescheduleTarget(null);
+      await loadAppointments();
+    } catch (error) {
+      toast.error(error.message || 'فشل تأجيل الموعد');
+    } finally {
+      setSavingReschedule(false);
     }
   };
 
@@ -296,11 +319,46 @@ export default function TodayPatientsPage() {
               onEnterRoom={handleEnterRoom}
               onNoShow={(item) => updateAppointmentStatus(item, 'no-show', 'تم تسجيل عدم الحضور')}
               onCancel={(item) => updateAppointmentStatus(item, 'cancel', 'تم إلغاء الموعد')}
+              onReschedule={openReschedule}
               onQueueChange={handleQueueChange}
             />
           ))}
         </div>
       )}
+
+      {rescheduleTarget ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => !savingReschedule && setRescheduleTarget(null)}
+          dir="rtl"
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b1020] p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-xl font-black text-white">تأجيل الحجز</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {rescheduleTarget.patient?.displayName || rescheduleTarget.patient?.name} · {rescheduleTarget.bookingRef || rescheduleTarget.id}
+            </p>
+            <div className="mt-4">
+              <Field label="اليوم الجديد">
+                <input className={inputClass} type="date" value={rescheduleDate} onChange={(event) => setRescheduleDate(event.target.value)} />
+              </Field>
+            </div>
+            <p className="mt-3 text-xs leading-6 text-slate-400">
+              سيتم الاحتفاظ بنفس الطبيب والخدمة ونوع الحجز، ثم إرسال رسالة تأكيد للمريض بعد الحفظ.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <SecondaryButton type="button" onClick={() => setRescheduleTarget(null)} disabled={savingReschedule}>
+                إلغاء
+              </SecondaryButton>
+              <PrimaryButton type="button" onClick={saveReschedule} disabled={savingReschedule || !rescheduleDate}>
+                حفظ التأجيل
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppLayout>
   );
 }

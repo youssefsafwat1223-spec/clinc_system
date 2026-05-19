@@ -674,6 +674,77 @@ const updateQueuePosition = async (req, res, next) => {
   }
 };
 
+const rescheduleDay = async (req, res, next) => {
+  try {
+    const { appointment: existingAppointment, scopedDoctor } = await getAccessibleAppointment(req, req.params.id, {
+      patient: true,
+      doctor: true,
+      service: true,
+    });
+    if (!existingAppointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    if (!['PENDING', 'CONFIRMED'].includes(existingAppointment.status)) {
+      return res.status(400).json({ error: 'يمكن تأجيل الموعد للحجوزات المؤكدة أو المعلقة فقط' });
+    }
+
+    const { date } = req.body || {};
+    if (!date) {
+      return res.status(400).json({ error: 'اختر اليوم الجديد أولاً' });
+    }
+
+    let nextScheduledTime;
+    if (existingAppointment.appointmentType === 'WALK_IN') {
+      nextScheduledTime = date;
+    } else {
+      const current = new Date(existingAppointment.scheduledTime);
+      const nextDate = new Date(date);
+      if (Number.isNaN(nextDate.getTime())) {
+        return res.status(400).json({ error: 'اليوم الجديد غير صالح' });
+      }
+      nextDate.setHours(current.getHours(), current.getMinutes(), 0, 0);
+      nextScheduledTime = nextDate;
+    }
+
+    let result = await appointmentService.createAppointment({
+      patientId: existingAppointment.patientId,
+      doctorId: scopedDoctor?.id || existingAppointment.doctorId,
+      serviceId: existingAppointment.serviceId,
+      scheduledTime: nextScheduledTime,
+      appointmentType: existingAppointment.appointmentType,
+      rescheduleAptId: existingAppointment.id,
+    });
+
+    if (result.conflict) {
+      return res.status(409).json({
+        error: 'هذا اليوم غير متاح لهذا الموعد',
+        alternatives: result.alternatives,
+      });
+    }
+
+    result = await appointmentService.confirmAppointment(existingAppointment.id);
+    if (result.conflict) {
+      return res.status(409).json({
+        error: 'تعذر تأكيد الموعد بعد التأجيل',
+        alternatives: result.alternatives,
+      });
+    }
+
+    const appointment = result.appointment;
+
+    try {
+      await notificationService.sendBookingConfirmed(appointment);
+    } catch (e) {
+      console.error('Notification error:', e.message);
+    }
+
+    res.json({ appointment });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAll,
   getOne,
@@ -687,6 +758,7 @@ module.exports = {
   complete,
   noShow,
   cancel,
+  rescheduleDay,
   getStats,
   availability,
   previewRescheduleByDoctor,

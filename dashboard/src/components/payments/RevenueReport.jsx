@@ -36,9 +36,10 @@ const itemTypeOptions = [
   { value: 'EXTRA', label: 'الخدمات الإضافية فقط' },
 ];
 
-const defaultFilters = () => ({
-  from: todayInputValue(),
-  to: todayInputValue(),
+const defaultFilters = (allTime = false) => ({
+  // In a patient profile we want every payment by default, not just today.
+  from: allTime ? '' : todayInputValue(),
+  to: allTime ? '' : todayInputValue(),
   status: 'ALL',
   method: 'ALL',
   caseStatus: 'ALL',
@@ -292,8 +293,8 @@ function InlinePaymentEditor({ payment, onSaved, onDelete }) {
 
 export default function RevenueReport({ patientId = '', patientName = '', patientPhone = '', compact = false }) {
   const navigate = useNavigate();
-  const [filters, setFilters] = useState(defaultFilters);
-  const [dateRange, setDateRange] = useState('today');
+  const [filters, setFilters] = useState(() => defaultFilters(Boolean(patientId)));
+  const [dateRange, setDateRange] = useState(patientId ? 'all' : 'today');
   const [includeExpenses, setIncludeExpenses] = useState(true);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);

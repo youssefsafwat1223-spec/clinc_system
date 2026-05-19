@@ -96,6 +96,12 @@ const defaultServiceForm = {
   duration: 30,
 };
 
+const treatmentStatusLabels = {
+  PLANNED: 'مخطط',
+  IN_PROGRESS: 'قيد العلاج',
+  DONE: 'مكتمل',
+};
+
 const toothType = (number) => {
   const n = Number(number);
   const molars = [1, 2, 3, 14, 15, 16, 17, 18, 19, 30, 31, 32];
@@ -348,6 +354,28 @@ export default function TeethChart({
     }));
   };
 
+  const linkExistingPayment = () => {
+    if (!matchingPayment) return;
+    const finalAmount = Number(matchingPayment.finalAmount || matchingPayment.amount || 0);
+    const paidAmount = Number(matchingPayment.paidAmount || 0);
+    const remaining = Math.max(0, finalAmount - paidAmount);
+    setTeeth((current) => ({
+      ...current,
+      [selectedTooth]: recalcEntry({
+        ...normalizeEntry(current[selectedTooth] || { doctorId: currentDoctorId }),
+        linkedPaymentId: matchingPayment.id,
+        extraChargeId: '',
+        priceBefore: finalAmount,
+        priceAfter: finalAmount,
+        requiredAmount: finalAmount,
+        paidAmount,
+        remaining,
+        updatedAt: new Date().toISOString(),
+      }),
+    }));
+    toast.success('تم ربط السن بنفس الدفعة الحالية');
+  };
+
   const applyServiceDefaults = (serviceId) => {
     const selected = services.find((service) => service.id === serviceId);
     const basePrice = toNumberOrNull(selected?.price ?? selected?.priceFrom ?? selected?.priceTo);
@@ -585,6 +613,9 @@ export default function TeethChart({
     }
   };
 
+  const selectedDoctorName = doctors.find((doctor) => doctor.id === (entry.doctorId || currentDoctorId))?.name || '';
+  const selectedServiceName = selectedService?.nameAr || selectedService?.name || '';
+
   return (
     <DataCard>
       <div className="grid gap-6 2xl:grid-cols-[minmax(620px,1fr)_360px]">
@@ -640,6 +671,149 @@ export default function TeethChart({
         </div>
 
         <div className="space-y-4">
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h4 className="text-base font-black text-white">سن رقم {selectedTooth}</h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  {selectedServiceName || 'بدون خدمة'}{selectedDoctorName ? ` · د. ${selectedDoctorName}` : ''}
+                </p>
+              </div>
+              <span className="rounded-full border border-sky-500/20 bg-sky-500/10 px-3 py-1 text-xs font-black text-sky-200">
+                {treatmentStatusLabels[entry.status] || 'مخطط'}
+              </span>
+            </div>
+
+            <Field label="ملاحظة السن">
+              <textarea
+                className={inputClass}
+                rows={3}
+                value={entry.note}
+                disabled={readonly}
+                onChange={(event) => updateEntry('note', event.target.value)}
+              />
+            </Field>
+            <div className="mt-3 grid gap-3">
+              <Field label="ملاحظة العلاج">
+                <textarea
+                  className={inputClass}
+                  rows={3}
+                  value={entry.treatmentNote}
+                  disabled={readonly}
+                  onChange={(event) => updateEntry('treatmentNote', event.target.value)}
+                />
+              </Field>
+              <Field label="الخدمة">
+                <select className={inputClass} value={entry.serviceId} disabled={readonly} onChange={(event) => applyServiceDefaults(event.target.value)}>
+                  <option value="">اختر الخدمة</option>
+                  {services.map((service) => (
+                    <option key={service.id} value={service.id}>{service.nameAr || service.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="الطبيب">
+                <select className={inputClass} value={entry.doctorId || currentDoctorId} disabled={readonly} onChange={(event) => updateEntry('doctorId', event.target.value)}>
+                  <option value="">اختر الطبيب</option>
+                  {doctors.map((doctor) => (
+                    <option key={doctor.id} value={doctor.id}>د. {doctor.name}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="حالة العلاج">
+                <select className={inputClass} value={entry.status} disabled={readonly} onChange={(event) => updateEntry('status', event.target.value)}>
+                  {Object.entries(treatmentStatusLabels).map(([value, label]) => (
+                    <option key={value} value={value}>{label}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="تم عمل الخدمة؟">
+                <select className={inputClass} value={entry.done ? 'YES' : 'NO'} disabled={readonly} onChange={(event) => updateEntry('done', event.target.value === 'YES')}>
+                  <option value="NO">لا</option>
+                  <option value="YES">نعم</option>
+                </select>
+              </Field>
+            </div>
+          </div>
+
+          {selectedService ? (
+            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+              <h4 className="mb-3 text-sm font-black text-white">تفاصيل العلاج والدفع</h4>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field label="السعر قبل الخصم">
+                  <input className={inputClass} type="number" value={moneyFieldValue(entry.priceBefore)} disabled={readonly} onChange={(event) => updateEntry('priceBefore', event.target.value)} />
+                </Field>
+                <Field label="نوع الخصم">
+                  <select className={inputClass} value={entry.discountType} disabled={readonly} onChange={(event) => updateEntry('discountType', event.target.value)}>
+                    <option value="AMOUNT">مبلغ</option>
+                    <option value="PERCENT">نسبة مئوية</option>
+                  </select>
+                </Field>
+                <Field label="قيمة الخصم">
+                  <input className={inputClass} type="number" value={moneyFieldValue(entry.discountValue)} disabled={readonly} onChange={(event) => updateEntry('discountValue', event.target.value)} />
+                </Field>
+                <Field label="السعر بعد الخصم">
+                  <input className={inputClass} type="number" value={moneyFieldValue(entry.priceAfter)} disabled />
+                </Field>
+                <Field label="المطلوب">
+                  <input className={inputClass} type="number" value={moneyFieldValue(entry.requiredAmount)} disabled={readonly} onChange={(event) => updateEntry('requiredAmount', event.target.value)} />
+                </Field>
+                <Field label="المدفوع">
+                  <input className={inputClass} type="number" value={moneyFieldValue(entry.paidAmount)} disabled={readonly} onChange={(event) => updateEntry('paidAmount', event.target.value)} />
+                </Field>
+                <Field label="المتبقي">
+                  <input className={inputClass} type="number" value={moneyFieldValue(entry.remaining)} disabled />
+                </Field>
+                <Field label="رقم البند المالي">
+                  <input className={inputClass} value={entry.extraChargeId || entry.linkedPaymentId || 'غير مرتبط بعد'} disabled />
+                </Field>
+              </div>
+              <div className="mt-3">
+                <Field label="ملاحظة الدفع">
+                  <textarea className={inputClass} rows={3} value={entry.paymentNote} disabled={readonly} onChange={(event) => updateEntry('paymentNote', event.target.value)} />
+                </Field>
+              </div>
+            </div>
+          ) : null}
+
+          {matchingPayment && !entry.linkedPaymentId && !readonly ? (
+            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+              <h4 className="text-sm font-black text-amber-100">يوجد دفع سابق لنفس الخدمة</h4>
+              <p className="mt-2 text-xs leading-6 text-amber-50/90">
+                الإجمالي: {money(Number(matchingPayment.finalAmount || matchingPayment.amount || 0))} · المدفوع: {money(Number(matchingPayment.paidAmount || 0))} · المتبقي: {money(Math.max(0, Number(matchingPayment.finalAmount || matchingPayment.amount || 0) - Number(matchingPayment.paidAmount || 0)))}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <SecondaryButton type="button" onClick={linkExistingPayment}>ربط بنفس الدفعة</SecondaryButton>
+                <SecondaryButton type="button" onClick={() => handleStartTreatment({ forceSeparate: true })}>إنشاء بند سن منفصل</SecondaryButton>
+              </div>
+            </div>
+          ) : null}
+
+          {!readonly ? (
+            <div className="grid gap-2">
+              <PrimaryButton type="button" onClick={() => handleStartTreatment()} disabled={saving || !entry.serviceId}>بدء العلاج</PrimaryButton>
+              <SecondaryButton type="button" onClick={handlePlanOnly} disabled={saving}>عدم البدء الآن</SecondaryButton>
+              <SecondaryButton type="button" onClick={handlePayFullAmount} disabled={saving || !entry.serviceId}>دفع كامل</SecondaryButton>
+              {onAddToPrescription ? (
+                <SecondaryButton type="button" onClick={() => onAddToPrescription(selectedTooth, entry)}>إضافة للروشتة</SecondaryButton>
+              ) : null}
+              {!showServiceForm ? (
+                <SecondaryButton type="button" onClick={() => setShowServiceForm(true)}>
+                  <PlusCircle className="h-4 w-4" />
+                  إضافة خدمة أخرى
+                </SecondaryButton>
+              ) : null}
+              <PrimaryButton type="button" onClick={saveCurrentTooth} disabled={saving}>
+                <Save className="h-4 w-4" />
+                حفظ السن المحدد
+              </PrimaryButton>
+              {showSaveButton ? (
+                <SecondaryButton type="button" onClick={saveTeeth} disabled={saving}>حفظ خريطة الأسنان</SecondaryButton>
+              ) : null}
+            </div>
+          ) : null}
+
+          {false ? (
+            <>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <h4 className="mb-3 text-base font-black text-white">سن رقم {selectedTooth}</h4>
             <Field label="ملاحظة السن">
@@ -717,6 +891,8 @@ export default function TeethChart({
             <SecondaryButton type="button" onClick={saveTeeth} disabled={saving} className="w-full">
               حفظ كل خريطة الأسنان
             </SecondaryButton>
+          ) : null}
+            </>
           ) : null}
         </div>
       </div>

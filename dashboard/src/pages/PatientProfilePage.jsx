@@ -12,7 +12,7 @@ import TeethChart from '../components/teeth/TeethChart';
 import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatCard, StatusBadge, inputClass } from '../components/ui';
 import EmptyState from '../components/EmptyState';
 import { confirmDialog, promptDialog } from '../components/dialogs';
-import { formatDateTime, money } from '../utils/appointmentUi';
+import { formatDateTime, money, todayInputValue } from '../utils/appointmentUi';
 import { PrescriptionsWorkspace } from './PrescriptionsPage';
 
 const PLATFORMS = ['WHATSAPP', 'FACEBOOK', 'INSTAGRAM'];
@@ -50,6 +50,9 @@ export default function PatientProfilePage() {
   const [showTeeth, setShowTeeth] = useState(true);
   const [prescriptionAppointmentRef, setPrescriptionAppointmentRef] = useState('');
   const [teethSaveSignal, setTeethSaveSignal] = useState(0);
+  const [rescheduleTarget, setRescheduleTarget] = useState(null);
+  const [rescheduleDate, setRescheduleDate] = useState(todayInputValue());
+  const [savingReschedule, setSavingReschedule] = useState(false);
   const [prescriptionPrefill, setPrescriptionPrefill] = useState({
     toothNotes: [],
     notesText: '',
@@ -147,6 +150,34 @@ export default function PatientProfilePage() {
     };
   };
 
+  const buildSingleToothPrescriptionPrefill = (toothNumber, rawEntry) => {
+    const entry = typeof rawEntry === 'string' ? { note: rawEntry } : rawEntry || {};
+    const serviceName =
+      patient?.extraCharges?.find((item) => item.id === entry.extraChargeId)?.service?.nameAr ||
+      patient?.extraCharges?.find((item) => item.id === entry.extraChargeId)?.service?.name ||
+      patient?.payments?.find((item) => item.id === entry.linkedPaymentId)?.service?.nameAr ||
+      patient?.payments?.find((item) => item.id === entry.linkedPaymentId)?.service?.name ||
+      patient?.appointments?.find((item) => item.serviceId === entry.serviceId)?.service?.nameAr ||
+      patient?.appointments?.find((item) => item.serviceId === entry.serviceId)?.service?.name;
+    const doctorName =
+      patient?.extraCharges?.find((item) => item.id === entry.extraChargeId)?.doctor?.name ||
+      patient?.appointments?.find((item) => item.doctorId === entry.doctorId)?.doctor?.name;
+    const parts = [
+      entry.note,
+      entry.treatmentNote,
+      serviceName ? `الخدمة: ${serviceName}` : null,
+      doctorName ? `الطبيب: د. ${doctorName}` : null,
+      entry.status ? `الحالة: ${entry.status}` : null,
+      entry.remaining != null ? `المتبقي: ${money(entry.remaining)}` : null,
+    ].filter(Boolean);
+    const note = parts.join(' - ');
+    return {
+      toothNotes: note ? [{ toothNumber: String(toothNumber), note }] : [{ toothNumber: String(toothNumber), note: '' }],
+      notesText: note ? `سن ${toothNumber}: ${note}` : '',
+      diagnosisText: serviceName || `ملاحظات سن ${toothNumber}`,
+    };
+  };
+
   const updateDraft = (field, value) => setDraft((current) => ({ ...current, [field]: value }));
 
   const saveNotes = async () => {
@@ -238,6 +269,26 @@ export default function PatientProfilePage() {
       await loadPatient();
     } catch (error) {
       toast.error(error.message || 'فشل تحديث الدور');
+    }
+  };
+
+  const openReschedule = (appointment) => {
+    setRescheduleTarget(appointment);
+    setRescheduleDate((appointment?.scheduledTime || '').slice(0, 10) || todayInputValue());
+  };
+
+  const saveReschedule = async () => {
+    if (!rescheduleTarget || !rescheduleDate) return;
+    setSavingReschedule(true);
+    try {
+      await api.post(`/appointments/${rescheduleTarget.id}/reschedule-day`, { date: rescheduleDate });
+      toast.success('تم تأجيل الحجز وإرسال رسالة التأكيد');
+      setRescheduleTarget(null);
+      await loadPatient();
+    } catch (error) {
+      toast.error(error.message || 'فشل تأجيل الحجز');
+    } finally {
+      setSavingReschedule(false);
     }
   };
 
@@ -566,6 +617,16 @@ export default function PatientProfilePage() {
               extraCharges={patient.extraCharges || []}
               saveSignal={teethSaveSignal}
               showSaveButton={false}
+              onAddToPrescription={(toothNumber, rawEntry) => {
+                const prefill = buildSingleToothPrescriptionPrefill(toothNumber, rawEntry);
+                setPrescriptionPrefill({
+                  ...prefill,
+                  signal: Date.now(),
+                });
+                setPrescriptionAppointmentRef('');
+                setActiveTab('prescriptions');
+                toast.success(`تم تجهيز الروشتة من السن ${toothNumber}`);
+              }}
               onSaved={(teethNotes) => setPatient((current) => ({ ...current, teethNotes }))}
             />
           ) : null}
@@ -606,6 +667,7 @@ export default function PatientProfilePage() {
                 onComplete={(item) => handleAppointmentAction(item, 'complete')}
                 onNoShow={(item) => handleAppointmentAction(item, 'no-show')}
                 onCancel={(item) => handleAppointmentAction(item, 'cancel')}
+                onReschedule={openReschedule}
                 onQueueChange={handleQueueChange}
                 onCreatePrescription={() => {
                   setPrescriptionAppointmentRef(appointment.bookingRef || appointment.id || '');
@@ -808,6 +870,40 @@ export default function PatientProfilePage() {
               </section>
             </div>
           </DataCard>
+        </div>
+      ) : null}
+
+      {rescheduleTarget ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => !savingReschedule && setRescheduleTarget(null)}
+          dir="rtl"
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b1020] p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-xl font-black text-white">تأجيل الحجز</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {rescheduleTarget.patient?.displayName || rescheduleTarget.patient?.name} · {rescheduleTarget.bookingRef || rescheduleTarget.id}
+            </p>
+            <div className="mt-4">
+              <Field label="اليوم الجديد">
+                <input className={inputClass} type="date" value={rescheduleDate} onChange={(event) => setRescheduleDate(event.target.value)} />
+              </Field>
+            </div>
+            <p className="mt-3 text-xs leading-6 text-slate-400">
+              سيتم الاحتفاظ بنفس الطبيب والخدمة ونوع الحجز، ثم إرسال رسالة تأكيد للمريض بعد الحفظ.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <SecondaryButton type="button" onClick={() => setRescheduleTarget(null)} disabled={savingReschedule}>
+                إلغاء
+              </SecondaryButton>
+              <PrimaryButton type="button" onClick={saveReschedule} disabled={savingReschedule || !rescheduleDate}>
+                حفظ التأجيل
+              </PrimaryButton>
+            </div>
+          </div>
         </div>
       ) : null}
     </AppLayout>
