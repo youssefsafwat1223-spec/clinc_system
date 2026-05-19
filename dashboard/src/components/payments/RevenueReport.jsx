@@ -36,10 +36,9 @@ const itemTypeOptions = [
   { value: 'EXTRA', label: 'الخدمات الإضافية فقط' },
 ];
 
-const defaultFilters = (allTime = false) => ({
-  // In a patient profile we want every payment by default, not just today.
-  from: allTime ? '' : todayInputValue(),
-  to: allTime ? '' : todayInputValue(),
+const defaultFilters = () => ({
+  from: '',
+  to: '',
   status: 'ALL',
   method: 'ALL',
   caseStatus: 'ALL',
@@ -47,6 +46,8 @@ const defaultFilters = (allTime = false) => ({
   search: '',
   cashierExpenses: '',
 });
+
+const isAutoFullPaymentNote = (value = '') => /^تحصيل كامل\s*\(/.test(String(value).trim());
 
 const toAmount = (value) => Number(value) || 0;
 const clampAmount = (value, max = Infinity) => Math.max(0, Math.min(toAmount(value), max));
@@ -81,7 +82,7 @@ const defaultEditForm = (payment = {}) => ({
   remainingAmount: payment.remainingAmount ?? Math.max(0, netPaymentAmount(payment) - toAmount(payment.paidAmount)),
   teethCount: payment.teethCount || 1,
   method: payment.method || 'cash',
-  notes: payment.notes || '',
+  notes: isAutoFullPaymentNote(payment.notes) ? '' : payment.notes || '',
   caseStatus: payment.caseStatus || '',
 });
 
@@ -257,6 +258,8 @@ function InlinePaymentEditor({ payment, onSaved, onDelete }) {
 
   const markFullyPaid = () =>
     setForm((current) => ({ ...current, paidAmount: netPaymentAmount(payment, current.discountAmount), remainingAmount: 0 }));
+  const isFullyPaid =
+    Math.max(0, netPaymentAmount(payment, form.discountAmount) - clampAmount(form.paidAmount, netPaymentAmount(payment, form.discountAmount))) <= 0;
 
   const save = async () => {
     setSaving(true);
@@ -275,9 +278,11 @@ function InlinePaymentEditor({ payment, onSaved, onDelete }) {
     <div className="mt-4 rounded-2xl border border-sky-500/15 bg-slate-950/40 p-4">
       <PaymentFields payment={payment} form={form} setForm={setForm} />
       <div className="mt-4 flex flex-wrap justify-end gap-2">
-        <SecondaryButton type="button" onClick={markFullyPaid}>
-          تحصيل كامل ({money(payment.amount || 0)})
-        </SecondaryButton>
+        {!isFullyPaid ? (
+          <SecondaryButton type="button" onClick={markFullyPaid}>
+            تحصيل كامل ({money(netPaymentAmount(payment, form.discountAmount))})
+          </SecondaryButton>
+        ) : null}
         {payment.source === 'extra' ? (
           <SecondaryButton type="button" onClick={() => onDelete?.(payment.id)} className="hover:bg-rose-500/15 hover:text-rose-200">
             حذف
@@ -293,8 +298,8 @@ function InlinePaymentEditor({ payment, onSaved, onDelete }) {
 
 export default function RevenueReport({ patientId = '', patientName = '', patientPhone = '', compact = false }) {
   const navigate = useNavigate();
-  const [filters, setFilters] = useState(() => defaultFilters(Boolean(patientId)));
-  const [dateRange, setDateRange] = useState(patientId ? 'all' : 'today');
+  const [filters, setFilters] = useState(() => defaultFilters());
+  const [dateRange, setDateRange] = useState('all');
   const [includeExpenses, setIncludeExpenses] = useState(true);
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -490,6 +495,9 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
 
   const markFullyPaid = () =>
     setEditForm((current) => ({ ...current, paidAmount: netPaymentAmount(editing, current.discountAmount), remainingAmount: 0 }));
+  const editingFullyPaid =
+    editing &&
+    Math.max(0, netPaymentAmount(editing, editForm.discountAmount) - clampAmount(editForm.paidAmount, netPaymentAmount(editing, editForm.discountAmount))) <= 0;
 
   const showAllPayments = () => {
     applyDateChip('all');
@@ -992,9 +1000,11 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
               </p>
             ) : null}
             <div className="mt-6 flex flex-wrap justify-end gap-3">
-              <SecondaryButton type="button" onClick={markFullyPaid}>
-                تحصيل كامل ({money(editing.amount || 0)})
-              </SecondaryButton>
+              {!editingFullyPaid ? (
+                <SecondaryButton type="button" onClick={markFullyPaid}>
+                  تحصيل كامل ({money(netPaymentAmount(editing, editForm.discountAmount))})
+                </SecondaryButton>
+              ) : null}
               <SecondaryButton type="button" onClick={() => setEditing(null)}>
                 إلغاء
               </SecondaryButton>
