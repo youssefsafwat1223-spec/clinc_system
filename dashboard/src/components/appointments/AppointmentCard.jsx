@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, CheckCircle, Clock3, Hash, Stethoscope, User, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle, Clock3, Hash, Stethoscope, Trash2, User, XCircle } from 'lucide-react';
 import { DataCard, PrimaryButton, SecondaryButton, StatusBadge, inputClass } from '../ui';
 import {
   appointmentStatusLabels,
@@ -18,6 +18,7 @@ export default function AppointmentCard({
   onNoShow,
   onCancel,
   onReschedule,
+  onDelete,
   onOpenPatientProfile,
   onCreatePrescription,
   onQueueChange,
@@ -264,6 +265,17 @@ export default function AppointmentCard({
                 </SecondaryButton>
               ) : null}
             </>
+          ) : null}
+
+          {onDelete ? (
+            <SecondaryButton
+              type="button"
+              onClick={() => onDelete?.(appointment)}
+              className="hover:bg-rose-500/15 hover:text-rose-200"
+            >
+              <Trash2 className="h-4 w-4" />
+              حذف الموعد
+            </SecondaryButton>
           ) : null}
 
           {canEnterRoom ? (

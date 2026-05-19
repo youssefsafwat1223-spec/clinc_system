@@ -252,6 +252,8 @@ const revenueReport = async (req, res, next) => {
             serviceName,
             caseType: serviceName,
             netAmount: 0,
+            bookedAmount: 0,
+            doctorAddedAmount: 0,
             debtAmount: 0,
             receivedAmount: 0,
             caseCount: 0,
@@ -260,12 +262,15 @@ const revenueReport = async (req, res, next) => {
         }
 
         const row = rowsMap.get(serviceId);
+        // Payment rows = booked revenue (came from an appointment).
         row.netAmount += finalAmount;
+        row.bookedAmount += finalAmount;
         row.debtAmount += remaining;
         row.receivedAmount += paidAmount;
         row.caseCount += 1;
         row.teethCount += teethCount;
 
+        acc.totalBookedRevenue += finalAmount;
         acc.totalRevenue += finalAmount;
         acc.totalReceived += paidAmount;
         acc.totalDebt += remaining;
@@ -281,6 +286,8 @@ const revenueReport = async (req, res, next) => {
       },
       {
         totalRevenue: 0,
+        totalBookedRevenue: 0,
+        totalDoctorAddedRevenue: 0,
         totalReceived: 0,
         totalDebt: 0,
         totalProfit: 0,
@@ -344,6 +351,8 @@ const revenueReport = async (req, res, next) => {
           serviceName,
           caseType: serviceName,
           netAmount: 0,
+          bookedAmount: 0,
+          doctorAddedAmount: 0,
           debtAmount: 0,
           receivedAmount: 0,
           caseCount: 0,
@@ -351,12 +360,15 @@ const revenueReport = async (req, res, next) => {
         });
       }
       const row = rowsMap.get(serviceKey);
+      // ExtraCharge rows = doctor-added revenue (added after the appointment).
       row.netAmount += finalAmount;
+      row.doctorAddedAmount += finalAmount;
       row.debtAmount += remaining;
       row.receivedAmount += paidAmount;
       row.caseCount += 1;
       row.teethCount += teethCount;
 
+      summary.totalDoctorAddedRevenue += finalAmount;
       summary.totalRevenue += finalAmount;
       summary.totalReceived += paidAmount;
       summary.totalDebt += remaining;

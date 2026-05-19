@@ -500,6 +500,8 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
     const summaryRows = [
       ['البند', 'القيمة'],
       ['إجمالي الإيرادات', summary.totalRevenue || 0],
+      ['حجز الخدمة (إيراد محجوز)', summary.totalBookedRevenue || 0],
+      ['الدكتور ضافها (إيراد إضافي)', summary.totalDoctorAddedRevenue || 0],
       ['إجمالي المدفوع', summary.totalReceived || 0],
       ['إجمالي الديون / المتبقي', summary.totalDebt || 0],
       ['إجمالي الربح', summary.totalProfit || 0],
@@ -519,10 +521,12 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
     ];
 
     const serviceRows = [
-      ['الخدمة / الحالة', 'الصافي', 'الديون / المتبقي', 'المدفوع', 'عدد الحالات', 'عدد الأسنان', 'النوع'],
+      ['الخدمة / الحالة', 'الصافي', 'حجز الخدمة', 'الدكتور ضافها', 'الديون / المتبقي', 'المدفوع', 'عدد الحالات', 'عدد الأسنان', 'النوع'],
       ...(report.rows || []).map((row) => [
         row.serviceName || '',
         row.netAmount || 0,
+        row.bookedAmount || 0,
+        row.doctorAddedAmount || 0,
         row.debtAmount || 0,
         row.receivedAmount || 0,
         row.caseCount || 0,
@@ -775,6 +779,21 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
             />
           </div>
 
+          <div className={`grid gap-4 ${compact ? 'md:grid-cols-2' : 'md:grid-cols-2'}`}>
+            <StatCard
+              title="حجز الخدمة"
+              value={money(summary.totalBookedRevenue || 0)}
+              hint="إيرادات من دفعات المواعيد المحجوزة"
+              tone="blue"
+            />
+            <StatCard
+              title="الدكتور ضافها"
+              value={money(summary.totalDoctorAddedRevenue || 0)}
+              hint="إيرادات من الخدمات الإضافية التي أضافها الطبيب"
+              tone="violet"
+            />
+          </div>
+
           <DataCard>
             <h3 className="mb-4 text-lg font-black text-white">ملخص الخدمات / الحالات</h3>
             <div className="overflow-x-auto">
@@ -783,6 +802,8 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
                   <tr className="border-b border-white/10">
                     <th className="px-3 py-2 text-right">الخدمة / الحالة</th>
                     <th className="px-3 py-2 text-right">الصافي</th>
+                    <th className="px-3 py-2 text-right">حجز الخدمة</th>
+                    <th className="px-3 py-2 text-right">الدكتور ضافها</th>
                     <th className="px-3 py-2 text-right">الديون</th>
                     <th className="px-3 py-2 text-right">المدفوع</th>
                     <th className="px-3 py-2 text-right">عدد الحالات</th>
@@ -795,6 +816,8 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
                     <tr key={row.serviceId} className="border-b border-white/5 text-slate-200">
                       <td className="px-3 py-2 font-bold">{row.serviceName}</td>
                       <td className="px-3 py-2">{money(row.netAmount)}</td>
+                      <td className="px-3 py-2 text-sky-200">{money(row.bookedAmount || 0)}</td>
+                      <td className="px-3 py-2 text-violet-200">{money(row.doctorAddedAmount || 0)}</td>
                       <td className="px-3 py-2">{money(row.debtAmount)}</td>
                       <td className="px-3 py-2">{money(row.receivedAmount)}</td>
                       <td className="px-3 py-2">{row.caseCount}</td>
@@ -804,7 +827,7 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
                   ))}
                   {(report.rows || []).length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-3 py-6 text-center text-slate-500">
+                      <td colSpan={9} className="px-3 py-6 text-center text-slate-500">
                         لا توجد بيانات في هذه الفترة.
                       </td>
                     </tr>

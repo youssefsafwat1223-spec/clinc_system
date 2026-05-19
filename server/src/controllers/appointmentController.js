@@ -745,6 +745,29 @@ const rescheduleDay = async (req, res, next) => {
   }
 };
 
+// Safe delete: Notification and Review have RESTRICT FK on appointmentId so
+// they would block a raw prisma.appointment.delete. Payment cascades and
+// Prescription detaches (SetNull) automatically. Wrap in a transaction so
+// the operation is all-or-nothing.
+const remove = async (req, res, next) => {
+  try {
+    const { appointment } = await getAccessibleAppointment(req, req.params.id);
+    if (!appointment) {
+      return res.status(404).json({ error: 'الموعد غير موجود' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.notification.deleteMany({ where: { appointmentId: appointment.id } });
+      await tx.review.deleteMany({ where: { appointmentId: appointment.id } });
+      await tx.appointment.delete({ where: { id: appointment.id } });
+    });
+
+    res.json({ message: 'تم حذف الموعد وكل البيانات المرتبطة به بنجاح' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getAll,
   getOne,
@@ -759,6 +782,7 @@ module.exports = {
   noShow,
   cancel,
   rescheduleDay,
+  remove,
   getStats,
   availability,
   previewRescheduleByDoctor,

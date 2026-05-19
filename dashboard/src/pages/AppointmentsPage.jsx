@@ -8,7 +8,7 @@ import AppointmentCard from '../components/appointments/AppointmentCard';
 import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatCard, inputClass } from '../components/ui';
 import { confirmDialog, promptDialog } from '../components/dialogs';
 import EmptyState from '../components/EmptyState';
-import { appointmentStatusLabels, formatDetailedDate } from '../utils/appointmentUi';
+import { appointmentStatusLabels, formatDetailedDate, todayInputValue } from '../utils/appointmentUi';
 import {
   buildRecentMonthOptions,
   calendarFilterOptions,
@@ -46,6 +46,46 @@ export default function AppointmentsPage() {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedMonth, setSelectedMonth] = useState(monthOptions[0]?.value || '');
   const [selectedWeek, setSelectedWeek] = useState('1');
+  const [rescheduleTarget, setRescheduleTarget] = useState(null);
+  const [rescheduleDate, setRescheduleDate] = useState(todayInputValue());
+  const [savingReschedule, setSavingReschedule] = useState(false);
+
+  const openReschedule = (appointment) => {
+    setRescheduleTarget(appointment);
+    setRescheduleDate((appointment?.scheduledTime || '').slice(0, 10) || todayInputValue());
+  };
+
+  const saveReschedule = async () => {
+    if (!rescheduleTarget || !rescheduleDate) return;
+    setSavingReschedule(true);
+    try {
+      await api.post(`/appointments/${rescheduleTarget.id}/reschedule-day`, { date: rescheduleDate });
+      toast.success('تم تأجيل الموعد وإرسال رسالة التأكيد');
+      setRescheduleTarget(null);
+      fetchAppointments();
+    } catch (error) {
+      toast.error(error.response?.data?.error || error.message || 'فشل تأجيل الموعد');
+    } finally {
+      setSavingReschedule(false);
+    }
+  };
+
+  const handleDelete = async (appointment) => {
+    const ok = await confirmDialog({
+      title: 'حذف الموعد',
+      message: `سيتم حذف موعد "${appointment.patient?.displayName || appointment.patient?.name || ''}" (${appointment.bookingRef || appointment.id}) نهائياً مع دفعته. لا يمكن التراجع.`,
+      confirmLabel: 'حذف نهائي',
+      tone: 'danger',
+    });
+    if (!ok) return;
+    try {
+      await api.delete(`/appointments/${appointment.id}`);
+      toast.success('تم حذف الموعد');
+      fetchAppointments();
+    } catch (error) {
+      toast.error(error.response?.data?.error || error.message || 'فشل حذف الموعد');
+    }
+  };
 
   const fetchAppointments = async () => {
     try {
@@ -448,6 +488,8 @@ export default function AppointmentsPage() {
                     onComplete={(item) => handleAction(item, 'complete')}
                     onNoShow={(item) => handleAction(item, 'no-show')}
                     onCancel={(item) => handleAction(item, 'cancel')}
+                    onReschedule={openReschedule}
+                    onDelete={handleDelete}
                   />
                 ))}
               </div>
@@ -455,6 +497,46 @@ export default function AppointmentsPage() {
           ))}
         </div>
       )}
+
+      {rescheduleTarget ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => !savingReschedule && setRescheduleTarget(null)}
+          dir="rtl"
+        >
+          <div
+            className="w-full max-w-md rounded-3xl border border-white/10 bg-[#0b1020] p-6 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h3 className="text-xl font-black text-white">تأجيل الموعد</h3>
+            <p className="mt-1 text-sm text-slate-400">
+              {rescheduleTarget.patient?.displayName || rescheduleTarget.patient?.name} ·{' '}
+              {rescheduleTarget.bookingRef || rescheduleTarget.id}
+            </p>
+            <div className="mt-4">
+              <Field label="اليوم الجديد">
+                <input
+                  className={inputClass}
+                  type="date"
+                  value={rescheduleDate}
+                  onChange={(event) => setRescheduleDate(event.target.value)}
+                />
+              </Field>
+            </div>
+            <p className="mt-3 text-xs leading-6 text-slate-400">
+              يحتفظ النظام بنفس الطبيب والخدمة ونوع الحجز، ثم يُرسل رسالة تأكيد للمريض بعد الحفظ.
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-3">
+              <SecondaryButton type="button" onClick={() => setRescheduleTarget(null)} disabled={savingReschedule}>
+                إلغاء
+              </SecondaryButton>
+              <PrimaryButton type="button" onClick={saveReschedule} disabled={savingReschedule || !rescheduleDate}>
+                حفظ التأجيل
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </AppLayout>
   );
 }

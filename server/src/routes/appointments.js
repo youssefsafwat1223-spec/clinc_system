@@ -1,6 +1,6 @@
 const express = require('express');
-const { getAll, getOne, create, confirm, checkIn, enterRoom, reject, update, block, complete, noShow, cancel, rescheduleDay, getStats, availability, previewRescheduleByDoctor, rescheduleByDoctor, assignQueuePosition, updateQueuePosition } = require('../controllers/appointmentController');
-const { auth } = require('../middleware/auth');
+const { getAll, getOne, create, confirm, checkIn, enterRoom, reject, update, block, complete, noShow, cancel, rescheduleDay, remove, getStats, availability, previewRescheduleByDoctor, rescheduleByDoctor, assignQueuePosition, updateQueuePosition } = require('../controllers/appointmentController');
+const { auth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -24,5 +24,6 @@ router.post('/:id/cancel', cancel);
 router.post('/:id/reschedule-day', rescheduleDay);
 router.post('/:id/assign-queue-position', assignQueuePosition);
 router.patch('/:id/queue-position', updateQueuePosition);
+router.delete('/:id', requireRole('ADMIN'), remove);
 
 module.exports = router;
