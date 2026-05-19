@@ -1,12 +1,10 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { PlusCircle, Save } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../api/client';
 import { DataCard, Field, PrimaryButton, SecondaryButton, inputClass } from '../ui';
 import { money } from '../../utils/appointmentUi';
 import { TOOTH_2D_CLASS, TOOTH_LEGEND, toothState } from './toothState';
-
-const Teeth3DChart = lazy(() => import('./Teeth3DChart'));
 
 const normalizeEntry = (value) => {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -94,6 +92,16 @@ const recalcEntry = (entry) => {
     done: entry.done || entry.status === 'DONE',
   };
 };
+
+const paymentNetAmount = (payment) => {
+  const amount = Math.max(0, toNumberOrNull(payment?.amount) ?? 0);
+  const finalAmount = toNumberOrNull(payment?.finalAmount);
+  if (finalAmount !== null) return Math.max(0, finalAmount);
+  return Math.max(0, amount - Math.max(0, toNumberOrNull(payment?.discountAmount) ?? 0));
+};
+
+const paymentBaseAmount = (payment) =>
+  Math.max(0, toNumberOrNull(payment?.amount) ?? paymentNetAmount(payment));
 
 const defaultServiceForm = {
   nameAr: '',
@@ -326,7 +334,6 @@ export default function TeethChart({
   const [services, setServices] = useState(providedServices || []);
   const [doctors, setDoctors] = useState(providedDoctors || []);
   const [saving, setSaving] = useState(false);
-  const [viewMode, setViewMode] = useState('2D');
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [serviceForm, setServiceForm] = useState(defaultServiceForm);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -520,23 +527,29 @@ export default function TeethChart({
 
   const linkExistingPayment = () => {
     if (!matchingPayment) return;
-    const finalAmount = Number(matchingPayment.finalAmount || matchingPayment.amount || 0);
-    const paidAmount = Number(matchingPayment.paidAmount || 0);
-    const remaining = Math.max(0, finalAmount - paidAmount);
-    setTeeth((current) => ({
-      ...current,
-      [selectedTooth]: recalcEntry({
-        ...normalizeEntry(current[selectedTooth] || { doctorId: currentDoctorId }),
-        linkedPaymentId: matchingPayment.id,
-        extraChargeId: '',
-        priceBefore: finalAmount,
-        priceAfter: finalAmount,
-        requiredAmount: finalAmount,
-        paidAmount,
-        remaining,
-        updatedAt: new Date().toISOString(),
-      }),
-    }));
+    const linkedBaseAmount = paymentBaseAmount(matchingPayment);
+    const linkedNetAmount = paymentNetAmount(matchingPayment);
+    setTeeth((current) => {
+      const base = normalizeEntry(current[selectedTooth] || { doctorId: currentDoctorId });
+      const currentRequired = toNumberOrNull(base.requiredAmount) ?? toNumberOrNull(base.priceAfter) ?? linkedNetAmount;
+      const paidAmount = Math.min(currentRequired, Math.max(0, Number(matchingPayment.paidAmount || 0)));
+      return {
+        ...current,
+        [selectedTooth]: {
+          ...base,
+          linkedPaymentId: matchingPayment.id,
+          extraChargeId: '',
+          priceBefore: toNumberOrNull(base.priceBefore) ?? linkedBaseAmount,
+          discountType: base.discountType || 'AMOUNT',
+          discountValue: toNumberOrNull(base.discountValue) ?? Math.max(0, linkedBaseAmount - linkedNetAmount),
+          priceAfter: toNumberOrNull(base.priceAfter) ?? linkedNetAmount,
+          requiredAmount: currentRequired,
+          paidAmount,
+          remaining: Math.max(0, currentRequired - paidAmount),
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    });
     toast.success('تم ربط السن بنفس الدفعة الحالية');
   };
 
@@ -757,19 +770,21 @@ export default function TeethChart({
     setSaving(true);
     try {
       const shouldLinkBookedPayment = matchingPayment && !forceSeparate && !entry.linkedPaymentId && !entry.extraChargeId;
-      const linkedAmount = Number(matchingPayment?.finalAmount || matchingPayment?.amount || 0);
-      const linkedPaid = Number(matchingPayment?.paidAmount || 0);
+      const linkedBaseAmount = paymentBaseAmount(matchingPayment);
+      const linkedNetAmount = paymentNetAmount(matchingPayment);
+      const currentRequired = toNumberOrNull(entry.requiredAmount) ?? toNumberOrNull(entry.priceAfter) ?? linkedNetAmount;
+      const linkedPaid = Math.min(currentRequired, Math.max(0, Number(matchingPayment?.paidAmount || 0)));
       let nextEntry = recalcEntry({
         ...entry,
         ...(shouldLinkBookedPayment
           ? {
               linkedPaymentId: matchingPayment.id,
               extraChargeId: '',
-              priceBefore: linkedAmount,
-              priceAfter: linkedAmount,
-              requiredAmount: linkedAmount,
+              priceBefore: toNumberOrNull(entry.priceBefore) ?? linkedBaseAmount,
+              priceAfter: toNumberOrNull(entry.priceAfter) ?? linkedNetAmount,
+              requiredAmount: currentRequired,
               paidAmount: linkedPaid,
-              remaining: Math.max(0, linkedAmount - linkedPaid),
+              remaining: Math.max(0, currentRequired - linkedPaid),
             }
           : {}),
         status: 'IN_PROGRESS',
@@ -908,39 +923,9 @@ export default function TeethChart({
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-lg font-black text-white">خريطة الأسنان</h3>
-            <div className="flex rounded-2xl border border-white/10 bg-white/5 p-1">
-              {['2D', '3D'].map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setViewMode(mode)}
-                  className={`rounded-xl px-3 py-1.5 text-xs font-black transition ${
-                    viewMode === mode ? 'bg-sky-500 text-white' : 'text-slate-300 hover:bg-white/10'
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
-            </div>
           </div>
 
-          {viewMode === '3D' ? (
-            <Suspense
-              fallback={
-                <div className="flex h-[520px] items-center justify-center rounded-3xl border border-white/10 bg-slate-950 text-sm font-bold text-slate-300">
-                  Loading 3D dental chart...
-                </div>
-              }
-            >
-              <Teeth3DChart
-                teethNotes={teeth}
-                selectedTooth={selectedTooth}
-                onSelectTooth={(toothNumber) => selectTooth(toothNumber)}
-              />
-            </Suspense>
-          ) : (
-            <DentalArch2D teeth={teeth} services={services} selectedTooth={selectedTooth} onSelectTooth={selectTooth} />
-          )}
+          <DentalArch2D teeth={teeth} services={services} selectedTooth={selectedTooth} onSelectTooth={selectTooth} />
 
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-300">
             {TOOTH_LEGEND.map((item) => (
@@ -1159,6 +1144,18 @@ export default function TeethChart({
                   </optgroup>
                 </select>
               </Field>
+              {matchingPayment && !entry.linkedPaymentId && !readonly ? (
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
+                  <h4 className="text-sm font-black text-amber-100">يوجد دفع سابق لنفس الخدمة</h4>
+                  <p className="mt-2 text-xs leading-6 text-amber-50/90">
+                    الإجمالي: {money(paymentNetAmount(matchingPayment))} · المدفوع: {money(Number(matchingPayment.paidAmount || 0))} · المتبقي: {money(Math.max(0, paymentNetAmount(matchingPayment) - Number(matchingPayment.paidAmount || 0)))}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <SecondaryButton type="button" onClick={linkExistingPayment}>ربط بنفس الدفعة</SecondaryButton>
+                    <SecondaryButton type="button" onClick={() => handleStartTreatment({ forceSeparate: true })}>إنشاء بند سن منفصل</SecondaryButton>
+                  </div>
+                </div>
+              ) : null}
               <Field label="الطبيب">
                 <select className={inputClass} value={entry.doctorId || currentDoctorId} disabled={readonly} onChange={(event) => updateEntry('doctorId', event.target.value)}>
                   <option value="">اختر الطبيب</option>
@@ -1219,19 +1216,6 @@ export default function TeethChart({
                 <Field label="ملاحظة الدفع">
                   <textarea className={inputClass} rows={3} value={entry.paymentNote} disabled={readonly} onChange={(event) => updateEntry('paymentNote', event.target.value)} />
                 </Field>
-              </div>
-            </div>
-          ) : null}
-
-          {matchingPayment && !entry.linkedPaymentId && !readonly ? (
-            <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4">
-              <h4 className="text-sm font-black text-amber-100">يوجد دفع سابق لنفس الخدمة</h4>
-              <p className="mt-2 text-xs leading-6 text-amber-50/90">
-                الإجمالي: {money(Number(matchingPayment.finalAmount || matchingPayment.amount || 0))} · المدفوع: {money(Number(matchingPayment.paidAmount || 0))} · المتبقي: {money(Math.max(0, Number(matchingPayment.finalAmount || matchingPayment.amount || 0) - Number(matchingPayment.paidAmount || 0)))}
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <SecondaryButton type="button" onClick={linkExistingPayment}>ربط بنفس الدفعة</SecondaryButton>
-                <SecondaryButton type="button" onClick={() => handleStartTreatment({ forceSeparate: true })}>إنشاء بند سن منفصل</SecondaryButton>
               </div>
             </div>
           ) : null}
