@@ -290,6 +290,12 @@ export default function TeethChart({
   const [viewMode, setViewMode] = useState('2D');
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [serviceForm, setServiceForm] = useState(defaultServiceForm);
+  const [editorOpen, setEditorOpen] = useState(false);
+
+  const selectTooth = (toothNumber) => {
+    setSelectedTooth(String(toothNumber));
+    setEditorOpen(true);
+  };
   const previousSaveSignal = useRef(saveSignal);
 
   useEffect(() => {
@@ -625,7 +631,7 @@ export default function TeethChart({
 
   return (
     <DataCard>
-      <div className="grid gap-6 2xl:grid-cols-[minmax(620px,1fr)_360px]">
+      <div>
         <div>
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <h3 className="text-lg font-black text-white">خريطة الأسنان</h3>
@@ -656,11 +662,11 @@ export default function TeethChart({
               <Teeth3DChart
                 teethNotes={teeth}
                 selectedTooth={selectedTooth}
-                onSelectTooth={(toothNumber) => setSelectedTooth(String(toothNumber))}
+                onSelectTooth={(toothNumber) => selectTooth(toothNumber)}
               />
             </Suspense>
           ) : (
-            <DentalArch2D teeth={teeth} services={services} selectedTooth={selectedTooth} onSelectTooth={setSelectedTooth} />
+            <DentalArch2D teeth={teeth} services={services} selectedTooth={selectedTooth} onSelectTooth={selectTooth} />
           )}
 
           <div className="mt-3 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-[11px] font-bold text-slate-300">
@@ -677,7 +683,27 @@ export default function TeethChart({
           </div>
         </div>
 
-        <div className="space-y-4">
+      {editorOpen ? (
+        <div
+          className="fixed inset-0 z-[95] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setEditorOpen(false)}
+          dir="rtl"
+        >
+          <div
+            className="my-6 w-full max-w-2xl space-y-4 rounded-3xl border border-white/10 bg-[#0b1020] p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-lg font-black text-white">تفاصيل سن رقم {selectedTooth}</h3>
+              <button
+                type="button"
+                onClick={() => setEditorOpen(false)}
+                className="rounded-lg p-2 text-slate-400 transition hover:bg-white/10 hover:text-white"
+                aria-label="إغلاق"
+              >
+                ✕
+              </button>
+            </div>
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -914,7 +940,9 @@ export default function TeethChart({
           ) : null}
             </>
           ) : null}
+          </div>
         </div>
+      ) : null}
       </div>
     </DataCard>
   );
