@@ -3,6 +3,7 @@ import { PlusCircle, Save } from 'lucide-react';
 import { toast } from 'react-toastify';
 import api from '../../api/client';
 import { DataCard, Field, PrimaryButton, SecondaryButton, inputClass } from '../ui';
+import { money } from '../../utils/appointmentUi';
 import { TOOTH_2D_CLASS, TOOTH_LEGEND, toothState } from './toothState';
 
 const Teeth3DChart = lazy(() => import('./Teeth3DChart'));
