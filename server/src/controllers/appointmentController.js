@@ -1,7 +1,82 @@
 const prisma = require('../lib/prisma');
 const appointmentService = require('../services/appointmentService');
 const notificationService = require('../services/notificationService');
+const { getDiscountForAppointment, toNumber } = require('../services/discountService');
 const { paginate } = require('../utils/helpers');
+
+const resolvePaymentStatus = (paidAmount, finalAmount) => {
+  if (paidAmount <= 0) return 'UNPAID';
+  if (paidAmount < finalAmount) return 'PARTIAL';
+  return 'PAID';
+};
+
+const recalculatePatientAccount = async (patientId) => {
+  const payments = await prisma.payment.findMany({
+    where: { patientId },
+    select: { finalAmount: true, paidAmount: true, paidAt: true },
+  });
+  const totalSpent = payments.reduce((sum, payment) => sum + toNumber(payment.paidAmount), 0);
+  const creditBalance = payments.reduce(
+    (sum, payment) => sum + Math.max(0, toNumber(payment.finalAmount) - toNumber(payment.paidAmount)),
+    0
+  );
+  const lastPayment = payments
+    .filter((payment) => payment.paidAt)
+    .sort((a, b) => new Date(b.paidAt).getTime() - new Date(a.paidAt).getTime())[0];
+
+  await prisma.patient.update({
+    where: { id: patientId },
+    data: {
+      totalSpent,
+      creditBalance,
+      accountBalance: creditBalance,
+      lastPaymentDate: lastPayment?.paidAt || null,
+    },
+  });
+};
+
+const ensureAppointmentPayment = async (appointment, body = {}) => {
+  const service = appointment.service || (await prisma.service.findUnique({ where: { id: appointment.serviceId } }));
+  const paymentAppointment = { ...appointment, service };
+  const amount = body.amount !== undefined ? toNumber(body.amount) : toNumber(service?.price ?? service?.priceFrom ?? 0);
+  const discountAmount =
+    body.discountAmount !== undefined
+      ? toNumber(body.discountAmount)
+      : (await getDiscountForAppointment(paymentAppointment)).discountAmount;
+  const finalAmount = Math.max(0, amount - Math.min(amount, Math.max(0, discountAmount)));
+  const paidAmount = Math.max(0, toNumber(body.paidAmount));
+
+  const payment = await prisma.payment.upsert({
+    where: { appointmentId: appointment.id },
+    update: {
+      patientId: appointment.patientId,
+      serviceId: appointment.serviceId || null,
+      amount,
+      discountAmount: Math.min(amount, Math.max(0, discountAmount)),
+      finalAmount,
+      paidAmount,
+      status: resolvePaymentStatus(paidAmount, finalAmount),
+      method: body.method || null,
+      notes: body.paymentNotes || null,
+      paidAt: paidAmount > 0 ? new Date() : null,
+    },
+    create: {
+      appointmentId: appointment.id,
+      patientId: appointment.patientId,
+      serviceId: appointment.serviceId || null,
+      amount,
+      discountAmount: Math.min(amount, Math.max(0, discountAmount)),
+      finalAmount,
+      paidAmount,
+      status: resolvePaymentStatus(paidAmount, finalAmount),
+      method: body.method || null,
+      notes: body.paymentNotes || null,
+      paidAt: paidAmount > 0 ? new Date() : null,
+    },
+  });
+  await recalculatePatientAccount(appointment.patientId);
+  return payment;
+};
 
 const getScopedDoctor = async (req) => {
   if (req.user?.role !== 'DOCTOR') {
@@ -167,9 +242,11 @@ const create = async (req, res, next) => {
       appointment = await prisma.appointment.update({
         where: { id: appointment.id },
         data: { notes },
-        include: { patient: true, doctor: true, service: true },
+        include: { patient: true, doctor: true, service: true, payment: true },
       });
     }
+
+    await ensureAppointmentPayment(appointment, req.body);
 
     if (confirmImmediately) {
       result = await appointmentService.confirmAppointment(appointment.id);
@@ -183,6 +260,7 @@ const create = async (req, res, next) => {
       }
 
       appointment = result.appointment;
+      await ensureAppointmentPayment(appointment, req.body);
 
       if (notifyPatient) {
         try {

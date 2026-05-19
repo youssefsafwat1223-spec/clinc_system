@@ -501,7 +501,7 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
       ['البند', 'القيمة'],
       ['إجمالي الإيرادات', summary.totalRevenue || 0],
       ['حجز الخدمة (إيراد محجوز)', summary.totalBookedRevenue || 0],
-      ['الدكتور ضافها (إيراد إضافي)', summary.totalDoctorAddedRevenue || 0],
+      ['خدمات إضافية أثناء الكشف', summary.totalDoctorAddedRevenue || 0],
       ['إجمالي المدفوع', summary.totalReceived || 0],
       ['إجمالي الديون / المتبقي', summary.totalDebt || 0],
       ['إجمالي الربح', summary.totalProfit || 0],
@@ -521,7 +521,7 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
     ];
 
     const serviceRows = [
-      ['الخدمة / الحالة', 'الصافي', 'حجز الخدمة', 'الدكتور ضافها', 'الديون / المتبقي', 'المدفوع', 'عدد الحالات', 'عدد الأسنان', 'النوع'],
+      ['الخدمة / الحالة', 'الصافي', 'حجز الخدمة', 'خدمات إضافية أثناء الكشف', 'الديون / المتبقي', 'المدفوع', 'عدد الحالات', 'عدد الأسنان', 'النوع'],
       ...(report.rows || []).map((row) => [
         row.serviceName || '',
         row.netAmount || 0,
@@ -787,9 +787,9 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
               tone="blue"
             />
             <StatCard
-              title="الدكتور ضافها"
+              title="خدمات إضافية أثناء الكشف"
               value={money(summary.totalDoctorAddedRevenue || 0)}
-              hint="إيرادات من الخدمات الإضافية التي أضافها الطبيب"
+              hint="أي خدمة إضافية لم تكن ضمن حجز الريسبشن"
               tone="violet"
             />
           </div>
@@ -803,7 +803,7 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
                     <th className="px-3 py-2 text-right">الخدمة / الحالة</th>
                     <th className="px-3 py-2 text-right">الصافي</th>
                     <th className="px-3 py-2 text-right">حجز الخدمة</th>
-                    <th className="px-3 py-2 text-right">الدكتور ضافها</th>
+                    <th className="px-3 py-2 text-right">خدمات إضافية أثناء الكشف</th>
                     <th className="px-3 py-2 text-right">الديون</th>
                     <th className="px-3 py-2 text-right">المدفوع</th>
                     <th className="px-3 py-2 text-right">عدد الحالات</th>
@@ -842,7 +842,7 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
               <h3 className="text-lg font-black text-white">تفاصيل المدفوعات المستلمة</h3>
               {patientId ? (
                 <PrimaryButton type="button" onClick={() => setAddOpen(true)}>
-                  إضافة خدمة + مبلغ
+                  إضافة خدمة أثناء الكشف
                 </PrimaryButton>
               ) : null}
             </div>
@@ -1016,7 +1016,7 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
             className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#0b1020] p-6 shadow-2xl"
             onClick={(event) => event.stopPropagation()}
           >
-            <h3 className="text-xl font-black text-white">إضافة خدمة + مبلغ</h3>
+            <h3 className="text-xl font-black text-white">إضافة خدمة أثناء الكشف</h3>
             <p className="mt-1 text-sm text-slate-400">بند مالي إضافي لهذا المريض مستقل عن المواعيد.</p>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <Field label="الخدمة">

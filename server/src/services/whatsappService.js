@@ -3,6 +3,38 @@ const config = require('../config/env');
 const prisma = require('../lib/prisma');
 
 const WHATSAPP_API_URL = `https://graph.facebook.com/v18.0/${config.whatsapp.phoneNumberId}/messages`;
+const DEFAULT_COUNTRY_CODE = String(
+  process.env.WHATSAPP_DEFAULT_COUNTRY_CODE || process.env.DEFAULT_WHATSAPP_COUNTRY_CODE || '964'
+).replace(/[^\d]/g, '');
+
+const normalizeWhatsAppRecipient = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  let digits = raw.replace(/^whatsapp:/i, '').replace(/[^\d+]/g, '');
+  if (digits.startsWith('+')) digits = digits.slice(1);
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith('0') && DEFAULT_COUNTRY_CODE) {
+    digits = `${DEFAULT_COUNTRY_CODE}${digits.slice(1)}`;
+  }
+
+  return digits.replace(/[^\d]/g, '');
+};
+
+const findPatientByWhatsAppRecipient = async (recipient) => {
+  const normalized = normalizeWhatsAppRecipient(recipient);
+  const suffix = normalized.length >= 10 ? normalized.slice(-10) : normalized;
+
+  return prisma.patient.findFirst({
+    where: {
+      OR: [
+        { phone: normalized },
+        { whatsappId: normalized },
+        ...(suffix ? [{ phone: { endsWith: suffix } }, { whatsappId: { endsWith: suffix } }] : []),
+      ],
+    },
+  });
+};
 
 const resolvePublicUrl = (value) => {
   const raw = String(value || '').trim();
@@ -20,13 +52,20 @@ const resolvePublicUrl = (value) => {
 };
 
 const sendMessage = async (messageData) => {
+  const normalizedTo = normalizeWhatsAppRecipient(messageData?.to);
+  const payload = messageData?.to ? { ...messageData, to: normalizedTo } : messageData;
+
+  if (messageData?.to && normalizedTo.length < 8) {
+    throw new Error(`Invalid WhatsApp recipient phone: ${messageData.to}`);
+  }
+
   if (!config.whatsapp.token) {
-    console.log('[WhatsApp] Token not configured. Message:', JSON.stringify(messageData, null, 2));
+    console.log('[WhatsApp] Token not configured. Message:', JSON.stringify(payload, null, 2));
     return { success: false, mock: true, message: 'WhatsApp token not configured' };
   }
 
   try {
-    const response = await axios.post(WHATSAPP_API_URL, messageData, {
+    const response = await axios.post(WHATSAPP_API_URL, payload, {
       headers: {
         Authorization: `Bearer ${config.whatsapp.token}`,
         'Content-Type': 'application/json',
@@ -35,8 +74,8 @@ const sendMessage = async (messageData) => {
     console.log('[WhatsApp] Message sent successfully:', response.data);
 
     try {
-      if (messageData.to) {
-        const patient = await prisma.patient.findFirst({ where: { phone: messageData.to } });
+      if (payload.to) {
+        const patient = await findPatientByWhatsAppRecipient(payload.to);
         if (patient) {
           let textContent = '[رد آلي]';
 
@@ -247,4 +286,5 @@ module.exports = {
   sendInteractiveMessage,
   sendTemplateMessage,
   markAsRead,
+  normalizeWhatsAppRecipient,
 };

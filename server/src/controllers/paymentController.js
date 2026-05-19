@@ -10,7 +10,10 @@ const resolveStatus = (paidAmount, finalAmount, explicitStatus) => {
 };
 
 const buildPaymentData = async (appointment, body = {}) => {
-  const amount = body.amount !== undefined ? toNumber(body.amount) : toNumber(appointment.service?.price);
+  const amount =
+    body.amount !== undefined
+      ? toNumber(body.amount)
+      : toNumber(appointment.service?.price ?? appointment.service?.priceFrom ?? appointment.service?.priceTo);
   const teethCount =
     body.teethCount !== undefined ? Math.max(1, Math.floor(toNumber(body.teethCount) || 1)) : undefined;
   const discountAmount =
@@ -221,6 +224,32 @@ const revenueReport = async (req, res, next) => {
     }
 
     const where = filters.length ? { AND: filters } : {};
+
+    if (!resolvedStatus || resolvedStatus === 'ALL' || resolvedStatus === 'UNPAID') {
+      const missingPaymentFilters = [];
+      if (patientId) missingPaymentFilters.push({ patientId });
+      if (appointmentFilters.length) missingPaymentFilters.push({ AND: appointmentFilters });
+
+      const missingPaymentAppointments = await prisma.appointment.findMany({
+        where: {
+          ...(missingPaymentFilters.length ? { AND: missingPaymentFilters } : {}),
+          payment: { is: null },
+        },
+        take: 200,
+        include: { patient: true, doctor: true, service: true },
+      });
+
+      for (const appointment of missingPaymentAppointments) {
+        try {
+          const data = await buildPaymentData(appointment);
+          await prisma.payment.create({ data });
+          await recalculatePatientAccount(appointment.patientId);
+        } catch (error) {
+          if (error?.code !== 'P2002') throw error;
+        }
+      }
+    }
+
     const payments = await prisma.payment.findMany({
       where,
       take: Math.min(Number(limit) || 500, 1000),

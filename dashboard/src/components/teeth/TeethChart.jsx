@@ -26,6 +26,9 @@ const normalizeEntry = (value) => {
       paymentNote: value.paymentNote || '',
       extraChargeId: value.extraChargeId || '',
       linkedPaymentId: value.linkedPaymentId || '',
+      groupId: value.groupId || '',
+      groupTeeth: Array.isArray(value.groupTeeth) ? value.groupTeeth.map(String) : [],
+      groupTotalAmount: value.groupTotalAmount ?? null,
       createdAt: value.createdAt || null,
       createdById: value.createdById || '',
       updatedAt: value.updatedAt || null,
@@ -49,6 +52,9 @@ const normalizeEntry = (value) => {
     paymentNote: '',
     extraChargeId: '',
     linkedPaymentId: '',
+    groupId: '',
+    groupTeeth: [],
+    groupTotalAmount: null,
     createdAt: null,
     createdById: '',
     updatedAt: null,
@@ -95,6 +101,36 @@ const defaultServiceForm = {
   priceFrom: '',
   priceTo: '',
   duration: 30,
+};
+
+const defaultGroupForm = {
+  serviceId: '',
+  doctorId: '',
+  teeth: [],
+  rangeFrom: '1',
+  rangeTo: '32',
+  priceMode: 'TOTAL',
+  price: '',
+  paidAmount: '',
+  note: '',
+  treatmentNote: '',
+};
+
+const allToothNumbers = Array.from({ length: 32 }, (_, index) => String(index + 1));
+const upperToothNumbers = Array.from({ length: 16 }, (_, index) => String(index + 1));
+const lowerToothNumbers = Array.from({ length: 16 }, (_, index) => String(index + 17));
+
+const uniqueSortedTeeth = (items = []) =>
+  Array.from(new Set(items.map((item) => String(item)).filter((item) => Number(item) >= 1 && Number(item) <= 32))).sort(
+    (a, b) => Number(a) - Number(b)
+  );
+
+const rangeTeeth = (from, to) => {
+  const start = Math.max(1, Math.min(32, Number(from) || 1));
+  const end = Math.max(1, Math.min(32, Number(to) || 32));
+  const min = Math.min(start, end);
+  const max = Math.max(start, end);
+  return allToothNumbers.filter((number) => Number(number) >= min && Number(number) <= max);
 };
 
 const treatmentStatusLabels = {
@@ -292,6 +328,8 @@ export default function TeethChart({
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [serviceForm, setServiceForm] = useState(defaultServiceForm);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [groupOpen, setGroupOpen] = useState(false);
+  const [groupForm, setGroupForm] = useState(defaultGroupForm);
 
   const selectTooth = (toothNumber) => {
     setSelectedTooth(String(toothNumber));
@@ -359,9 +397,53 @@ export default function TeethChart({
     return payments.find((payment) => {
       const sameService = payment.serviceId === entry.serviceId || payment.service?.id === entry.serviceId;
       const finalAmount = Number(payment.finalAmount || payment.amount || 0);
-      return sameService && finalAmount > 0 && !['PAID', 'COMPLETED'].includes(payment.status);
+      return sameService && finalAmount > 0;
     }) || null;
   }, [payments, entry.serviceId]);
+
+  const groupSelectedService = useMemo(
+    () => services.find((service) => service.id === groupForm.serviceId) || null,
+    [services, groupForm.serviceId]
+  );
+
+  const groupMatchingPayment = useMemo(() => {
+    if (!groupForm.serviceId) return null;
+    return (
+      payments.find((payment) => {
+        const sameService = payment.serviceId === groupForm.serviceId || payment.service?.id === groupForm.serviceId;
+        const finalAmount = Number(payment.finalAmount || payment.amount || 0);
+        return sameService && finalAmount > 0;
+      }) || null
+    );
+  }, [payments, groupForm.serviceId]);
+
+  const groupTeeth = useMemo(() => uniqueSortedTeeth(groupForm.teeth), [groupForm.teeth]);
+  const groupUnitPrice = Number(groupForm.price || 0);
+  const groupTotalAmount =
+    groupForm.priceMode === 'PER_TOOTH' ? groupUnitPrice * Math.max(1, groupTeeth.length) : groupUnitPrice;
+  const groupPaidAmount = Math.max(0, Number(groupForm.paidAmount || 0));
+
+  const updateGroupForm = (field, value) => {
+    setGroupForm((current) => ({ ...current, [field]: value }));
+  };
+
+  const toggleGroupTooth = (toothNumber) => {
+    setGroupForm((current) => {
+      const tooth = String(toothNumber);
+      const exists = current.teeth.includes(tooth);
+      return {
+        ...current,
+        teeth: uniqueSortedTeeth(exists ? current.teeth.filter((item) => item !== tooth) : [...current.teeth, tooth]),
+      };
+    });
+  };
+
+  const setGroupTeethPreset = (preset) => {
+    if (preset === 'UPPER') updateGroupForm('teeth', upperToothNumbers);
+    if (preset === 'LOWER') updateGroupForm('teeth', lowerToothNumbers);
+    if (preset === 'ALL') updateGroupForm('teeth', allToothNumbers);
+    if (preset === 'RANGE') updateGroupForm('teeth', rangeTeeth(groupForm.rangeFrom, groupForm.rangeTo));
+  };
 
   const updateEntry = (field, nextValue) => {
     if (readonly) return;
@@ -509,6 +591,103 @@ export default function TeethChart({
     };
   };
 
+  const syncLinkedPayment = async (entryToPersist) => {
+    if (!entryToPersist.linkedPaymentId) return entryToPersist;
+    const priceBefore = Number(entryToPersist.priceBefore || entryToPersist.requiredAmount || 0);
+    const priceAfter = Number(entryToPersist.priceAfter || entryToPersist.requiredAmount || priceBefore || 0);
+    await api.put(`/payments/${entryToPersist.linkedPaymentId}`, {
+      amount: priceBefore,
+      discountAmount: Math.max(0, priceBefore - priceAfter),
+      paidAmount: Number(entryToPersist.paidAmount || 0),
+      teethCount: 1,
+      notes: entryToPersist.paymentNote || entryToPersist.note || undefined,
+    });
+    return entryToPersist;
+  };
+
+  const handleStartGroupTreatment = async ({ forceExtra = false } = {}) => {
+    const selectedTeeth = uniqueSortedTeeth(groupForm.teeth);
+    if (!groupForm.serviceId) {
+      toast.warn('اختر الخدمة أولاً');
+      return;
+    }
+    if (selectedTeeth.length === 0) {
+      toast.warn('اختر سن واحد على الأقل');
+      return;
+    }
+
+    const servicePrice = toNumberOrNull(groupSelectedService?.price ?? groupSelectedService?.priceFrom ?? groupSelectedService?.priceTo) || 0;
+    const amount = groupForm.price === '' ? servicePrice : groupTotalAmount;
+    const paidAmount = Math.min(amount, groupPaidAmount);
+    const shouldLinkBookedPayment = groupMatchingPayment && !forceExtra;
+    const groupId = `group-${Date.now()}`;
+
+    setSaving(true);
+    try {
+      let financialId = '';
+      if (shouldLinkBookedPayment) {
+        financialId = groupMatchingPayment.id;
+      } else {
+        const res = await api.post('/payments/extra-charges', {
+          patientId,
+          serviceId: groupForm.serviceId,
+          doctorId: groupForm.doctorId || currentDoctorId || undefined,
+          description:
+            groupForm.treatmentNote ||
+            groupForm.note ||
+            `${groupSelectedService?.nameAr || groupSelectedService?.name || 'خدمة'} - ${selectedTeeth.length} أسنان`,
+          amount,
+          paidAmount,
+          teethCount: selectedTeeth.length,
+          method: null,
+          notes: groupForm.note || undefined,
+        });
+        financialId = res.data.extraCharge?.id || '';
+      }
+
+      const perToothAmount = selectedTeeth.length ? amount / selectedTeeth.length : amount;
+      const nextTeeth = { ...teeth };
+      selectedTeeth.forEach((toothNumber) => {
+        nextTeeth[toothNumber] = recalcEntry({
+          ...normalizeEntry(nextTeeth[toothNumber] || { doctorId: currentDoctorId }),
+          note: groupForm.note || normalizeEntry(nextTeeth[toothNumber] || {}).note,
+          treatmentNote: groupForm.treatmentNote || normalizeEntry(nextTeeth[toothNumber] || {}).treatmentNote,
+          serviceId: groupForm.serviceId,
+          doctorId: groupForm.doctorId || currentDoctorId || '',
+          status: 'IN_PROGRESS',
+          done: false,
+          linkedPaymentId: shouldLinkBookedPayment ? financialId : '',
+          extraChargeId: shouldLinkBookedPayment ? '' : financialId,
+          groupId,
+          groupTeeth: selectedTeeth,
+          groupTotalAmount: amount,
+          priceBefore: perToothAmount,
+          priceAfter: perToothAmount,
+          requiredAmount: perToothAmount,
+          paidAmount: selectedTeeth.length ? paidAmount / selectedTeeth.length : paidAmount,
+          paymentNote: groupForm.note || '',
+          createdAt: nextTeeth[toothNumber]?.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        });
+      });
+
+      const saved = await persistTeeth(nextTeeth);
+      setTeeth(saved);
+      onSaved?.(saved);
+      setGroupForm(defaultGroupForm);
+      setGroupOpen(false);
+      toast.success(
+        shouldLinkBookedPayment
+          ? 'تم ربط مجموعة الأسنان بحجز الخدمة بدون إضافة مبلغ جديد'
+          : 'تمت إضافة خدمة أثناء الكشف لمجموعة الأسنان'
+      );
+    } catch (error) {
+      toast.error(error.message || 'فشل حفظ خدمة مجموعة الأسنان');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleStartTreatment = async ({ forceSeparate = false } = {}) => {
     if (!entry.serviceId) {
       toast.warn('اختر الخدمة أولاً');
@@ -517,14 +696,32 @@ export default function TeethChart({
 
     setSaving(true);
     try {
+      const shouldLinkBookedPayment = matchingPayment && !forceSeparate && !entry.linkedPaymentId && !entry.extraChargeId;
+      const linkedAmount = Number(matchingPayment?.finalAmount || matchingPayment?.amount || 0);
+      const linkedPaid = Number(matchingPayment?.paidAmount || 0);
       let nextEntry = recalcEntry({
         ...entry,
+        ...(shouldLinkBookedPayment
+          ? {
+              linkedPaymentId: matchingPayment.id,
+              extraChargeId: '',
+              priceBefore: linkedAmount,
+              priceAfter: linkedAmount,
+              requiredAmount: linkedAmount,
+              paidAmount: linkedPaid,
+              remaining: Math.max(0, linkedAmount - linkedPaid),
+            }
+          : {}),
         status: 'IN_PROGRESS',
         done: false,
-        linkedPaymentId: forceSeparate ? '' : entry.linkedPaymentId,
+        linkedPaymentId: forceSeparate ? '' : shouldLinkBookedPayment ? matchingPayment.id : entry.linkedPaymentId,
         createdAt: entry.createdAt || new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       });
+      if (shouldLinkBookedPayment) {
+        nextEntry.linkedPaymentId = matchingPayment.id;
+        nextEntry.extraChargeId = '';
+      }
       nextEntry = await syncExtraCharge(nextEntry, { createIfMissing: !nextEntry.linkedPaymentId });
       const nextTeeth = {
         ...teeth,
@@ -577,6 +774,7 @@ export default function TeethChart({
         done: true,
         updatedAt: new Date().toISOString(),
       });
+      nextEntry = await syncLinkedPayment(nextEntry);
       nextEntry = await syncExtraCharge(nextEntry);
       const nextTeeth = {
         ...teeth,
@@ -696,7 +894,138 @@ export default function TeethChart({
               محدد
             </span>
           </div>
+          {!readonly ? (
+            <div className="mt-4 flex justify-center">
+              <PrimaryButton type="button" onClick={() => setGroupOpen(true)}>
+                <PlusCircle className="h-4 w-4" />
+                إضافة خدمة لمجموعة أسنان
+              </PrimaryButton>
+            </div>
+          ) : null}
         </div>
+
+      {groupOpen ? (
+        <div
+          className="fixed inset-0 z-[94] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setGroupOpen(false)}
+          dir="rtl"
+        >
+          <div
+            className="my-6 w-full max-w-4xl space-y-4 rounded-3xl border border-white/10 bg-[#0b1020] p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-lg font-black text-white">إضافة خدمة لمجموعة أسنان</h3>
+                <p className="mt-1 text-xs text-slate-400">مناسب لابتسامة هوليود، التركيبات المتعددة، التقويم، التبييض أو أي خدمة تشمل أكثر من سن.</p>
+              </div>
+              <button type="button" onClick={() => setGroupOpen(false)} className="rounded-lg p-2 text-slate-400 transition hover:bg-white/10 hover:text-white" aria-label="إغلاق">
+                ×
+              </button>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+              <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field label="الخدمة">
+                    <select className={inputClass} value={groupForm.serviceId} onChange={(event) => updateGroupForm('serviceId', event.target.value)}>
+                      <option value="">اختر الخدمة</option>
+                      {effectiveBookedServices.length ? (
+                        <optgroup label="خدمات حجزها المريض">
+                          {effectiveBookedServices.map((service) => (
+                            <option key={`group-booked-${service.id}`} value={service.id}>{service.nameAr || service.name}</option>
+                          ))}
+                        </optgroup>
+                      ) : null}
+                      <optgroup label="كل الخدمات">
+                        {services.map((service) => (
+                          <option key={`group-service-${service.id}`} value={service.id}>{service.nameAr || service.name}</option>
+                        ))}
+                      </optgroup>
+                    </select>
+                  </Field>
+                  <Field label="الطبيب">
+                    <select className={inputClass} value={groupForm.doctorId || currentDoctorId} onChange={(event) => updateGroupForm('doctorId', event.target.value)}>
+                      <option value="">اختر الطبيب</option>
+                      {doctors.map((doctor) => (
+                        <option key={doctor.id} value={doctor.id}>د. {doctor.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="طريقة السعر">
+                    <select className={inputClass} value={groupForm.priceMode} onChange={(event) => updateGroupForm('priceMode', event.target.value)}>
+                      <option value="TOTAL">سعر إجمالي للخدمة</option>
+                      <option value="PER_TOOTH">سعر لكل سن</option>
+                    </select>
+                  </Field>
+                  <Field label={groupForm.priceMode === 'PER_TOOTH' ? 'السعر لكل سن' : 'السعر الإجمالي'}>
+                    <input className={inputClass} type="number" value={groupForm.price} placeholder={String(groupSelectedService?.price ?? groupSelectedService?.priceFrom ?? '')} onChange={(event) => updateGroupForm('price', event.target.value)} />
+                  </Field>
+                  <Field label="المدفوع">
+                    <input className={inputClass} type="number" value={groupForm.paidAmount} onChange={(event) => updateGroupForm('paidAmount', event.target.value)} />
+                  </Field>
+                  <Field label="الإجمالي المتوقع">
+                    <input className={inputClass} value={money(groupForm.price === '' ? groupSelectedService?.price ?? groupSelectedService?.priceFrom ?? 0 : groupTotalAmount)} disabled />
+                  </Field>
+                </div>
+                <Field label="ملاحظة عامة">
+                  <textarea className={inputClass} rows={3} value={groupForm.note} onChange={(event) => updateGroupForm('note', event.target.value)} />
+                </Field>
+                <Field label="ملاحظة العلاج">
+                  <textarea className={inputClass} rows={3} value={groupForm.treatmentNote} onChange={(event) => updateGroupForm('treatmentNote', event.target.value)} />
+                </Field>
+              </div>
+
+              <div className="space-y-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <SecondaryButton type="button" onClick={() => setGroupTeethPreset('UPPER')}>فك علوي</SecondaryButton>
+                  <SecondaryButton type="button" onClick={() => setGroupTeethPreset('LOWER')}>فك سفلي</SecondaryButton>
+                  <SecondaryButton type="button" onClick={() => setGroupTeethPreset('ALL')}>كل الأسنان</SecondaryButton>
+                  <SecondaryButton type="button" onClick={() => updateGroupForm('teeth', [])}>مسح</SecondaryButton>
+                </div>
+                <div className="grid grid-cols-[1fr_1fr_auto] gap-2">
+                  <input className={inputClass} type="number" min="1" max="32" value={groupForm.rangeFrom} onChange={(event) => updateGroupForm('rangeFrom', event.target.value)} />
+                  <input className={inputClass} type="number" min="1" max="32" value={groupForm.rangeTo} onChange={(event) => updateGroupForm('rangeTo', event.target.value)} />
+                  <SecondaryButton type="button" onClick={() => setGroupTeethPreset('RANGE')}>نطاق</SecondaryButton>
+                </div>
+                <div className="grid grid-cols-8 gap-2">
+                  {allToothNumbers.map((number) => {
+                    const active = groupForm.teeth.includes(number);
+                    return (
+                      <button
+                        key={`group-tooth-${number}`}
+                        type="button"
+                        onClick={() => toggleGroupTooth(number)}
+                        className={`rounded-xl border px-2 py-2 text-sm font-black transition ${active ? 'border-sky-400 bg-sky-500 text-white' : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'}`}
+                      >
+                        {number}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="rounded-2xl border border-sky-500/20 bg-sky-500/10 p-3 text-sm font-bold text-sky-100">
+                  الأسنان المختارة: {groupTeeth.length ? groupTeeth.join(', ') : 'لم يتم اختيار أسنان'}
+                </div>
+                {groupMatchingPayment ? (
+                  <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-3 text-xs font-bold leading-6 text-amber-50">
+                    يوجد حجز سابق لنفس الخدمة. زر الحفظ الأساسي سيربط الأسنان بحجز الخدمة بدون إضافة مبلغ جديد.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 pt-4">
+              <SecondaryButton type="button" onClick={() => setGroupOpen(false)}>إلغاء</SecondaryButton>
+              {groupMatchingPayment ? (
+                <SecondaryButton type="button" onClick={() => handleStartGroupTreatment({ forceExtra: true })} disabled={saving}>إنشاء خدمة إضافية منفصلة</SecondaryButton>
+              ) : null}
+              <PrimaryButton type="button" onClick={() => handleStartGroupTreatment()} disabled={saving}>
+                {groupMatchingPayment ? 'ربط بحجز الخدمة' : 'إضافة أثناء الكشف'}
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {editorOpen ? (
         <div
