@@ -280,6 +280,7 @@ export default function TeethChart({
   readonly = false,
   saveSignal = 0,
   showSaveButton = true,
+  bookedServices = [],
 }) {
   const sourceValue = teethNotes || value;
   const [selectedTooth, setSelectedTooth] = useState('1');
@@ -338,6 +339,20 @@ export default function TeethChart({
     () => services.find((service) => service.id === entry.serviceId) || null,
     [services, entry.serviceId]
   );
+
+  // Services the patient already booked (appointments / payments / extra
+  // charges) — surfaced as a quick "خدمات حجزها المريض" group in the picker.
+  const effectiveBookedServices = useMemo(() => {
+    if (bookedServices && bookedServices.length) return bookedServices;
+    const map = new Map();
+    const add = (svc) => {
+      if (svc && svc.id && !map.has(svc.id)) map.set(svc.id, svc);
+    };
+    (patient?.appointments || []).forEach((item) => add(item.service));
+    (payments || []).forEach((item) => add(item.service));
+    (extraCharges || []).forEach((item) => add(item.service));
+    return Array.from(map.values());
+  }, [bookedServices, patient, payments, extraCharges]);
 
   const matchingPayment = useMemo(() => {
     if (!entry.serviceId) return null;
@@ -739,9 +754,20 @@ export default function TeethChart({
               <Field label="الخدمة">
                 <select className={inputClass} value={entry.serviceId} disabled={readonly} onChange={(event) => applyServiceDefaults(event.target.value)}>
                   <option value="">اختر الخدمة</option>
-                  {services.map((service) => (
-                    <option key={service.id} value={service.id}>{service.nameAr || service.name}</option>
-                  ))}
+                  {effectiveBookedServices.length ? (
+                    <optgroup label="خدمات حجزها المريض">
+                      {effectiveBookedServices.map((service) => (
+                        <option key={`booked-${service.id}`} value={service.id}>
+                          {service.nameAr || service.name} ★
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null}
+                  <optgroup label="كل الخدمات">
+                    {services.map((service) => (
+                      <option key={service.id} value={service.id}>{service.nameAr || service.name}</option>
+                    ))}
+                  </optgroup>
                 </select>
               </Field>
               <Field label="الطبيب">
@@ -858,45 +884,6 @@ export default function TeethChart({
             </div>
           ) : null}
 
-          {false ? (
-            <>
-          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-            <h4 className="mb-3 text-base font-black text-white">سن رقم {selectedTooth}</h4>
-            <Field label="ملاحظة السن">
-              <textarea
-                className={inputClass}
-                rows={4}
-                value={entry.note}
-                disabled={readonly}
-                onChange={(event) => updateEntry('note', event.target.value)}
-              />
-            </Field>
-            <div className="mt-3 grid gap-3">
-              <Field label="الخدمة">
-                <select className={inputClass} value={entry.serviceId} disabled={readonly} onChange={(event) => updateEntry('serviceId', event.target.value)}>
-                  <option value="">اختر الخدمة</option>
-                  {services.map((service) => (
-                    <option key={service.id} value={service.id}>{service.nameAr || service.name}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="الطبيب">
-                <select className={inputClass} value={entry.doctorId || currentDoctorId} disabled={readonly} onChange={(event) => updateEntry('doctorId', event.target.value)}>
-                  <option value="">اختر الطبيب</option>
-                  {doctors.map((doctor) => (
-                    <option key={doctor.id} value={doctor.id}>د. {doctor.name}</option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="تم عمل الخدمة؟">
-                <select className={inputClass} value={entry.done ? 'YES' : 'NO'} disabled={readonly} onChange={(event) => updateEntry('done', event.target.value === 'YES')}>
-                  <option value="NO">لا</option>
-                  <option value="YES">نعم</option>
-                </select>
-              </Field>
-            </div>
-          </div>
-
           {!readonly && showServiceForm ? (
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <h4 className="mb-3 text-sm font-black text-white">إضافة خدمة جديدة</h4>
@@ -917,28 +904,6 @@ export default function TeethChart({
                 <SecondaryButton type="button" onClick={() => setShowServiceForm(false)}>إلغاء</SecondaryButton>
               </div>
             </div>
-          ) : null}
-
-          {!readonly && !showServiceForm ? (
-            <SecondaryButton type="button" onClick={() => setShowServiceForm(true)} className="w-full">
-              <PlusCircle className="h-4 w-4" />
-              إضافة خدمة أخرى
-            </SecondaryButton>
-          ) : null}
-
-          {!readonly ? (
-            <PrimaryButton type="button" onClick={saveCurrentTooth} disabled={saving} className="w-full">
-              <Save className="h-4 w-4" />
-              حفظ السن المحدد
-            </PrimaryButton>
-          ) : null}
-
-          {!readonly && showSaveButton ? (
-            <SecondaryButton type="button" onClick={saveTeeth} disabled={saving} className="w-full">
-              حفظ كل خريطة الأسنان
-            </SecondaryButton>
-          ) : null}
-            </>
           ) : null}
           </div>
         </div>
