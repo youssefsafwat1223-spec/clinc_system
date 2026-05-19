@@ -6,7 +6,7 @@ import api from '../api/client';
 import AppLayout from '../components/Layout';
 import AppointmentCard from '../components/appointments/AppointmentCard';
 import ManualBookingPanel from '../components/appointments/ManualBookingPanel';
-import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, StatCard, inputClass } from '../components/ui';
+import { DataCard, Field, PageHeader, PageLoader, PrimaryButton, SecondaryButton, StatCard, inputClass } from '../components/ui';
 import EmptyState from '../components/EmptyState';
 import { appointmentStatusLabels, todayInputValue } from '../utils/appointmentUi';
 import {
