@@ -6,6 +6,43 @@ import { DataCard, Field, PrimaryButton, SecondaryButton, inputClass } from '../
 import { money } from '../../utils/appointmentUi';
 import { TOOTH_2D_CLASS, TOOTH_LEGEND, toothState } from './toothState';
 
+// Inline editor صغير لإضافة مبلغ على متابعة "بمال" — input + زرار ✓.
+function FollowUpAmountEditor({ appointmentId, initialValue, onSave, saving }) {
+  const [value, setValue] = useState(String(initialValue || ''));
+  useEffect(() => {
+    setValue(String(initialValue || ''));
+  }, [initialValue, appointmentId]);
+  const submit = () => {
+    onSave?.(appointmentId, value);
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-[11px] font-bold text-amber-200">إضافة مال:</span>
+      <input
+        type="number"
+        min="0"
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        className={`${inputClass} h-8 w-32 text-xs`}
+        placeholder="المبلغ"
+      />
+      <button
+        type="button"
+        onClick={submit}
+        disabled={saving}
+        className="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-2 py-1 text-[11px] font-bold text-emerald-100 hover:bg-emerald-500/30"
+      >
+        ✓ حفظ
+      </button>
+      {Number(initialValue) > 0 ? (
+        <span className="text-[11px] text-amber-200">
+          الحالي: {Number(initialValue).toLocaleString('ar-EG')} د.ع
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 const normalizeEntry = (value) => {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     return {
@@ -32,6 +69,17 @@ const normalizeEntry = (value) => {
       updatedAt: value.updatedAt || null,
       updatedById: value.updatedById || '',
       done: Boolean(value.done || value.status === 'DONE'),
+      followUpAppointmentIds: Array.isArray(value.followUpAppointmentIds)
+        ? value.followUpAppointmentIds.filter(Boolean).map(String)
+        : [],
+      followUpAmounts:
+        value.followUpAmounts && typeof value.followUpAmounts === 'object' && !Array.isArray(value.followUpAmounts)
+          ? Object.fromEntries(
+              Object.entries(value.followUpAmounts)
+                .map(([key, amount]) => [key, Math.max(0, Number(amount) || 0)])
+                .filter(([, amount]) => amount > 0)
+            )
+          : {},
     };
   }
   return {
@@ -58,6 +106,8 @@ const normalizeEntry = (value) => {
     updatedAt: null,
     updatedById: '',
     done: false,
+    followUpAppointmentIds: [],
+    followUpAmounts: {},
   };
 };
 
@@ -79,7 +129,13 @@ const recalcEntry = (entry) => {
     entry.discountType === 'PERCENT'
       ? Math.max(0, priceBefore - (priceBefore * discountValue) / 100)
       : Math.max(0, priceBefore - discountValue);
-  const requiredAmount = toNumberOrNull(entry.requiredAmount) ?? priceAfter;
+  // مبالغ المتابعات المدفوعة بمال — بتتضاف على المطلوب الكلي للسن.
+  const followUpExtra = Object.values(entry.followUpAmounts || {}).reduce(
+    (sum, value) => sum + (Math.max(0, Number(value) || 0)),
+    0
+  );
+  const baseRequired = toNumberOrNull(entry.requiredAmount) ?? priceAfter;
+  const requiredAmount = baseRequired + followUpExtra;
   const remaining = Math.max(0, requiredAmount - paidAmount);
   return {
     ...entry,
@@ -87,6 +143,7 @@ const recalcEntry = (entry) => {
     discountValue,
     priceAfter,
     requiredAmount,
+    followUpExtra,
     paidAmount,
     remaining,
     done: entry.done || entry.status === 'DONE',
@@ -339,6 +396,11 @@ export default function TeethChart({
   const [editorOpen, setEditorOpen] = useState(false);
   const [groupOpen, setGroupOpen] = useState(false);
   const [groupForm, setGroupForm] = useState(defaultGroupForm);
+  // متابعات: قائمة كل مواعيد المريض (نفلتر منها المجاني فقط في الـ modal).
+  const [patientAppointments, setPatientAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
+  const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
+  const [followUpSelection, setFollowUpSelection] = useState([]);
 
   const selectTooth = (toothNumber) => {
     setSelectedTooth(String(toothNumber));
@@ -362,6 +424,31 @@ export default function TeethChart({
   useEffect(() => {
     if (providedDoctors) setDoctors(providedDoctors);
   }, [providedDoctors]);
+
+  // جلب كل مواعيد المريض عشان نختار منها متابعات.
+  useEffect(() => {
+    if (!patientId) {
+      setPatientAppointments([]);
+      return;
+    }
+    let cancelled = false;
+    setLoadingAppointments(true);
+    api
+      .get('/appointments', { params: { patientId, limit: 200 } })
+      .then((res) => {
+        if (cancelled) return;
+        setPatientAppointments(res.data?.appointments || []);
+      })
+      .catch(() => {
+        if (!cancelled) setPatientAppointments([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingAppointments(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [patientId]);
 
   useEffect(() => {
     if (providedServices && providedDoctors) return;
@@ -387,6 +474,126 @@ export default function TeethChart({
     () => services.find((service) => service.id === entry.serviceId) || null,
     [services, entry.serviceId]
   );
+
+  // المتابعات المرتبطة بالسن الحالي (IDs مخزّنة جوا entry).
+  const linkedFollowUps = useMemo(() => {
+    const ids = entry.followUpAppointmentIds || [];
+    if (!ids.length) return [];
+    const byId = new Map(patientAppointments.map((appointment) => [appointment.id, appointment]));
+    return ids
+      .map((id) => byId.get(id))
+      .filter(Boolean)
+      .sort((a, b) => new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime());
+  }, [entry.followUpAppointmentIds, patientAppointments]);
+
+  // مواعيد المتابعة المتاحة: أي موعد notes فيه tag [follow-up:free] أو [follow-up:paid]،
+  // أو موعد مجاني فعليًا (مفيش Payment أو finalAmount = 0). بنستثني اللي مربوطة بسن تاني.
+  const freeAppointmentCandidates = useMemo(() => {
+    const linkedElsewhere = new Set();
+    Object.entries(teeth).forEach(([toothKey, toothEntry]) => {
+      if (toothKey === String(selectedTooth)) return;
+      (toothEntry?.followUpAppointmentIds || []).forEach((id) => linkedElsewhere.add(id));
+    });
+    return patientAppointments.filter((appointment) => {
+      if (linkedElsewhere.has(appointment.id)) return false;
+      const tagged = /\[follow-up:(free|paid)\]/i.test(String(appointment.notes || ''));
+      if (tagged) return true;
+      const payment = appointment.payment;
+      const finalAmount = Number(payment?.finalAmount ?? payment?.amount ?? 0);
+      return !payment || finalAmount <= 0;
+    });
+  }, [patientAppointments, teeth, selectedTooth]);
+
+  // نوع المتابعة من الـ notes: free / paid / null.
+  const followUpKind = (appointment) => {
+    const match = /\[follow-up:(free|paid)\]/i.exec(String(appointment?.notes || ''));
+    return match ? match[1].toLowerCase() : null;
+  };
+
+  // حفظ مبلغ متابعة بمال على entry السن.
+  const saveFollowUpAmount = async (appointmentId, amount) => {
+    if (readonly) return;
+    const nextAmounts = { ...(entry.followUpAmounts || {}) };
+    const value = Math.max(0, Number(amount) || 0);
+    if (value > 0) {
+      nextAmounts[appointmentId] = value;
+    } else {
+      delete nextAmounts[appointmentId];
+    }
+    const nextTeeth = {
+      ...teeth,
+      [selectedTooth]: recalcEntry({
+        ...normalizeEntry(teeth[selectedTooth] || { doctorId: currentDoctorId }),
+        followUpAmounts: nextAmounts,
+        updatedAt: new Date().toISOString(),
+      }),
+    };
+    setSaving(true);
+    try {
+      const saved = await persistTeeth(nextTeeth);
+      setTeeth(saved);
+      onSaved?.(saved);
+      toast.success(value > 0 ? 'تمت إضافة مبلغ المتابعة' : 'تم مسح مبلغ المتابعة');
+    } catch (error) {
+      toast.error(error.message || 'فشل حفظ مبلغ المتابعة');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveFollowUpSelection = async () => {
+    if (readonly) return;
+    const merged = Array.from(new Set([...(entry.followUpAppointmentIds || []), ...followUpSelection]));
+    const nextTeeth = {
+      ...teeth,
+      [selectedTooth]: recalcEntry({
+        ...normalizeEntry(teeth[selectedTooth] || { doctorId: currentDoctorId }),
+        followUpAppointmentIds: merged,
+        updatedAt: new Date().toISOString(),
+      }),
+    };
+    setSaving(true);
+    try {
+      const saved = await persistTeeth(nextTeeth);
+      setTeeth(saved);
+      onSaved?.(saved);
+      setFollowUpModalOpen(false);
+      setFollowUpSelection([]);
+      toast.success('تم ربط المتابعات بالسن');
+    } catch (error) {
+      toast.error(error.message || 'فشل ربط المتابعات');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const unlinkFollowUp = async (appointmentId) => {
+    if (readonly) return;
+    const next = (entry.followUpAppointmentIds || []).filter((id) => id !== appointmentId);
+    // لما نفك الربط بنشيل المبلغ المضاف للمتابعة دي كمان.
+    const nextAmounts = { ...(entry.followUpAmounts || {}) };
+    delete nextAmounts[appointmentId];
+    const nextTeeth = {
+      ...teeth,
+      [selectedTooth]: recalcEntry({
+        ...normalizeEntry(teeth[selectedTooth] || { doctorId: currentDoctorId }),
+        followUpAppointmentIds: next,
+        followUpAmounts: nextAmounts,
+        updatedAt: new Date().toISOString(),
+      }),
+    };
+    setSaving(true);
+    try {
+      const saved = await persistTeeth(nextTeeth);
+      setTeeth(saved);
+      onSaved?.(saved);
+      toast.success('تم فك ربط المتابعة');
+    } catch (error) {
+      toast.error(error.message || 'فشل فك الربط');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Services the patient already booked (appointments / payments / extra
   // charges) — surfaced as a quick "خدمات حجزها المريض" group in the picker.
@@ -700,6 +907,14 @@ export default function TeethChart({
       let financialId = '';
       if (shouldLinkBookedPayment) {
         financialId = groupMatchingPayment.id;
+        // مزامنة عدد الأسنان مع الـ Payment المرتبط (فك علوي/سفلي/كل الأسنان -> 16/16/32).
+        try {
+          await api.put(`/payments/${groupMatchingPayment.id}`, {
+            teethCount: selectedTeeth.length,
+          });
+        } catch {
+          // لو الـ PUT فشل لأي سبب، استمر بربط الأسنان من غير ما نوقف الحفظ.
+        }
       } else {
         const res = await api.post('/payments/extra-charges', {
           patientId,
@@ -1072,6 +1287,104 @@ export default function TeethChart({
         </div>
       ) : null}
 
+      {/* Modal اختيار متابعات لربطها بالسن الحالي */}
+      {followUpModalOpen ? (
+        <div
+          className="fixed inset-0 z-[96] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setFollowUpModalOpen(false)}
+          dir="rtl"
+        >
+          <div
+            className="w-full max-w-xl space-y-4 rounded-3xl border border-white/10 bg-[#0b1020] p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2 border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-lg font-black text-white">اختر متابعات لربطها بالسن رقم {selectedTooth}</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  بنعرض المواعيد المجانية اللي الريسبشن حجزتها للمريض ده ولسه مش مربوطة بأي سن.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setFollowUpModalOpen(false)}
+                className="rounded-full border border-white/10 p-1 text-slate-400 hover:bg-white/10"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+              {loadingAppointments ? (
+                <p className="py-6 text-center text-sm text-slate-400">جاري التحميل…</p>
+              ) : freeAppointmentCandidates.length === 0 ? (
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-4 text-sm leading-6 text-amber-100">
+                  مفيش مواعيد متابعة مجانية متاحة. خلّي الريسبشن تحجز موعد بسعر صفر أو بخصم 100% للمريض ده وارجع هنا تاني.
+                </div>
+              ) : (
+                freeAppointmentCandidates.map((appointment) => {
+                  const checked = followUpSelection.includes(appointment.id);
+                  const date = new Date(appointment.scheduledTime);
+                  const doctorName = appointment.doctor?.name || '—';
+                  const serviceName = appointment.service?.nameAr || appointment.service?.name || 'خدمة';
+                  return (
+                    <label
+                      key={appointment.id}
+                      className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3 text-sm transition ${
+                        checked
+                          ? 'border-sky-400 bg-sky-500/15'
+                          : 'border-white/10 bg-white/5 hover:bg-white/10'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 accent-sky-500"
+                        checked={checked}
+                        onChange={(event) => {
+                          setFollowUpSelection((current) =>
+                            event.target.checked
+                              ? [...current, appointment.id]
+                              : current.filter((id) => id !== appointment.id)
+                          );
+                        }}
+                      />
+                      <div className="flex-1">
+                        <p className="font-bold text-white">
+                          {date.toLocaleDateString('ar-EG')} ·{' '}
+                          {date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        <p className="mt-1 text-xs leading-6 text-slate-300">
+                          د. {doctorName} · {serviceName} ·{' '}
+                          <span className="text-emerald-300">مجاني</span>
+                          {appointment.bookingRef ? (
+                            <span className="ms-2 font-mono text-[10px] text-slate-500" dir="ltr">
+                              {appointment.bookingRef}
+                            </span>
+                          ) : null}
+                        </p>
+                      </div>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 pt-3">
+              <SecondaryButton type="button" onClick={() => setFollowUpModalOpen(false)}>
+                إلغاء
+              </SecondaryButton>
+              <PrimaryButton
+                type="button"
+                onClick={saveFollowUpSelection}
+                disabled={saving || followUpSelection.length === 0}
+              >
+                ربط المختار ({followUpSelection.length})
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {editorOpen ? (
         <div
           className="fixed inset-0 z-[95] flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-sm"
@@ -1177,6 +1490,83 @@ export default function TeethChart({
                   <option value="YES">نعم</option>
                 </select>
               </Field>
+            </div>
+
+            {/* المتابعات المرتبطة بالسن — مواعيد مجانية اللي الريسبشن حجزتها للمريض. */}
+            <div className="mt-4 rounded-2xl border border-sky-500/15 bg-sky-500/5 p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                <h4 className="text-sm font-black text-sky-100">📅 المتابعات المرتبطة بالسن</h4>
+                {!readonly ? (
+                  <SecondaryButton
+                    type="button"
+                    onClick={() => {
+                      setFollowUpSelection([]);
+                      setFollowUpModalOpen(true);
+                    }}
+                    className="px-3 py-1.5 text-xs"
+                    disabled={loadingAppointments}
+                  >
+                    + إضافة متابعة
+                  </SecondaryButton>
+                ) : null}
+              </div>
+              {linkedFollowUps.length === 0 ? (
+                <p className="text-xs leading-6 text-slate-400">
+                  مفيش متابعات مربوطة بالسن ده. دوس "إضافة متابعة" عشان تربط مواعيد المتابعة المجانية اللي الريسبشن حجزتها.
+                </p>
+              ) : (
+                <ul className="space-y-2">
+                  {linkedFollowUps.map((appointment, index) => {
+                    const date = new Date(appointment.scheduledTime);
+                    const doctorName = appointment.doctor?.name || '—';
+                    const serviceName = appointment.service?.nameAr || appointment.service?.name || 'خدمة';
+                    const kind = followUpKind(appointment);
+                    const isPaid = kind === 'paid';
+                    const currentAmount = entry.followUpAmounts?.[appointment.id] || 0;
+                    return (
+                      <li
+                        key={appointment.id}
+                        className="space-y-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="font-bold text-white">
+                            متابعة {index + 1} ·{' '}
+                            <span className="text-sky-200">{date.toLocaleDateString('ar-EG')}</span>
+                            {' · '}د. {doctorName}
+                            {' · '}
+                            <span className="text-slate-300">{serviceName}</span>
+                            {' · '}
+                            <span className={isPaid ? 'text-amber-300' : 'text-emerald-300'}>
+                              {isPaid ? '💰 بمال' : 'مجاني'}
+                            </span>
+                          </span>
+                          {!readonly ? (
+                            <button
+                              type="button"
+                              onClick={() => unlinkFollowUp(appointment.id)}
+                              className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-200 hover:bg-rose-500/20"
+                            >
+                              ✕ فك الربط
+                            </button>
+                          ) : null}
+                        </div>
+                        {isPaid && !readonly ? (
+                          <FollowUpAmountEditor
+                            appointmentId={appointment.id}
+                            initialValue={currentAmount}
+                            onSave={saveFollowUpAmount}
+                            saving={saving}
+                          />
+                        ) : isPaid && currentAmount > 0 ? (
+                          <p className="text-[11px] font-bold text-amber-200">
+                            مبلغ مضاف: {Number(currentAmount).toLocaleString('ar-EG')} د.ع
+                          </p>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </div>
           </div>
 

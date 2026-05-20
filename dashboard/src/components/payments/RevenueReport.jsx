@@ -29,6 +29,45 @@ const caseStatusOptions = [
   { value: 'MOSTAMERA', label: 'مستمرة' },
 ];
 
+// مراحل العلاج المفصّلة (chip stepper). الـ value بيتسجّل في notes كـ tag منظّم،
+// ولو فيه appointmentAction هينفّذه على الموعد المرتبط.
+const caseStageOptions = [
+  {
+    value: 'STARTED',
+    label: 'بدء العلاج',
+    activeClass: 'border-sky-400 bg-sky-500 text-white',
+    appointmentAction: 'confirm',
+  },
+  {
+    value: 'EXAMINED',
+    label: 'تم الكشف',
+    activeClass: 'border-emerald-400 bg-emerald-500 text-white',
+    appointmentAction: 'complete',
+  },
+  {
+    value: 'ONGOING',
+    label: 'قيد العلاج',
+    activeClass: 'border-amber-400 bg-amber-500 text-white',
+    appointmentAction: null,
+  },
+  {
+    value: 'FINISHED',
+    label: 'منتهي',
+    activeClass: 'border-slate-300 bg-slate-200 text-slate-900',
+    appointmentAction: null,
+  },
+];
+
+const stageLabelOf = (value) => caseStageOptions.find((option) => option.value === value)?.label || value;
+const stageTagRegex = /^\[المرحلة:[^\]]*\][^\n]*\n?/;
+const stripStageTag = (notes = '') => String(notes || '').replace(stageTagRegex, '').trim();
+const buildStageTag = (stage, details = '') => {
+  if (!stage) return '';
+  const today = new Date().toISOString().slice(0, 10);
+  const detailsPart = details ? ` ${String(details).trim()}` : '';
+  return `[المرحلة: ${stageLabelOf(stage)} · ${today}]${detailsPart}`;
+};
+
 const itemTypeOptions = [
   { value: 'ALL', label: 'كل البنود' },
   { value: 'TOOTH', label: 'علاجات الأسنان فقط' },
@@ -82,18 +121,39 @@ const defaultEditForm = (payment = {}) => ({
   remainingAmount: payment.remainingAmount ?? Math.max(0, netPaymentAmount(payment) - toAmount(payment.paidAmount)),
   teethCount: payment.teethCount || 1,
   method: payment.method || 'cash',
-  notes: isAutoFullPaymentNote(payment.notes) ? '' : payment.notes || '',
-  caseStatus: payment.caseStatus || '',
+  notes: isAutoFullPaymentNote(payment.notes) ? '' : stripStageTag(payment.notes || ''),
+  caseStatus: '',
+  caseStage: '',
+  caseStageDetails: '',
 });
+
+const paymentStatusLabel = (payment = {}, discountAmount = payment.discountAmount, paidAmount = payment.paidAmount) => {
+  const netAmount = netPaymentAmount(payment, discountAmount);
+  const paid = clampAmount(paidAmount, netAmount);
+  if (paid <= 0) return { label: 'غير مدفوع', className: 'border-rose-500/20 bg-rose-500/10 text-rose-200' };
+  if (paid < netAmount) return { label: 'مدفوع جزئياً', className: 'border-amber-500/20 bg-amber-500/10 text-amber-200' };
+  return { label: 'مدفوع بالكامل', className: 'border-emerald-500/20 bg-emerald-500/10 text-emerald-200' };
+};
+
+const caseStatusLabel = (value) => caseStatusOptions.find((option) => option.value === value)?.label || 'غير محددة';
 
 async function savePaymentChanges(payment, form) {
   const paidAmount = clampAmount(form.paidAmount, netPaymentAmount(payment, form.discountAmount));
+  // ندمج مرحلة العلاج كـ tag في أول سطر من الملاحظات عشان تتخزن مع الدفعة.
+  const stageTag = buildStageTag(form.caseStage, form.caseStageDetails);
+  const userNotes = stripStageTag(form.notes || '');
+  const composedNotes = stageTag
+    ? userNotes
+      ? `${stageTag}\n${userNotes}`
+      : stageTag
+    : userNotes;
+
   if (payment.source === 'extra') {
     await api.patch(`/payments/extra-charges/${payment.id}`, {
       paidAmount,
       teethCount: Math.max(1, Math.floor(Number(form.teethCount) || 1)),
       method: form.method,
-      notes: form.notes,
+      notes: composedNotes,
     });
     return;
   }
@@ -103,7 +163,7 @@ async function savePaymentChanges(payment, form) {
     discountAmount: Number(form.discountAmount) || 0,
     teethCount: Math.max(1, Math.floor(Number(form.teethCount) || 1)),
     method: form.method,
-    notes: form.notes,
+    notes: composedNotes,
   });
 
   if (payment.appointmentId && form.caseStatus && form.caseStatus !== payment.caseStatus) {
@@ -117,6 +177,18 @@ async function savePaymentChanges(payment, form) {
       });
     }
   }
+
+  // المرحلة الجديدة ممكن تنفّذ action على الموعد المرتبط (بدء العلاج / تم الكشف).
+  if (payment.appointmentId && form.caseStage) {
+    const action = caseStageOptions.find((option) => option.value === form.caseStage)?.appointmentAction;
+    if (action) {
+      try {
+        await api.post(`/appointments/${payment.appointmentId}/${action}`);
+      } catch {
+        // لو الموعد في حالة لا تسمح بالـ action ده، نتجاهل الخطأ علشان ما نوقفش حفظ الدفع.
+      }
+    }
+  }
 }
 
 function PaymentFields({ payment, form, setForm }) {
@@ -126,6 +198,7 @@ function PaymentFields({ payment, form, setForm }) {
   const netAmount = netPaymentAmount(payment, discountAmount);
   const paidAmount = clampAmount(form.paidAmount, netAmount);
   const remainingAmount = Math.max(0, netAmount - paidAmount);
+  const currentPaymentStatus = paymentStatusLabel(payment, discountAmount, paidAmount);
 
   const updatePaidAmount = (value) => {
     const nextPaid = clampAmount(value, netAmount);
@@ -174,6 +247,16 @@ function PaymentFields({ payment, form, setForm }) {
           <span className="block text-slate-400">المتبقي على المريض</span>
           <span className={remainingAmount > 0 ? 'text-amber-300' : 'text-emerald-300'}>{money(remainingAmount)}</span>
         </div>
+      </div>
+      <div className="flex flex-wrap gap-2 text-xs font-bold">
+        <span className={`rounded-full border px-3 py-1 ${currentPaymentStatus.className}`}>
+          حالة الدفع: {currentPaymentStatus.label}
+        </span>
+        {payment.appointmentId ? (
+          <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-slate-300">
+            حالة الموعد الحالية: {caseStatusLabel(payment.caseStatus)}
+          </span>
+        ) : null}
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
       <Field label="المبلغ المدفوع">
@@ -226,24 +309,60 @@ function PaymentFields({ payment, form, setForm }) {
           <option value="other">أخرى</option>
         </select>
       </Field>
-      {payment.source !== 'extra' && payment.appointmentId ? (
-        <Field label="حالة الحالة">
-          <select
-            className={inputClass}
-            value={form.caseStatus || ''}
-            onChange={(event) => update('caseStatus', event.target.value)}
-          >
-            <option value="">بدون تغيير</option>
-            <option value="WASEL">واصل (تم الكشف)</option>
-            <option value="MOSTAMERA">مستمرة (تأكيد)</option>
-            <option value="MUNTAHI">منتهي (إلغاء)</option>
-          </select>
-        </Field>
-      ) : null}
       <Field label="ملاحظات">
-        <input className={inputClass} value={form.notes} onChange={(event) => update('notes', event.target.value)} />
+        <textarea
+          className={`${inputClass} min-h-[64px]`}
+          rows={2}
+          value={form.notes}
+          onChange={(event) => update('notes', event.target.value)}
+          placeholder="ملاحظات اختيارية للدفعة"
+        />
       </Field>
       </div>
+
+      {payment.source !== 'extra' && payment.appointmentId ? (
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+          <p className="mb-2 text-xs font-bold text-slate-300">مرحلة العلاج (مخطط متابعة الحالة)</p>
+          <div className="flex flex-wrap gap-2">
+            {caseStageOptions.map((option) => {
+              const active = form.caseStage === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => update('caseStage', active ? '' : option.value)}
+                  className={`rounded-full border px-3 py-1.5 text-xs font-bold transition ${
+                    active
+                      ? option.activeClass
+                      : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+          {form.caseStage ? (
+            <div className="mt-3">
+              <Field label="تفاصيل المرحلة">
+                <textarea
+                  className={`${inputClass} min-h-[72px]`}
+                  rows={2}
+                  value={form.caseStageDetails}
+                  onChange={(event) => update('caseStageDetails', event.target.value)}
+                  placeholder="مثال: تم تحضير الأسنان للتلبيس وأخذ المقاسات..."
+                />
+              </Field>
+              <p className="mt-2 text-[11px] leading-5 text-slate-400">
+                المرحلة + التفاصيل بتتسجّل في ملاحظات الدفع، و
+                {caseStageOptions.find((option) => option.value === form.caseStage)?.appointmentAction
+                  ? ' هتعمل تحديث تلقائي لحالة الموعد المرتبط.'
+                  : ' من غير تغيير لحالة الموعد.'}
+              </p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

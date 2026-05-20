@@ -18,6 +18,21 @@ const BOOKING_MODES = {
   WHATSAPP_CONTACT: 'whatsapp_contact',
 };
 
+// نوع الحجز: يدوي عادي أو متابعة لمريض سابق.
+const BOOKING_KINDS = {
+  MANUAL: 'manual',
+  FOLLOW_UP: 'follow_up',
+};
+
+// المتابعة ممكن تكون مجانية أو بمال (الطبيب يحدد المبلغ بعدين في popup السن).
+const FOLLOW_UP_TYPES = {
+  FREE: 'free',
+  PAID: 'paid',
+};
+
+// نشيل أي tag متابعة قديم قبل ما نضيف tag جديد، عشان ما نكرّرش.
+const stripFollowUpTag = (notes = '') => String(notes || '').replace(/\[follow-up:(free|paid)\]\s*/gi, '').trim();
+
 export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated, initialPhone = '', initialPatientId = '' }) {
   const [doctors, setDoctors] = useState([]);
   const [patients, setPatients] = useState([]);
@@ -31,6 +46,8 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
   const [bookingMode, setBookingMode] = useState(
     initialPhone ? BOOKING_MODES.WHATSAPP_CONTACT : BOOKING_MODES.NEW_PATIENT
   );
+  const [bookingKind, setBookingKind] = useState(BOOKING_KINDS.MANUAL);
+  const [followUpType, setFollowUpType] = useState(FOLLOW_UP_TYPES.FREE);
 
   const [form, setForm] = useState({
     patientId: '',
@@ -78,6 +95,14 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
       }));
     }
   }, [bookingMode, initialPhone]);
+
+  // في وضع المتابعة، لو مفيش خدمة مختارة نعبّيها بأول خدمة متاحة (المتابعة من غير اختيار خدمة).
+  useEffect(() => {
+    if (bookingKind !== BOOKING_KINDS.FOLLOW_UP) return;
+    if (form.serviceId) return;
+    if (!services.length) return;
+    setForm((current) => ({ ...current, serviceId: current.serviceId || services[0].id }));
+  }, [bookingKind, services, form.serviceId]);
 
   const fetchSupportData = async () => {
     try {
@@ -316,13 +341,22 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
         setPatients((current) => [familyPatient, ...current.filter((patient) => patient.id !== familyPatient.id)]);
       }
 
+      // لو ده حجز متابعة بنضيف tag في أول الـ notes عشان نميّز المتابعة (مجاني/بمال)
+      // في popup السن لاحقًا. الـ tag بيتشال أي tag قديم قبله.
+      const baseNotes = stripFollowUpTag(form.notes || '');
+      const followUpTag =
+        bookingKind === BOOKING_KINDS.FOLLOW_UP ? `[follow-up:${followUpType}]` : '';
+      const finalNotes = followUpTag
+        ? `${followUpTag}${baseNotes ? ' ' + baseNotes : ''}`
+        : baseNotes;
+
       const response = await api.post('/appointments', {
         patientId: targetPatientId,
         doctorId: effectiveDoctorId,
         serviceId: form.serviceId,
         appointmentType: form.appointmentType,
         scheduledTime: form.appointmentType === 'WALK_IN' ? form.date : `${form.date}T${form.time}:00`,
-        notes: form.notes || undefined,
+        notes: finalNotes || undefined,
         confirmImmediately: form.confirmImmediately,
         notifyPatient: form.notifyPatient,
       });
@@ -407,6 +441,65 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
         ) : (
           <p>هذا الوضع لمريض تواصل من الواتساب. ابحث بالرقم أو الاسم، ثم اختر المريض مباشرة لإكمال الحجز وإرسال التأكيد.</p>
         )}
+      </div>
+
+      {/* نوع الحجز: يدوي عادي أو متابعة لمريض سابق (الافتراضي: يدوي). */}
+      <div className="rounded-2xl border border-dark-border bg-dark-bg/40 p-4">
+        <p className="mb-2 text-xs font-bold text-slate-300">نوع الحجز</p>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setBookingKind(BOOKING_KINDS.MANUAL)}
+            className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+              bookingKind === BOOKING_KINDS.MANUAL
+                ? 'border-sky-400 bg-sky-500/20 text-sky-100'
+                : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+            }`}
+          >
+            📋 حجز يدوي
+          </button>
+          <button
+            type="button"
+            onClick={() => setBookingKind(BOOKING_KINDS.FOLLOW_UP)}
+            className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+              bookingKind === BOOKING_KINDS.FOLLOW_UP
+                ? 'border-emerald-400 bg-emerald-500/20 text-emerald-100'
+                : 'border-white/10 bg-white/5 text-slate-300 hover:bg-white/10'
+            }`}
+          >
+            🔄 حجز متابعة
+          </button>
+        </div>
+
+        {bookingKind === BOOKING_KINDS.FOLLOW_UP ? (
+          <div className="mt-3 space-y-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-emerald-50">
+            <p className="font-bold">المتابعة من غير اختيار خدمة. اختر نوعها:</p>
+            <div className="flex flex-wrap gap-3">
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="followUpType"
+                  value={FOLLOW_UP_TYPES.FREE}
+                  checked={followUpType === FOLLOW_UP_TYPES.FREE}
+                  onChange={() => setFollowUpType(FOLLOW_UP_TYPES.FREE)}
+                  className="accent-emerald-500"
+                />
+                🆓 مجاني
+              </label>
+              <label className="inline-flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="followUpType"
+                  value={FOLLOW_UP_TYPES.PAID}
+                  checked={followUpType === FOLLOW_UP_TYPES.PAID}
+                  onChange={() => setFollowUpType(FOLLOW_UP_TYPES.PAID)}
+                  className="accent-amber-500"
+                />
+                💰 بمال (الطبيب يحدد المبلغ من popup السن)
+              </label>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {showPatientCreator && (
@@ -510,29 +603,38 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
           </select>
         </div>
 
-        <div className="space-y-2">
-          <label className="text-xs font-bold text-dark-muted">الخدمة</label>
-          <select
-            value={form.serviceId}
-            onChange={(event) => handleFormChange('serviceId', event.target.value)}
-            className="input-field"
-            disabled={loading}
-          >
-            <option value="">اختر الخدمة</option>
-            {services.map((service) => (
-              <option key={service.id} value={service.id}>
-                {service.nameAr || service.name}
-              </option>
-            ))}
-          </select>
-          {selectedService ? (
-            <p className="text-xs text-slate-400 flex items-center gap-2">
-              <Clock3 className="w-3.5 h-3.5" />
-              {selectedService.duration} دقيقة
-              {selectedService.price ? `• ${Number(selectedService.price).toLocaleString('ar-IQ')} د.ع` : ''}
-            </p>
-          ) : null}
-        </div>
+        {bookingKind === BOOKING_KINDS.FOLLOW_UP ? (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-dark-muted">الخدمة</label>
+            <div className="input-field flex items-center text-slate-400">
+              متابعة (من غير اختيار خدمة)
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            <label className="text-xs font-bold text-dark-muted">الخدمة</label>
+            <select
+              value={form.serviceId}
+              onChange={(event) => handleFormChange('serviceId', event.target.value)}
+              className="input-field"
+              disabled={loading}
+            >
+              <option value="">اختر الخدمة</option>
+              {services.map((service) => (
+                <option key={service.id} value={service.id}>
+                  {service.nameAr || service.name}
+                </option>
+              ))}
+            </select>
+            {selectedService ? (
+              <p className="text-xs text-slate-400 flex items-center gap-2">
+                <Clock3 className="w-3.5 h-3.5" />
+                {selectedService.duration} دقيقة
+                {selectedService.price ? `• ${Number(selectedService.price).toLocaleString('ar-IQ')} د.ع` : ''}
+              </p>
+            ) : null}
+          </div>
+        )}
 
         <div className="space-y-2">
           <label className="text-xs font-bold text-dark-muted">نوع الحجز</label>
