@@ -486,8 +486,8 @@ export default function TeethChart({
       .sort((a, b) => new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime());
   }, [entry.followUpAppointmentIds, patientAppointments]);
 
-  // مواعيد المتابعة المتاحة: أي موعد notes فيه tag [follow-up:free] أو [follow-up:paid]،
-  // أو موعد مجاني فعليًا (مفيش Payment أو finalAmount = 0). بنستثني اللي مربوطة بسن تاني.
+  // مواعيد المتابعة المتاحة: فقط المواعيد اللي اتحجزت كـ "متابعة" من ManualBookingPanel
+  // (notes فيه [follow-up:free] أو [follow-up:paid]). بنستثني اللي مربوطة بسن تاني.
   const freeAppointmentCandidates = useMemo(() => {
     const linkedElsewhere = new Set();
     Object.entries(teeth).forEach(([toothKey, toothEntry]) => {
@@ -496,11 +496,7 @@ export default function TeethChart({
     });
     return patientAppointments.filter((appointment) => {
       if (linkedElsewhere.has(appointment.id)) return false;
-      const tagged = /\[follow-up:(free|paid)\]/i.test(String(appointment.notes || ''));
-      if (tagged) return true;
-      const payment = appointment.payment;
-      const finalAmount = Number(payment?.finalAmount ?? payment?.amount ?? 0);
-      return !payment || finalAmount <= 0;
+      return /\[follow-up:(free|paid)\]/i.test(String(appointment.notes || ''));
     });
   }, [patientAppointments, teeth, selectedTooth]);
 
@@ -1327,6 +1323,8 @@ export default function TeethChart({
                   const date = new Date(appointment.scheduledTime);
                   const doctorName = appointment.doctor?.name || '—';
                   const serviceName = appointment.service?.nameAr || appointment.service?.name || 'خدمة';
+                  const kind = followUpKind(appointment);
+                  const isPaid = kind === 'paid';
                   return (
                     <label
                       key={appointment.id}
@@ -1355,7 +1353,9 @@ export default function TeethChart({
                         </p>
                         <p className="mt-1 text-xs leading-6 text-slate-300">
                           د. {doctorName} · {serviceName} ·{' '}
-                          <span className="text-emerald-300">مجاني</span>
+                          <span className={isPaid ? 'text-amber-300' : 'text-emerald-300'}>
+                            {isPaid ? '💰 بمال' : '🆓 مجاني'}
+                          </span>
                           {appointment.bookingRef ? (
                             <span className="ms-2 font-mono text-[10px] text-slate-500" dir="ltr">
                               {appointment.bookingRef}
