@@ -376,6 +376,31 @@ const saveTeethNotes = async (req, res, next) => {
           return text || null;
         };
         const done = Boolean(value.done);
+        // المتابعات المربوطة بالسن: IDs بس + filter لـ strings.
+        const followUpAppointmentIds = Array.isArray(value.followUpAppointmentIds)
+          ? value.followUpAppointmentIds
+              .map((id) => (typeof id === 'string' ? id.trim() : ''))
+              .filter(Boolean)
+          : [];
+        // مبالغ المتابعات بمال (appointmentId -> amount).
+        const followUpAmounts =
+          value.followUpAmounts && typeof value.followUpAmounts === 'object' && !Array.isArray(value.followUpAmounts)
+            ? Object.fromEntries(
+                Object.entries(value.followUpAmounts)
+                  .map(([k, v]) => [String(k), Math.max(0, Number(v) || 0)])
+                  .filter(([, v]) => v > 0)
+              )
+            : {};
+        // الأقساط: [{amount, date}, ...]
+        const installments = Array.isArray(value.installments)
+          ? value.installments
+              .map((item) => ({
+                amount: Math.max(0, Number(item?.amount) || 0),
+                date: String(item?.date || ''),
+              }))
+              .filter((item) => item.amount > 0 && item.date)
+          : [];
+
         if (
           note ||
           treatmentNote ||
@@ -389,7 +414,10 @@ const saveTeethNotes = async (req, res, next) => {
           value.priceAfter != null ||
           value.requiredAmount != null ||
           value.paidAmount != null ||
-          value.remaining != null
+          value.remaining != null ||
+          followUpAppointmentIds.length > 0 ||
+          Object.keys(followUpAmounts).length > 0 ||
+          installments.length > 0
         ) {
           teeth[String(key)] = {
             note,
@@ -412,6 +440,9 @@ const saveTeethNotes = async (req, res, next) => {
             updatedAt: value.updatedAt || null,
             updatedById: toNullableString(value.updatedById),
             done,
+            followUpAppointmentIds,
+            followUpAmounts,
+            installments,
           };
         }
       } else {
