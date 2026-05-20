@@ -96,13 +96,21 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
     }
   }, [bookingMode, initialPhone]);
 
-  // في وضع المتابعة، لو مفيش خدمة مختارة نعبّيها بأول خدمة متاحة (المتابعة من غير اختيار خدمة).
+  // في وضع المتابعة بنختار خدمة "متابعة" المخصصة لو موجودة، وإلا أول خدمة (مع تنبيه).
+  // كمان بنقفل إرسال التأكيد افتراضيًا عشان رسالة الـ template بتذكر اسم الخدمة وممكن تربك المريض.
   useEffect(() => {
     if (bookingKind !== BOOKING_KINDS.FOLLOW_UP) return;
-    if (form.serviceId) return;
     if (!services.length) return;
-    setForm((current) => ({ ...current, serviceId: current.serviceId || services[0].id }));
-  }, [bookingKind, services, form.serviceId]);
+    const followUpService =
+      services.find((service) =>
+        /(^|\s)متابعة(\s|$)|follow[- ]?up/i.test(`${service.nameAr || ''} ${service.name || ''}`)
+      ) || services[0];
+    setForm((current) => ({
+      ...current,
+      serviceId: followUpService.id,
+      notifyPatient: false,
+    }));
+  }, [bookingKind, services]);
 
   const fetchSupportData = async () => {
     try {
@@ -498,6 +506,13 @@ export default function ManualBookingPanel({ isDoctor, doctorProfile, onCreated,
                 💰 بمال (الطبيب يحدد المبلغ من popup السن)
               </label>
             </div>
+            {!services.some((service) =>
+              /(^|\s)متابعة(\s|$)|follow[- ]?up/i.test(`${service.nameAr || ''} ${service.name || ''}`)
+            ) ? (
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2 text-amber-100">
+                ⚠️ مفيش خدمة اسمها "متابعة" في القائمة. هنستخدم أول خدمة متاحة، يفضّل تعمل خدمة جديدة اسمها "متابعة" من شاشة إعدادات الخدمات عشان رسائل التأكيد للمريض ما تربكش (إرسال التأكيد متقفل افتراضيًا للمتابعات).
+              </p>
+            ) : null}
           </div>
         ) : null}
       </div>
