@@ -6,6 +6,127 @@ import { DataCard, Field, PrimaryButton, SecondaryButton, inputClass } from '../
 import { money } from '../../utils/appointmentUi';
 import { TOOTH_2D_CLASS, TOOTH_LEGEND, toothState } from './toothState';
 
+// قسم الأقساط داخل popup السن: قائمة الدفعات بتواريخها + "+ إضافة دفعة".
+function ToothInstallmentsBlock({ installments, onChange, maxAmount, readonly = false }) {
+  const [adding, setAdding] = useState(false);
+  const [draftAmount, setDraftAmount] = useState('');
+
+  const total = (installments || []).reduce((sum, item) => sum + (Number(item?.amount) || 0), 0);
+  const max = Number(maxAmount) || 0;
+  const remaining = Math.max(0, max - total);
+
+  const confirmAdd = () => {
+    const value = Math.max(0, Number(draftAmount) || 0);
+    if (value <= 0) return;
+    const next = [...(installments || []), { amount: value, date: new Date().toISOString() }];
+    onChange?.(next);
+    setDraftAmount('');
+    setAdding(false);
+  };
+
+  const removeAt = (index) => {
+    const next = (installments || []).filter((_, i) => i !== index);
+    onChange?.(next);
+  };
+
+  return (
+    <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-black text-emerald-100">💵 سجل الدفعات (الأقساط)</h4>
+        {!readonly && !adding ? (
+          <SecondaryButton type="button" onClick={() => setAdding(true)} className="px-3 py-1.5 text-xs">
+            + إضافة دفعة
+          </SecondaryButton>
+        ) : null}
+        {!readonly && adding ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              value={draftAmount}
+              onChange={(event) => setDraftAmount(event.target.value)}
+              className={`${inputClass} h-8 w-28 text-xs`}
+              placeholder="المبلغ"
+              autoFocus
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  confirmAdd();
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={confirmAdd}
+              className="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-3 py-1 text-[11px] font-bold text-emerald-100 hover:bg-emerald-500/30"
+            >
+              ✓ تم
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(false);
+                setDraftAmount('');
+              }}
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold text-slate-300 hover:bg-white/10"
+            >
+              إلغاء
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {(installments || []).length === 0 ? (
+        <p className="text-xs leading-6 text-slate-400">
+          مفيش دفعات مسجّلة بعد. دوس "+ إضافة دفعة" عشان تسجل أول قسط بتاريخه.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {installments.map((entry, index) => {
+            const date = entry.date ? new Date(entry.date) : null;
+            return (
+              <li
+                key={`${entry.date}-${index}`}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs"
+              >
+                <span className="font-bold text-white">
+                  دفعة {index + 1}{' '}
+                  <span className="text-emerald-300">{Number(entry.amount).toLocaleString('ar-EG')} د.ع</span>
+                  {date ? (
+                    <>
+                      {' · '}
+                      <span className="text-slate-300">
+                        {date.toLocaleDateString('ar-EG')} ·{' '}
+                        {date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </>
+                  ) : null}
+                </span>
+                {!readonly ? (
+                  <button
+                    type="button"
+                    onClick={() => removeAt(index)}
+                    className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-200 hover:bg-rose-500/20"
+                  >
+                    ✕ حذف
+                  </button>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs">
+        <span className="font-bold text-emerald-100">
+          مجموع المدفوع: {Number(total).toLocaleString('ar-EG')} د.ع
+        </span>
+        <span className="text-emerald-200">المتبقي: {Number(remaining).toLocaleString('ar-EG')} د.ع</span>
+      </div>
+    </div>
+  );
+}
+
 // Inline editor صغير لإضافة مبلغ على متابعة "بمال" — input + زرار ✓.
 function FollowUpAmountEditor({ appointmentId, initialValue, onSave, saving }) {
   const [value, setValue] = useState(String(initialValue || ''));
@@ -80,6 +201,14 @@ const normalizeEntry = (value) => {
                 .filter(([, amount]) => amount > 0)
             )
           : {},
+      installments: Array.isArray(value.installments)
+        ? value.installments
+            .map((item) => ({
+              amount: Math.max(0, Number(item?.amount) || 0),
+              date: String(item?.date || ''),
+            }))
+            .filter((item) => item.amount > 0 && item.date)
+        : [],
     };
   }
   return {
@@ -108,6 +237,7 @@ const normalizeEntry = (value) => {
     done: false,
     followUpAppointmentIds: [],
     followUpAmounts: {},
+    installments: [],
   };
 };
 
@@ -124,7 +254,6 @@ const serviceBasePrice = (service) => toNumberOrNull(service?.price ?? service?.
 const recalcEntry = (entry) => {
   const priceBefore = Math.max(0, toNumberOrNull(entry.priceBefore) ?? 0);
   const discountValue = Math.max(0, toNumberOrNull(entry.discountValue) ?? 0);
-  const paidAmount = Math.max(0, toNumberOrNull(entry.paidAmount) ?? 0);
   const priceAfter =
     entry.discountType === 'PERCENT'
       ? Math.max(0, priceBefore - (priceBefore * discountValue) / 100)
@@ -136,6 +265,14 @@ const recalcEntry = (entry) => {
   );
   const baseRequired = toNumberOrNull(entry.requiredAmount) ?? priceAfter;
   const requiredAmount = baseRequired + followUpExtra;
+  // المدفوع = مجموع الأقساط لو موجودة، وإلا المبلغ اليدوي.
+  const installmentsList = Array.isArray(entry.installments) ? entry.installments : [];
+  const installmentsTotal = installmentsList.reduce(
+    (sum, item) => sum + Math.max(0, Number(item?.amount) || 0),
+    0
+  );
+  const explicitPaid = Math.max(0, toNumberOrNull(entry.paidAmount) ?? 0);
+  const paidAmount = installmentsList.length > 0 ? installmentsTotal : explicitPaid;
   const remaining = Math.max(0, requiredAmount - paidAmount);
   return {
     ...entry,
@@ -401,6 +538,15 @@ export default function TeethChart({
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
   const [followUpSelection, setFollowUpSelection] = useState([]);
+  // Modal الحجز السريع لمتابعة جديدة (من جوا popup السن).
+  const [quickBookOpen, setQuickBookOpen] = useState(false);
+  const [quickBookForm, setQuickBookForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    doctorId: '',
+    type: 'free', // free | paid
+    notes: '',
+  });
+  const [quickBookSaving, setQuickBookSaving] = useState(false);
 
   const selectTooth = (toothNumber) => {
     setSelectedTooth(String(toothNumber));
@@ -426,28 +572,25 @@ export default function TeethChart({
   }, [providedDoctors]);
 
   // جلب كل مواعيد المريض عشان نختار منها متابعات.
+  const reloadPatientAppointments = async () => {
+    if (!patientId) return;
+    setLoadingAppointments(true);
+    try {
+      const res = await api.get('/appointments', { params: { patientId, limit: 200 } });
+      setPatientAppointments(res.data?.appointments || []);
+    } catch {
+      setPatientAppointments([]);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  };
   useEffect(() => {
     if (!patientId) {
       setPatientAppointments([]);
       return;
     }
-    let cancelled = false;
-    setLoadingAppointments(true);
-    api
-      .get('/appointments', { params: { patientId, limit: 200 } })
-      .then((res) => {
-        if (cancelled) return;
-        setPatientAppointments(res.data?.appointments || []);
-      })
-      .catch(() => {
-        if (!cancelled) setPatientAppointments([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingAppointments(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    reloadPatientAppointments();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [patientId]);
 
   useEffect(() => {
@@ -476,14 +619,20 @@ export default function TeethChart({
   );
 
   // المتابعات المرتبطة بالسن الحالي (IDs مخزّنة جوا entry).
+  // IDs اللي لسه ما اتلودشلهم appointment object بنعرضها بـ placeholder
+  // عشان المستخدم يفهم إن الربط اتعمل وبس البيانات بتيجي.
   const linkedFollowUps = useMemo(() => {
     const ids = entry.followUpAppointmentIds || [];
     if (!ids.length) return [];
     const byId = new Map(patientAppointments.map((appointment) => [appointment.id, appointment]));
     return ids
-      .map((id) => byId.get(id))
-      .filter(Boolean)
-      .sort((a, b) => new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime());
+      .map((id) => byId.get(id) || { id, pending: true })
+      .sort((a, b) => {
+        if (a.pending && !b.pending) return 1;
+        if (!a.pending && b.pending) return -1;
+        if (a.pending && b.pending) return 0;
+        return new Date(a.scheduledTime).getTime() - new Date(b.scheduledTime).getTime();
+      });
   }, [entry.followUpAppointmentIds, patientAppointments]);
 
   // مواعيد المتابعة المتاحة: فقط المواعيد اللي اتحجزت كـ "متابعة" من ManualBookingPanel
@@ -555,11 +704,109 @@ export default function TeethChart({
       onSaved?.(saved);
       setFollowUpModalOpen(false);
       setFollowUpSelection([]);
+      await reloadPatientAppointments();
       toast.success('تم ربط المتابعات بالسن');
     } catch (error) {
       toast.error(error.message || 'فشل ربط المتابعات');
     } finally {
       setSaving(false);
+    }
+  };
+
+  // حفظ تلقائي للأقساط جوا entry السن (في teethNotes JSON).
+  const persistInstallments = async (nextInstallments) => {
+    if (readonly) return;
+    const nextTeeth = {
+      ...teeth,
+      [selectedTooth]: recalcEntry({
+        ...normalizeEntry(teeth[selectedTooth] || { doctorId: currentDoctorId }),
+        installments: nextInstallments,
+        updatedAt: new Date().toISOString(),
+      }),
+    };
+    setSaving(true);
+    try {
+      const saved = await persistTeeth(nextTeeth);
+      setTeeth(saved);
+      onSaved?.(saved);
+      toast.success('تم تحديث الأقساط');
+    } catch (error) {
+      toast.error(error.message || 'فشل حفظ الأقساط');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // حجز متابعة جديدة + ربطها بالسن في خطوة واحدة.
+  const handleQuickBookFollowUp = async () => {
+    if (readonly || !patientId) return;
+    const doctorId = quickBookForm.doctorId || currentDoctorId || doctors[0]?.id;
+    if (!doctorId) {
+      toast.warn('اختر طبيب أولاً');
+      return;
+    }
+    if (!quickBookForm.date) {
+      toast.warn('اختر تاريخ المتابعة');
+      return;
+    }
+    // نختار خدمة افتراضية: "متابعة" لو موجودة، وإلا أول خدمة.
+    const followUpService =
+      services.find((service) =>
+        /(^|\s)متابعة(\s|$)|follow[- ]?up/i.test(`${service.nameAr || ''} ${service.name || ''}`)
+      ) || services[0];
+    if (!followUpService) {
+      toast.error('مفيش خدمات متاحة عشان نحجز عليها');
+      return;
+    }
+    const tag = `[follow-up:${quickBookForm.type === 'paid' ? 'paid' : 'free'}]`;
+    const baseNotes = String(quickBookForm.notes || '').replace(/\[follow-up:(free|paid)\]\s*/gi, '').trim();
+    const finalNotes = baseNotes ? `${tag} ${baseNotes}` : tag;
+
+    setQuickBookSaving(true);
+    try {
+      const res = await api.post('/appointments', {
+        patientId,
+        doctorId,
+        serviceId: followUpService.id,
+        appointmentType: 'WALK_IN',
+        scheduledTime: quickBookForm.date,
+        notes: finalNotes,
+        confirmImmediately: true,
+        notifyPatient: false,
+      });
+      const newAppointment = res.data.appointment;
+      if (!newAppointment?.id) throw new Error('لم يتم إنشاء الموعد');
+
+      // أضف الموعد لـ patientAppointments عشان يظهر فورًا.
+      setPatientAppointments((current) => [newAppointment, ...current]);
+
+      // اربطه بالسن الحالي تلقائياً.
+      const merged = Array.from(
+        new Set([...(entry.followUpAppointmentIds || []), newAppointment.id])
+      );
+      const nextTeeth = {
+        ...teeth,
+        [selectedTooth]: recalcEntry({
+          ...normalizeEntry(teeth[selectedTooth] || { doctorId: currentDoctorId }),
+          followUpAppointmentIds: merged,
+          updatedAt: new Date().toISOString(),
+        }),
+      };
+      const saved = await persistTeeth(nextTeeth);
+      setTeeth(saved);
+      onSaved?.(saved);
+      toast.success('تم حجز المتابعة وربطها بالسن');
+      setQuickBookOpen(false);
+      setQuickBookForm({
+        date: new Date().toISOString().slice(0, 10),
+        doctorId: '',
+        type: 'free',
+        notes: '',
+      });
+    } catch (error) {
+      toast.error(error.message || 'فشل حجز المتابعة');
+    } finally {
+      setQuickBookSaving(false);
     }
   };
 
@@ -785,7 +1032,13 @@ export default function TeethChart({
       return nextTeeth;
     }
     const res = await api.put(`/patients/${patientId}/teeth-notes`, { teeth: nextTeeth });
-    return res.data.teeth || res.data.patient?.teethNotes || {};
+    const responseTeeth = res.data?.teeth || res.data?.patient?.teethNotes;
+    // Fallback: لو الـ backend مرجعش الـ teethNotes في الـ response، نرجع nextTeeth
+    // عشان ما نمسحش الـ UI state. الـ DB في الحالتين اتحدّث.
+    if (responseTeeth && typeof responseTeeth === 'object' && Object.keys(responseTeeth).length > 0) {
+      return responseTeeth;
+    }
+    return nextTeeth;
   };
 
   const updateSelectedToothEntry = (producer) => {
@@ -1283,6 +1536,111 @@ export default function TeethChart({
         </div>
       ) : null}
 
+      {/* Modal الحجز السريع لمتابعة جديدة من جوا popup السن */}
+      {quickBookOpen ? (
+        <div
+          className="fixed inset-0 z-[97] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={() => setQuickBookOpen(false)}
+          dir="rtl"
+        >
+          <div
+            className="w-full max-w-md space-y-4 rounded-3xl border border-white/10 bg-[#0b1020] p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-3">
+              <div>
+                <h3 className="text-lg font-black text-white">🔄 احجز متابعة — السن رقم {selectedTooth}</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  هتتحجز كموعد متابعة وتتربط تلقائيًا بالسن ده.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setQuickBookOpen(false)}
+                className="rounded-full border border-white/10 p-1 text-slate-400 hover:bg-white/10"
+              >
+                ✕
+              </button>
+            </div>
+
+            <Field label="التاريخ">
+              <input
+                type="date"
+                value={quickBookForm.date}
+                onChange={(event) =>
+                  setQuickBookForm((current) => ({ ...current, date: event.target.value }))
+                }
+                className={inputClass}
+              />
+            </Field>
+
+            <Field label="الطبيب">
+              <select
+                value={quickBookForm.doctorId}
+                onChange={(event) =>
+                  setQuickBookForm((current) => ({ ...current, doctorId: event.target.value }))
+                }
+                className={inputClass}
+              >
+                <option value="">اختر الطبيب</option>
+                {doctors.map((doctor) => (
+                  <option key={doctor.id} value={doctor.id}>د. {doctor.name}</option>
+                ))}
+              </select>
+            </Field>
+
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="mb-2 text-xs font-bold text-slate-300">نوع المتابعة</p>
+              <div className="flex flex-wrap gap-3 text-xs">
+                <label className="inline-flex items-center gap-2 text-emerald-100">
+                  <input
+                    type="radio"
+                    name="quickBookType"
+                    value="free"
+                    checked={quickBookForm.type === 'free'}
+                    onChange={() => setQuickBookForm((current) => ({ ...current, type: 'free' }))}
+                    className="accent-emerald-500"
+                  />
+                  🆓 مجاني
+                </label>
+                <label className="inline-flex items-center gap-2 text-amber-100">
+                  <input
+                    type="radio"
+                    name="quickBookType"
+                    value="paid"
+                    checked={quickBookForm.type === 'paid'}
+                    onChange={() => setQuickBookForm((current) => ({ ...current, type: 'paid' }))}
+                    className="accent-amber-500"
+                  />
+                  💰 بمال
+                </label>
+              </div>
+            </div>
+
+            <Field label="ملاحظة (اختياري)">
+              <textarea
+                rows={2}
+                value={quickBookForm.notes}
+                onChange={(event) =>
+                  setQuickBookForm((current) => ({ ...current, notes: event.target.value }))
+                }
+                className={`${inputClass} min-h-[60px]`}
+                placeholder="مثال: متابعة لتغيير الحشو"
+              />
+            </Field>
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-white/10 pt-3">
+              <SecondaryButton type="button" onClick={() => setQuickBookOpen(false)}>
+                إلغاء
+              </SecondaryButton>
+              <PrimaryButton type="button" onClick={handleQuickBookFollowUp} disabled={quickBookSaving}>
+                حفظ + ربط بالسن
+              </PrimaryButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* Modal اختيار متابعات لربطها بالسن الحالي */}
       {followUpModalOpen ? (
         <div
@@ -1497,17 +1855,34 @@ export default function TeethChart({
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <h4 className="text-sm font-black text-sky-100">📅 المتابعات المرتبطة بالسن</h4>
                 {!readonly ? (
-                  <SecondaryButton
-                    type="button"
-                    onClick={() => {
-                      setFollowUpSelection([]);
-                      setFollowUpModalOpen(true);
-                    }}
-                    className="px-3 py-1.5 text-xs"
-                    disabled={loadingAppointments}
-                  >
-                    + إضافة متابعة
-                  </SecondaryButton>
+                  <div className="flex flex-wrap gap-2">
+                    <PrimaryButton
+                      type="button"
+                      onClick={() => {
+                        setQuickBookForm({
+                          date: new Date().toISOString().slice(0, 10),
+                          doctorId: entry.doctorId || currentDoctorId || '',
+                          type: 'free',
+                          notes: '',
+                        });
+                        setQuickBookOpen(true);
+                      }}
+                      className="px-3 py-1.5 text-xs"
+                    >
+                      🔄 احجز متابعة
+                    </PrimaryButton>
+                    <SecondaryButton
+                      type="button"
+                      onClick={() => {
+                        setFollowUpSelection([]);
+                        setFollowUpModalOpen(true);
+                      }}
+                      className="px-3 py-1.5 text-xs"
+                      disabled={loadingAppointments}
+                    >
+                      + ربط متابعة موجودة
+                    </SecondaryButton>
+                  </div>
                 ) : null}
               </div>
               {linkedFollowUps.length === 0 ? (
@@ -1517,6 +1892,27 @@ export default function TeethChart({
               ) : (
                 <ul className="space-y-2">
                   {linkedFollowUps.map((appointment, index) => {
+                    if (appointment.pending) {
+                      return (
+                        <li
+                          key={appointment.id}
+                          className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-xs"
+                        >
+                          <span className="font-bold text-amber-200">
+                            متابعة {index + 1} · جاري تحميل بيانات الموعد...
+                          </span>
+                          {!readonly ? (
+                            <button
+                              type="button"
+                              onClick={() => unlinkFollowUp(appointment.id)}
+                              className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-200 hover:bg-rose-500/20"
+                            >
+                              ✕ فك الربط
+                            </button>
+                          ) : null}
+                        </li>
+                      );
+                    }
                     const date = new Date(appointment.scheduledTime);
                     const doctorName = appointment.doctor?.name || '—';
                     const serviceName = appointment.service?.nameAr || appointment.service?.name || 'خدمة';
@@ -1593,7 +1989,18 @@ export default function TeethChart({
                   <input className={inputClass} type="number" value={moneyFieldValue(entry.requiredAmount)} disabled={readonly} onChange={(event) => updateEntry('requiredAmount', event.target.value)} />
                 </Field>
                 <Field label="المدفوع">
-                  <input className={inputClass} type="number" value={moneyFieldValue(entry.paidAmount)} disabled={readonly} onChange={(event) => updateEntry('paidAmount', event.target.value)} />
+                  <input
+                    className={inputClass}
+                    type="number"
+                    value={moneyFieldValue(entry.paidAmount)}
+                    disabled={readonly || (entry.installments && entry.installments.length > 0)}
+                    onChange={(event) => updateEntry('paidAmount', event.target.value)}
+                  />
+                  {entry.installments && entry.installments.length > 0 ? (
+                    <p className="mt-1 text-[10px] text-emerald-200">
+                      محسوب تلقائيًا من سجل الأقساط بالأسفل
+                    </p>
+                  ) : null}
                 </Field>
                 <Field label="المتبقي">
                   <input className={inputClass} type="number" value={moneyFieldValue(entry.remaining)} disabled />
@@ -1602,6 +2009,15 @@ export default function TeethChart({
                   <input className={inputClass} value={entry.extraChargeId || entry.linkedPaymentId || 'غير مرتبط بعد'} disabled />
                 </Field>
               </div>
+
+              {/* سجل الأقساط مع التواريخ — مخزّن في teethNotes JSON ويتحفظ تلقائيًا. */}
+              <ToothInstallmentsBlock
+                installments={entry.installments || []}
+                onChange={(next) => persistInstallments(next)}
+                maxAmount={entry.requiredAmount || 0}
+                readonly={readonly}
+              />
+
               <div className="mt-3">
                 <Field label="ملاحظة الدفع">
                   <textarea className={inputClass} rows={3} value={entry.paymentNote} disabled={readonly} onChange={(event) => updateEntry('paymentNote', event.target.value)} />

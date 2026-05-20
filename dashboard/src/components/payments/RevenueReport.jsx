@@ -88,6 +88,35 @@ const defaultFilters = () => ({
 
 const isAutoFullPaymentNote = (value = '') => /^تحصيل كامل\s*\(/.test(String(value).trim());
 
+// تخزين الأقساط في أول سطر من notes كـ JSON مختصر: __inst__=[{a,d}]
+const INST_LINE_REGEX = /^__inst__=(\[[^\n]*\])\n?/;
+const parseInstallments = (rawNotes = '') => {
+  const text = String(rawNotes || '');
+  const match = text.match(INST_LINE_REGEX);
+  if (!match) return { installments: [], cleanNotes: text };
+  try {
+    const items = JSON.parse(match[1]);
+    if (!Array.isArray(items)) return { installments: [], cleanNotes: text.replace(INST_LINE_REGEX, '') };
+    const installments = items
+      .map((item) => ({
+        amount: Math.max(0, Number(item?.a) || 0),
+        date: String(item?.d || ''),
+      }))
+      .filter((entry) => entry.amount > 0 && entry.date);
+    return { installments, cleanNotes: text.replace(INST_LINE_REGEX, '') };
+  } catch {
+    return { installments: [], cleanNotes: text.replace(INST_LINE_REGEX, '') };
+  }
+};
+const serializeInstallments = (installments, cleanNotes = '') => {
+  const valid = (installments || [])
+    .map((entry) => ({ a: Math.max(0, Number(entry.amount) || 0), d: String(entry.date || '') }))
+    .filter((entry) => entry.a > 0 && entry.d);
+  const body = String(cleanNotes || '').trim();
+  if (valid.length === 0) return body;
+  return `__inst__=${JSON.stringify(valid)}\n${body}`.trim();
+};
+
 const toAmount = (value) => Number(value) || 0;
 const clampAmount = (value, max = Infinity) => Math.max(0, Math.min(toAmount(value), max));
 const paymentBaseAmount = (payment = {}) =>
@@ -115,17 +144,22 @@ const matchesItemType = (payment = {}, itemType = 'ALL') => {
   return true;
 };
 
-const defaultEditForm = (payment = {}) => ({
-  paidAmount: payment.paidAmount || 0,
-  discountAmount: payment.discountAmount || 0,
-  remainingAmount: payment.remainingAmount ?? Math.max(0, netPaymentAmount(payment) - toAmount(payment.paidAmount)),
-  teethCount: payment.teethCount || 1,
-  method: payment.method || 'cash',
-  notes: isAutoFullPaymentNote(payment.notes) ? '' : stripStageTag(payment.notes || ''),
-  caseStatus: '',
-  caseStage: '',
-  caseStageDetails: '',
-});
+const defaultEditForm = (payment = {}) => {
+  const rawNotes = isAutoFullPaymentNote(payment.notes) ? '' : payment.notes || '';
+  const { installments, cleanNotes } = parseInstallments(rawNotes);
+  return {
+    paidAmount: payment.paidAmount || 0,
+    discountAmount: payment.discountAmount || 0,
+    remainingAmount: payment.remainingAmount ?? Math.max(0, netPaymentAmount(payment) - toAmount(payment.paidAmount)),
+    teethCount: payment.teethCount || 1,
+    method: payment.method || 'cash',
+    notes: stripStageTag(cleanNotes),
+    caseStatus: '',
+    caseStage: '',
+    caseStageDetails: '',
+    installments,
+  };
+};
 
 const paymentStatusLabel = (payment = {}, discountAmount = payment.discountAmount, paidAmount = payment.paidAmount) => {
   const netAmount = netPaymentAmount(payment, discountAmount);
@@ -142,11 +176,13 @@ async function savePaymentChanges(payment, form) {
   // ندمج مرحلة العلاج كـ tag في أول سطر من الملاحظات عشان تتخزن مع الدفعة.
   const stageTag = buildStageTag(form.caseStage, form.caseStageDetails);
   const userNotes = stripStageTag(form.notes || '');
-  const composedNotes = stageTag
+  const withStage = stageTag
     ? userNotes
       ? `${stageTag}\n${userNotes}`
       : stageTag
     : userNotes;
+  // نضيف سطر الأقساط في الأول لو فيه أقساط (سطر __inst__=[...]).
+  const composedNotes = serializeInstallments(form.installments || [], withStage);
 
   if (payment.source === 'extra') {
     await api.patch(`/payments/extra-charges/${payment.id}`, {
@@ -189,6 +225,127 @@ async function savePaymentChanges(payment, form) {
       }
     }
   }
+}
+
+// قسم الأقساط: قائمة الدفعات بتواريخها + زرار "+ إضافة دفعة" يفتح حقل إدخال صغير.
+function InstallmentsBlock({ installments, onChange, maxAmount }) {
+  const [adding, setAdding] = useState(false);
+  const [draftAmount, setDraftAmount] = useState('');
+
+  const total = (installments || []).reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+  const remaining = Math.max(0, (Number(maxAmount) || 0) - total);
+
+  const confirmAdd = () => {
+    const value = Math.max(0, Number(draftAmount) || 0);
+    if (value <= 0) return;
+    const next = [...(installments || []), { amount: value, date: new Date().toISOString() }];
+    onChange?.(next);
+    setDraftAmount('');
+    setAdding(false);
+  };
+
+  const removeAt = (index) => {
+    const next = (installments || []).filter((_, i) => i !== index);
+    onChange?.(next);
+  };
+
+  return (
+    <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/5 p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <h4 className="text-sm font-black text-emerald-100">💵 سجل الدفعات (الأقساط)</h4>
+        {!adding ? (
+          <SecondaryButton
+            type="button"
+            onClick={() => setAdding(true)}
+            className="px-3 py-1.5 text-xs"
+          >
+            + إضافة دفعة
+          </SecondaryButton>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="number"
+              min="0"
+              value={draftAmount}
+              onChange={(event) => setDraftAmount(event.target.value)}
+              className={`${inputClass} h-8 w-28 text-xs`}
+              placeholder="المبلغ"
+              autoFocus
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  confirmAdd();
+                }
+              }}
+            />
+            <button
+              type="button"
+              onClick={confirmAdd}
+              className="rounded-full border border-emerald-400/40 bg-emerald-500/20 px-3 py-1 text-[11px] font-bold text-emerald-100 hover:bg-emerald-500/30"
+            >
+              ✓ تم
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAdding(false);
+                setDraftAmount('');
+              }}
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold text-slate-300 hover:bg-white/10"
+            >
+              إلغاء
+            </button>
+          </div>
+        )}
+      </div>
+
+      {(installments || []).length === 0 ? (
+        <p className="text-xs leading-6 text-slate-400">
+          مفيش دفعات مسجّلة بعد. دوس "+ إضافة دفعة" عشان تسجل أول قسط بتاريخه.
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {installments.map((entry, index) => {
+            const date = entry.date ? new Date(entry.date) : null;
+            return (
+              <li
+                key={`${entry.date}-${index}`}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs"
+              >
+                <span className="font-bold text-white">
+                  ① دفعة {index + 1}{' '}
+                  <span className="text-emerald-300">{money(entry.amount)}</span>
+                  {date ? (
+                    <>
+                      {' · '}
+                      <span className="text-slate-300">
+                        {date.toLocaleDateString('ar-EG')} ·{' '}
+                        {date.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </>
+                  ) : null}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeAt(index)}
+                  className="rounded-full border border-rose-500/30 bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-200 hover:bg-rose-500/20"
+                >
+                  ✕ حذف
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs">
+        <span className="font-bold text-emerald-100">
+          مجموع المدفوع: {money(total)}
+        </span>
+        <span className="text-emerald-200">المتبقي: {money(remaining)}</span>
+      </div>
+    </div>
+  );
 }
 
 function PaymentFields({ payment, form, setForm }) {
@@ -320,6 +477,21 @@ function PaymentFields({ payment, form, setForm }) {
       </Field>
       </div>
 
+      <InstallmentsBlock
+        installments={form.installments || []}
+        onChange={(next) => {
+          const total = next.reduce((sum, entry) => sum + (Number(entry.amount) || 0), 0);
+          const clampedPaid = clampAmount(total, netAmount);
+          setForm((current) => ({
+            ...current,
+            installments: next,
+            paidAmount: clampedPaid,
+            remainingAmount: Math.max(0, netAmount - clampedPaid),
+          }));
+        }}
+        maxAmount={netAmount}
+      />
+
       {payment.source !== 'extra' && payment.appointmentId ? (
         <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
           <p className="mb-2 text-xs font-bold text-slate-300">مرحلة العلاج (مخطط متابعة الحالة)</p>
@@ -367,13 +539,39 @@ function PaymentFields({ payment, form, setForm }) {
   );
 }
 
-function InlinePaymentEditor({ payment, onSaved, onDelete }) {
+function InlinePaymentEditor({ payment, onSaved, onDelete, patientTeethNotes, patientAppointments }) {
   const [form, setForm] = useState(defaultEditForm(payment));
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setForm(defaultEditForm(payment));
   }, [payment]);
+
+  // الأسنان المرتبطة بالدفعة: نلاقي السن اللي فيها linkedPaymentId أو extraChargeId == payment.id
+  const linkedTeeth = useMemo(() => {
+    if (!patientTeethNotes || typeof patientTeethNotes !== 'object') return [];
+    const list = [];
+    Object.entries(patientTeethNotes).forEach(([toothNumber, toothEntry]) => {
+      if (!toothEntry || typeof toothEntry !== 'object') return;
+      const matchesPayment = toothEntry.linkedPaymentId === payment.id;
+      const matchesExtra = toothEntry.extraChargeId === payment.id;
+      if (matchesPayment || matchesExtra) {
+        list.push({ toothNumber, entry: toothEntry });
+      }
+    });
+    return list;
+  }, [patientTeethNotes, payment.id]);
+
+  // المتابعات المربوطة بأسنان الدفعة دي (نجمعها كلها كـ chips).
+  const linkedFollowUpAppointments = useMemo(() => {
+    if (!patientAppointments || !Array.isArray(patientAppointments)) return [];
+    const ids = new Set();
+    linkedTeeth.forEach(({ entry }) => {
+      (entry.followUpAppointmentIds || []).forEach((id) => ids.add(id));
+    });
+    if (!ids.size) return [];
+    return patientAppointments.filter((appointment) => ids.has(appointment.id));
+  }, [linkedTeeth, patientAppointments]);
 
   const markFullyPaid = () =>
     setForm((current) => ({ ...current, paidAmount: netPaymentAmount(payment, current.discountAmount), remainingAmount: 0 }));
@@ -395,6 +593,58 @@ function InlinePaymentEditor({ payment, onSaved, onDelete }) {
 
   return (
     <div className="mt-4 rounded-2xl border border-sky-500/15 bg-slate-950/40 p-4">
+      {linkedTeeth.length > 0 ? (
+        <div className="mb-4 rounded-2xl border border-cyan-500/20 bg-cyan-500/5 p-3">
+          <h4 className="mb-2 text-sm font-black text-cyan-100">🦷 ملاحظات الأسنان المرتبطة</h4>
+          <ul className="space-y-2">
+            {linkedTeeth.map(({ toothNumber, entry }) => (
+              <li key={toothNumber} className="rounded-xl border border-white/10 bg-white/5 p-2 text-xs">
+                <p className="font-bold text-white">السن رقم {toothNumber}</p>
+                {entry.note ? (
+                  <p className="mt-1 text-slate-300">
+                    <span className="text-cyan-200">ملاحظة:</span> {entry.note}
+                  </p>
+                ) : null}
+                {entry.treatmentNote ? (
+                  <p className="mt-1 text-slate-300">
+                    <span className="text-cyan-200">ملاحظة العلاج:</span> {entry.treatmentNote}
+                  </p>
+                ) : null}
+                {!entry.note && !entry.treatmentNote ? (
+                  <p className="mt-1 text-slate-500">مفيش ملاحظات على السن ده.</p>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+
+          {linkedFollowUpAppointments.length > 0 ? (
+            <div className="mt-3">
+              <p className="mb-1 text-xs font-bold text-cyan-100">📅 المتابعات المرتبطة:</p>
+              <div className="flex flex-wrap gap-2">
+                {linkedFollowUpAppointments.map((appointment) => {
+                  const date = new Date(appointment.scheduledTime);
+                  const isPaid = /\[follow-up:paid\]/i.test(String(appointment.notes || ''));
+                  return (
+                    <span
+                      key={appointment.id}
+                      className={`rounded-full border px-3 py-1 text-[11px] font-bold ${
+                        isPaid
+                          ? 'border-amber-400/30 bg-amber-500/15 text-amber-100'
+                          : 'border-emerald-400/30 bg-emerald-500/15 text-emerald-100'
+                      }`}
+                    >
+                      {date.toLocaleDateString('ar-EG')} ·{' '}
+                      {appointment.doctor?.name || '—'} ·{' '}
+                      {isPaid ? '💰 بمال' : '🆓 مجاني'}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
       <PaymentFields payment={payment} form={form} setForm={setForm} />
       <div className="mt-4 flex flex-wrap justify-end gap-2">
         {!isFullyPaid ? (
@@ -415,7 +665,14 @@ function InlinePaymentEditor({ payment, onSaved, onDelete }) {
   );
 }
 
-export default function RevenueReport({ patientId = '', patientName = '', patientPhone = '', compact = false }) {
+export default function RevenueReport({
+  patientId = '',
+  patientName = '',
+  patientPhone = '',
+  patientTeethNotes = null,
+  patientAppointments = null,
+  compact = false,
+}) {
   const navigate = useNavigate();
   const [filters, setFilters] = useState(() => defaultFilters());
   const [dateRange, setDateRange] = useState('all');
@@ -1084,7 +1341,13 @@ export default function RevenueReport({ patientId = '', patientName = '', patien
                     ) : null}
                   </div>
                   {patientId ? (
-                    <InlinePaymentEditor payment={payment} onSaved={loadReport} onDelete={deleteExtra} />
+                    <InlinePaymentEditor
+                      payment={payment}
+                      onSaved={loadReport}
+                      onDelete={deleteExtra}
+                      patientTeethNotes={patientTeethNotes}
+                      patientAppointments={patientAppointments}
+                    />
                   ) : null}
                 </div>
               ))}

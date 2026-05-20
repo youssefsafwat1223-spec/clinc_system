@@ -725,6 +725,8 @@ export default function PatientProfilePage() {
           patientId={patient.id}
           patientName={patient.displayName || patient.name || ''}
           patientPhone={patient.phone || ''}
+          patientTeethNotes={patient.teethNotes || {}}
+          patientAppointments={patient.appointments || []}
           compact
         />
       ) : null}
